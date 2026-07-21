@@ -373,7 +373,45 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* ============================================================ Toasts ============================================================ */
+  /* ============================================================ سياسة ألوان الأزرار: أخضر=حفظ/تأكيد، أحمر=حذف/إلغاء/مرتجع، أزرق=طباعة/تقرير/بحث ============================================================ */
+  .btn.success { background: linear-gradient(135deg, #2ecc71, #27ae60); }
+  .btn.success:hover { filter: brightness(1.08); }
+  .btn.danger { background: linear-gradient(135deg, var(--danger), #e0405f); }
+  .btn.danger:hover { filter: brightness(1.08); }
+  .btn.info-btn { background: linear-gradient(135deg, var(--info), #3d8bdb); }
+  .btn.info-btn:hover { filter: brightness(1.08); }
+  .money-positive { color: var(--success); font-weight: 900; }
+  .money-negative { color: var(--danger); font-weight: 900; }
+
+  /* ============================================================ قائمة منسدلة مخصصة (Custom Select) بشكل البرنامج بدل شكل المتصفح ============================================================ */
+  select { display: none !important; }
+  .cs-wrap { position: relative; width: 100%; }
+  .cs-trigger {
+    width: 100%; padding: 11px 14px; border-radius: var(--radius-sm); border: 1.5px solid var(--border);
+    background: var(--surface-2); color: var(--text); font-family: inherit; font-size: 13.8px;
+    cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    transition: all .18s var(--ease); user-select: none;
+  }
+  .cs-trigger:hover { border-color: var(--accent); }
+  .cs-trigger.open { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(233,69,96,.1); }
+  .cs-trigger .cs-arrow { font-size: 10px; color: var(--text-dim); transition: transform .2s var(--ease); flex-shrink: 0; }
+  .cs-trigger.open .cs-arrow { transform: rotate(180deg); }
+  .cs-trigger .cs-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .cs-panel {
+    position: absolute; top: calc(100% + 6px); right: 0; left: 0; z-index: 200;
+    background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+    box-shadow: var(--shadow); max-height: 260px; overflow-y: auto; padding: 6px;
+    display: none; animation: modalIn .18s var(--ease);
+  }
+  .cs-panel.open { display: block; }
+  .cs-option {
+    padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: 13.5px; transition: background .12s;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .cs-option:hover { background: var(--surface-2); }
+  .cs-option.selected { background: rgba(233,69,96,.1); color: var(--accent); font-weight: 700; }
+  .cs-option.disabled { opacity: .5; cursor: not-allowed; }
   #toastContainer { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 999; display: flex; flex-direction: column; gap: 8px; align-items: center; }
   .toast {
     background: var(--surface); border: 1px solid var(--border); color: var(--text);
