@@ -136,12 +136,13 @@ api.addVariant = async function (session, payload) {
 };
 
 api.getInventoryIndex = async function () {
-  const { data: products, error } = await supabaseClient.from('products').select('*, product_variants(*)');
+  const { data: products, error } = await supabaseClient.from('products').select('*, product_variants(*), sub_category:sub_category_id(name)');
   if (error) throw error;
   const result = { products: {} };
   products.forEach(function (p) {
     result.products[p.code] = {
       code: p.code, name: p.name, basePrice: p.base_price, image: p.image_url, hasVariants: p.has_variants, status: p.status,
+      subCategoryName: p.sub_category ? p.sub_category.name : '',
       variants: (p.product_variants || []).map(function (v) {
         return { code: v.code, productCode: p.code, color: v.color, size: v.size, quantity: v.quantity, cost: v.cost, specialPrice: v.special_price, warehouseId: v.warehouse_id, lowStockThreshold: v.low_stock_threshold, status: v.status };
       })
@@ -262,7 +263,8 @@ api.addExpense = async function (session, payload) {
     expense_date: payload.date ? new Date(payload.date).toISOString() : new Date().toISOString(),
     main_category: payload.mainCategory, sub_category: payload.subCategory || '', description: payload.description || '',
     amount: payload.amount, is_recurring: !!payload.isRecurring, recurrence_days: payload.recurrenceDays || null,
-    is_fixed_asset: !!payload.isFixedAsset, payment_method: payload.paymentMethod || 'كاش'
+    is_fixed_asset: !!payload.isFixedAsset, payment_method: payload.paymentMethod || 'كاش',
+    employee_id: payload.employeeId || null, bonus: payload.bonus || null
   });
   if (error) throw error;
 
@@ -308,6 +310,14 @@ api.paySupplierInstallment = async function (session, orderId, amount) {
   const { error } = await supabaseClient.rpc('rpc_pay_supplier_installment', { p_order_id: orderId, p_amount: amount });
   if (error) throw error;
   return { success: true };
+};
+
+api.getSupplierStatement = async function (supplierName) {
+  const { data: supplier } = await supabaseClient.from('suppliers').select('id').eq('name', supplierName).single();
+  if (!supplier) throw new Error('المورد غير موجود');
+  const { data, error } = await supabaseClient.rpc('rpc_get_supplier_statement', { p_supplier_id: supplier.id });
+  if (error) throw error;
+  return data;
 };
 
 // ------------------------------------------------------------
@@ -439,7 +449,7 @@ api.listEmployees = async function (activeOnly) {
   if (activeOnly) q = q.eq('status', 'نشط');
   const { data, error } = await q;
   if (error) throw error;
-  return (data || []).map(function (e) { return { name: e.name, jobTitle: e.job_title, baseSalary: e.base_salary, phone: e.phone, status: e.status }; });
+  return (data || []).map(function (e) { return { id: e.id, name: e.name, jobTitle: e.job_title, baseSalary: e.base_salary, phone: e.phone, status: e.status }; });
 };
 
 api.recordAttendance = async function (session, employeeName, status) {
