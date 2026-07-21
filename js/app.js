@@ -66,6 +66,7 @@ function openModal(title, desc, bodyHtml, actionsHtml) {
     '<div id="modalBody">' + (bodyHtml || '') + '</div>' +
     '<div class="modal-actions">' + (actionsHtml || '') + '</div>';
   document.getElementById('modalOverlay').style.display = 'flex';
+  enhanceSelects_(document.getElementById('modalBox'));
 }
 function closeModal() { document.getElementById('modalOverlay').style.display = 'none'; }
 
@@ -206,7 +207,88 @@ function navigate(pageKey) {
 
 function renderSkeleton_() { return '<div class="grid grid-4">' + '<div class="loading-skeleton" style="height:110px; border-radius:16px;"></div>'.repeat(4) + '</div>'; }
 function renderComingSoon_() { document.getElementById('content').innerHTML = '<div class="card"><div class="empty-state"><span class="emoji">🚧</span><div class="msg">الشاشة دي هتُبنى قريبًا</div></div></div>'; }
-function setContent_(html) { document.getElementById('content').innerHTML = '<div class="page-fade">' + html + '</div>'; }
+function setContent_(html) { document.getElementById('content').innerHTML = '<div class="page-fade">' + html + '</div>'; enhanceSelects_(document.getElementById('content')); }
+
+// ============================================================
+// محرّك القوائم المنسدلة المخصصة (Custom Select) — بيحوّل أي
+// <select> عادي لقائمة بشكل البرنامج، مع الحفاظ الكامل على
+// قيمته وأحداث onchange بتاعته (شفاف تمامًا لباقي الكود)
+// ============================================================
+function enhanceSelects_(container) {
+  if (!container) return;
+  container.querySelectorAll('select').forEach(function (select) {
+    const existingWrap = select.previousElementSibling;
+    if (existingWrap && existingWrap.classList && existingWrap.classList.contains('cs-wrap')) existingWrap.remove();
+
+    const wrap = document.createElement('div');
+    wrap.className = 'cs-wrap';
+    const trigger = document.createElement('div');
+    trigger.className = 'cs-trigger';
+    trigger.tabIndex = 0;
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'cs-label';
+    const arrowSpan = document.createElement('span');
+    arrowSpan.className = 'cs-arrow';
+    arrowSpan.textContent = '▾';
+    trigger.appendChild(labelSpan);
+    trigger.appendChild(arrowSpan);
+
+    const panel = document.createElement('div');
+    panel.className = 'cs-panel';
+
+    function syncLabel() {
+      const opt = select.options[select.selectedIndex];
+      labelSpan.textContent = opt ? opt.textContent : '';
+    }
+    function buildOptions() {
+      panel.innerHTML = '';
+      Array.from(select.options).forEach(function (opt, idx) {
+        const optEl = document.createElement('div');
+        optEl.className = 'cs-option' + (idx === select.selectedIndex ? ' selected' : '') + (opt.disabled ? ' disabled' : '');
+        optEl.textContent = opt.textContent;
+        optEl.onclick = function (e) {
+          e.stopPropagation();
+          if (opt.disabled) return;
+          select.selectedIndex = idx;
+          syncLabel();
+          closePanel();
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+        };
+        panel.appendChild(optEl);
+      });
+    }
+    function openPanel() {
+      document.querySelectorAll('.cs-panel.open').forEach(function (p) { p.classList.remove('open'); });
+      document.querySelectorAll('.cs-trigger.open').forEach(function (t) { t.classList.remove('open'); });
+      buildOptions();
+      panel.classList.add('open');
+      trigger.classList.add('open');
+    }
+    function closePanel() { panel.classList.remove('open'); trigger.classList.remove('open'); }
+
+    trigger.onclick = function (e) { e.stopPropagation(); panel.classList.contains('open') ? closePanel() : openPanel(); };
+
+    wrap.appendChild(trigger);
+    wrap.appendChild(panel);
+    select.insertAdjacentElement('beforebegin', wrap);
+    syncLabel();
+
+    select.__csRefresh = function () { syncLabel(); };
+  });
+}
+
+document.addEventListener('click', function (e) {
+  if (!e.target.closest('.cs-wrap')) {
+    document.querySelectorAll('.cs-panel.open').forEach(function (p) { p.classList.remove('open'); });
+    document.querySelectorAll('.cs-trigger.open').forEach(function (t) { t.classList.remove('open'); });
+  }
+});
+
+// تُستدعى بعد أي تحديث ديناميكي لمحتوى select (زي الفئة الفرعية بعد تغيير الرئيسية)
+function refreshSelect_(selectId) {
+  const select = document.getElementById(selectId);
+  if (select) enhanceSelects_(select.parentElement);
+}
 
 // ============================================================
 // الداشبورد
@@ -232,9 +314,7 @@ function buildDashboardHtml_(d) {
 
   html += '<div class="section-title">الخزنة <span class="count-chip">خصوصية 👁</span></div>';
   html += '<div class="grid grid-4">';
-  html += treasuryCardHtml_('الإجمالي', d.treasury.total, 'total', cur);
-  html += treasuryCardHtml_('الكاش', d.treasury.cash, 'cash', cur);
-  html += treasuryCardHtml_('البنك', d.treasury.bank, 'bank', cur);
+  html += unifiedTreasuryCardHtml_(d.treasury, cur);
   html += statCard_('👛', 'العهدة', formatMoney_(d.pettyCash, cur), '', false);
   html += '</div>';
 
@@ -276,13 +356,26 @@ function statCard_(icon, label, value, sub, accent) {
 }
 function emptyRow_(icon, msg) { return '<div class="empty-state" style="padding:26px;"><span class="emoji" style="font-size:24px;">' + icon + '</span><div class="msg" style="font-size:12.5px;">' + msg + '</div></div>'; }
 
-function treasuryCardHtml_(label, value, key, currency) {
-  const revealed = state.treasuryRevealed[key];
-  const display = revealed ? formatMoney_(value, currency) : '••••••';
-  return '<div class="card stat-card"><div class="card-row"><div class="stat-icon">🔒</div>' +
-    '<button class="eye-btn" onclick="toggleTreasuryEye_(\'' + key + '\')">' + (revealed ? '🙈 إخفاء' : '👁 عرض') + '</button></div>' +
-    '<div class="card-label" style="margin-top:10px;">' + label + '</div>' +
-    '<div class="card-value ' + (revealed ? '' : 'hidden-value') + '">' + display + '</div></div>';
+function unifiedTreasuryCardHtml_(treasury, currency) {
+  const totalRevealed = state.treasuryRevealed.total;
+  const cashRevealed = state.treasuryRevealed.cash;
+  const bankRevealed = state.treasuryRevealed.bank;
+
+  return '<div class="card stat-card" style="grid-column: span 2;">' +
+    '<div class="card-row">' +
+      '<div class="stat-icon">🔒</div>' +
+      '<button class="eye-btn" onclick="toggleTreasuryEye_(\'total\')">' + (totalRevealed ? '🙈' : '👁') + '</button>' +
+    '</div>' +
+    '<div class="card-label" style="margin-top:10px;">إجمالي الخزنة</div>' +
+    '<div class="card-value big ' + (totalRevealed ? '' : 'hidden-value') + '">' + (totalRevealed ? formatMoney_(treasury.total, currency) : '••••••') + '</div>' +
+    '<div style="display:flex; gap:22px; margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">' +
+      '<div style="flex:1;"><div class="card-row"><span class="card-label" style="margin:0;">💵 كاش</span>' +
+        '<button class="eye-btn" style="padding:3px 7px; font-size:11px;" onclick="toggleTreasuryEye_(\'cash\')">' + (cashRevealed ? '🙈' : '👁') + '</button></div>' +
+        '<div style="font-size:15px; font-weight:800; margin-top:4px;" class="' + (cashRevealed ? '' : 'hidden-value') + '">' + (cashRevealed ? formatMoney_(treasury.cash, currency) : '••••') + '</div></div>' +
+      '<div style="flex:1;"><div class="card-row"><span class="card-label" style="margin:0;">🏦 بنك</span>' +
+        '<button class="eye-btn" style="padding:3px 7px; font-size:11px;" onclick="toggleTreasuryEye_(\'bank\')">' + (bankRevealed ? '🙈' : '👁') + '</button></div>' +
+        '<div style="font-size:15px; font-weight:800; margin-top:4px;" class="' + (bankRevealed ? '' : 'hidden-value') + '">' + (bankRevealed ? formatMoney_(treasury.bank, currency) : '••••') + '</div></div>' +
+    '</div></div>';
 }
 function toggleTreasuryEye_(key) { state.treasuryRevealed[key] = !state.treasuryRevealed[key]; setContent_(buildDashboardHtml_(window.__dashboardData)); }
 
@@ -307,8 +400,8 @@ function renderPosPage() {
           '<div class="field"><label>الخصم</label><input type="number" id="posDiscount" value="0"></div>' +
           '<div class="field"><label>طريقة الدفع</label><select id="posPaymentMethod"><option>كاش</option><option>فودافون كاش</option><option>بطاقة</option><option>انستاباي</option></select></div>' +
         '</div>' +
-        '<button class="btn block" style="margin-top:16px;" onclick="submitPosSale_()">✅ إتمام البيع</button>' +
-        '<button class="btn secondary block" style="margin-top:10px;" onclick="openPosReturnModal_()">↩️ مرتجع بيعة سابقة</button>' +
+        '<button class="btn success block" style="margin-top:16px;" onclick="submitPosSale_()">✅ إتمام البيع</button>' +
+        '<button class="btn danger block" style="margin-top:10px;" onclick="openPosReturnModal_()">↩️ مرتجع بيعة سابقة</button>' +
       '</div>' +
     '</div>' +
     '<div class="section-title">ملخص اليوم</div><div id="posTodaySummary" class="grid grid-3"></div>'
@@ -417,32 +510,16 @@ async function loadPosSummary_() {
 }
 
 // ============================================================
-// شاشة المخزون — ويزارد: فئات → منتج → متغيرات → تصفح
+// شاشة المخزون — جدول المنتجات هو الأساس + كل الإضافة عن طريق مودالز
 // ============================================================
-let invTab = 'categories';
 let invTreeCache = null;
 let invProductsCache = null;
 let invWarehousesCache = null;
 
 async function renderInventoryPage() {
-  setContent_(
-    '<div class="subtabs">' + subtabBtn_('categories', '1️⃣ الفئات') + subtabBtn_('product', '2️⃣ منتج جديد') +
-    subtabBtn_('variant', '3️⃣ المتغيرات (لون/مقاس)') + subtabBtn_('browse', '📦 تصفح المخزون') + '</div>' +
-    '<div id="invTabContent"></div>'
-  );
+  setContent_(renderSkeleton_());
   await loadInventoryBaseData_();
-  renderInvTab_(invTab);
-}
-
-function subtabBtn_(key, label) { return '<div class="subtab' + (invTab === key ? ' active' : '') + '" onclick="switchInvTab_(\'' + key + '\')">' + label + '</div>'; }
-
-function switchInvTab_(key) {
-  invTab = key;
-  document.querySelectorAll('.subtab').forEach(function (el, idx) {
-    const keys = ['categories', 'product', 'variant', 'browse'];
-    el.classList.toggle('active', keys[idx] === key);
-  });
-  renderInvTab_(key);
+  setContent_(buildInventoryMainHtml_());
 }
 
 async function loadInventoryBaseData_() {
@@ -454,37 +531,97 @@ async function loadInventoryBaseData_() {
   } catch (err) { showErrorToast_(err); }
 }
 
-function renderInvTab_(key) {
-  const box = document.getElementById('invTabContent');
-  if (key === 'categories') box.innerHTML = buildCategoriesTabHtml_();
-  else if (key === 'product') box.innerHTML = buildProductTabHtml_();
-  else if (key === 'variant') box.innerHTML = buildVariantTabHtml_();
-  else box.innerHTML = buildBrowseTabHtml_();
+function buildInventoryMainHtml_() {
+  const products = Object.values(invProductsCache || {});
+  const totalVariants = products.reduce(function (s, p) { return s + p.variants.length; }, 0);
+
+  let html = '<div class="card-row" style="margin-bottom:18px; flex-wrap:wrap; gap:10px;">' +
+    '<div class="field" style="flex:1; min-width:220px; margin-bottom:0;"><input type="text" id="invSearchInput" oninput="invSearch_(this.value)" placeholder="🔍 ابحث بالاسم أو الكود..."></div>' +
+    '<div style="display:flex; gap:8px; flex-wrap:wrap;">' +
+      '<button class="btn secondary" onclick="openCategoriesModal_()">🗂️ الفئات (' + invTreeCache.mainCategories.length + ')</button>' +
+      '<button class="btn success" onclick="openAddProductModal_()">➕ منتج جديد</button>' +
+      '<button class="btn info-btn" onclick="openAddVariantModal_()">🎨 إضافة متغير</button>' +
+    '</div></div>';
+
+  html += '<div class="card" style="padding:0; overflow:hidden;">';
+  html += '<div class="table-wrap" style="border:none; border-radius:0;"><table id="invTable"><thead><tr>' +
+    '<th>الكود</th><th>المنتج</th><th>الفئة</th><th>السعر</th><th>المتغيرات</th><th>الحالة</th>' +
+    '</tr></thead><tbody id="invTableBody">';
+  html += buildInventoryRows_(products);
+  html += '</tbody></table></div></div>';
+
+  html += '<div class="hint" style="margin-top:10px;">📦 ' + products.length + ' منتج · 🎨 ' + totalVariants + ' متغير</div>';
+  return html;
 }
 
-function buildCategoriesTabHtml_() {
-  let html = '<div class="grid grid-2">';
-  html += '<div class="card"><div class="card-heading">➕ فئة رئيسية جديدة</div><div class="card-desc">مثال: ملابس رجالي، إكسسوارات...</div>' +
-    '<div class="field"><label>اسم الفئة الرئيسية <span class="req">*</span></label><input type="text" id="mainCatName" placeholder="اكتب اسم الفئة"></div>' +
-    '<button class="btn block" style="margin-top:14px;" onclick="submitMainCategory_()">إضافة</button></div>';
+function buildInventoryRows_(products) {
+  if (products.length === 0) {
+    return '<tr><td colspan="6"><div class="empty-state"><span class="emoji">📦</span><div class="msg">لسه مفيش منتجات — دوسي "منتج جديد" فوق</div></div></td></tr>';
+  }
+  return products.map(function (p) {
+    const mainRow = '<tr style="cursor:pointer;" onclick="toggleProductRow_(\'' + p.code + '\')">' +
+      '<td><span class="pill info">' + p.code + '</span></td>' +
+      '<td><b>' + p.name + '</b></td>' +
+      '<td>' + (p.subCategoryName || '—') + '</td>' +
+      '<td><b>' + p.basePrice + '</b></td>' +
+      '<td>' + p.variants.length + ' متغير</td>' +
+      '<td><span class="pill ' + (p.status === 'نشط' ? 'success' : 'danger') + '">' + p.status + '</span></td>' +
+      '</tr>';
+    const variantsRow = '<tr id="variants-row-' + p.code + '" style="display:none;"><td colspan="6" style="background:var(--surface-2);">' +
+      (p.variants.length === 0 ? '<span class="hint">منتج بدون متغيرات (يُباع مباشرة)</span>' :
+        p.variants.map(function (v) {
+          const low = v.quantity <= v.lowStockThreshold;
+          return '<span class="variant-chip">' + v.code + ' — ' + (v.color || '—') + '/' + (v.size || '—') +
+            ' <span class="qty-tag" style="' + (low ? 'color:var(--danger);' : '') + '">' + v.quantity + '</span></span>';
+        }).join('')) +
+      '</td></tr>';
+    return mainRow + variantsRow;
+  }).join('');
+}
 
-  html += '<div class="card"><div class="card-heading">➕ فئة فرعية جديدة</div><div class="card-desc">لازم تختار الفئة الرئيسية الأب الأول</div>' +
-    '<div class="field"><label>الفئة الرئيسية <span class="req">*</span></label><select id="subCatParent">' + mainCategoryOptions_() + '</select></div>' +
-    '<div class="field" style="margin-top:12px;"><label>اسم الفئة الفرعية <span class="req">*</span></label><input type="text" id="subCatName" placeholder="اكتب اسم الفئة الفرعية"></div>' +
-    '<button class="btn block" style="margin-top:14px;" onclick="submitSubCategory_()">إضافة</button></div></div>';
+function toggleProductRow_(code) {
+  const row = document.getElementById('variants-row-' + code);
+  if (row) row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+}
 
-  html += '<div class="section-title">الشجرة الحالية <span class="count-chip">' + invTreeCache.mainCategories.length + ' فئة رئيسية</span></div><div class="card">';
-  if (invTreeCache.mainCategories.length === 0) html += emptyRow_('🌳', 'لسه مفيش فئات — ابدأ بإضافة فئة رئيسية فوق');
-  else invTreeCache.mainCategories.forEach(function (m) {
-    const subs = invTreeCache.subCategories.filter(function (s) { return s.parent === m.code; });
-    html += '<div style="padding:10px 0; border-bottom:1px solid var(--border);"><div style="font-weight:800; font-size:13.5px;">📁 ' + m.name + ' <span class="pill info">' + m.code + '</span></div>';
-    html += subs.length > 0
-      ? '<div style="padding-right:22px; margin-top:8px;">' + subs.map(function (s) { return '<span class="variant-chip">' + s.name + ' <span class="qty-tag">' + s.code + '</span></span>'; }).join('') + '</div>'
-      : '<div style="padding-right:22px; margin-top:6px; font-size:11.5px; color:var(--text-faint);">لا يوجد فئات فرعية بعد</div>';
-    html += '</div>';
+function invSearch_(query) {
+  const products = Object.values(invProductsCache || {});
+  const filtered = !query ? products : products.filter(function (p) {
+    return p.name.toLowerCase().includes(query.toLowerCase()) || p.code.includes(query);
   });
-  html += '</div>';
+  document.getElementById('invTableBody').innerHTML = buildInventoryRows_(filtered);
+}
+
+// ------------------------------------------------------------
+// مودال: الفئات (عرض الشجرة + إضافة رئيسية/فرعية)
+// ------------------------------------------------------------
+function openCategoriesModal_() {
+  openModal('🗂️ الفئات', 'إدارة الفئات الرئيسية والفرعية', buildCategoriesModalBody_(), '<button class="btn secondary" onclick="closeModal()">إغلاق</button>');
+}
+
+function buildCategoriesModalBody_() {
+  let html = '<div class="form-grid">' +
+    '<div class="field"><label>فئة رئيسية جديدة</label><input type="text" id="mainCatName" placeholder="مثال: ملابس رجالي"></div>' +
+    '<div class="field"><label>&nbsp;</label><button class="btn success block" onclick="submitMainCategory_()">➕ إضافة</button></div>' +
+  '</div>' +
+  '<div class="form-grid" style="margin-top:14px;">' +
+    '<div class="field"><label>الفئة الرئيسية الأب</label><select id="subCatParent">' + mainCategoryOptions_() + '</select></div>' +
+    '<div class="field"><label>فئة فرعية جديدة</label><input type="text" id="subCatName" placeholder="اسم الفئة الفرعية"></div>' +
+  '</div>' +
+  '<button class="btn success block" style="margin-top:10px;" onclick="submitSubCategory_()">➕ إضافة فرعية</button>' +
+  '<div class="section-title" style="margin-top:22px;">الشجرة الحالية</div><div id="categoriesTreeView">' + buildCategoriesTreeView_() + '</div>';
   return html;
+}
+
+function buildCategoriesTreeView_() {
+  if (invTreeCache.mainCategories.length === 0) return emptyRow_('🌳', 'لسه مفيش فئات');
+  return invTreeCache.mainCategories.map(function (m) {
+    const subs = invTreeCache.subCategories.filter(function (s) { return s.parent === m.code; });
+    return '<div style="padding:10px 0; border-bottom:1px solid var(--border);">' +
+      '<div style="font-weight:800; font-size:13.5px;">📁 ' + m.name + ' <span class="pill info">' + m.code + '</span></div>' +
+      (subs.length > 0 ? '<div style="padding-right:22px; margin-top:8px;">' + subs.map(function (s) { return '<span class="variant-chip">' + s.name + ' <span class="qty-tag">' + s.code + '</span></span>'; }).join('') + '</div>' :
+        '<div style="padding-right:22px; margin-top:6px; font-size:11.5px; color:var(--text-faint);">لا يوجد فئات فرعية بعد</div>') + '</div>';
+  }).join('');
 }
 
 function mainCategoryOptions_(selected) {
@@ -493,7 +630,7 @@ function mainCategoryOptions_(selected) {
 }
 function subCategoryOptionsForParent_(parentCode) {
   const subs = invTreeCache.subCategories.filter(function (s) { return s.parent === parentCode; });
-  if (subs.length === 0) return '<option value="">لا يوجد فئات فرعية — أضف واحدة من تاب الفئات</option>';
+  if (subs.length === 0) return '<option value="">لا يوجد فئات فرعية — أضف واحدة فوق</option>';
   return subs.map(function (s) { return '<option value="' + s.code + '">' + s.name + '</option>'; }).join('');
 }
 
@@ -503,7 +640,9 @@ async function submitMainCategory_() {
   try {
     const res = await api.createCategory({ username: state.user.username }, { name: name, type: 'رئيسية' });
     showToast_('تمت إضافة "' + res.name + '" ✅', 'success');
-    await loadInventoryBaseData_(); renderInvTab_('categories');
+    await loadInventoryBaseData_();
+    document.getElementById('modalBody').innerHTML = buildCategoriesModalBody_();
+    enhanceSelects_(document.getElementById('modalBody'));
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -515,117 +654,78 @@ async function submitSubCategory_() {
   try {
     const res = await api.createCategory({ username: state.user.username }, { name: name, type: 'فرعية', parentCode: parentCode });
     showToast_('تمت إضافة "' + res.name + '" ✅', 'success');
-    await loadInventoryBaseData_(); renderInvTab_('categories');
+    await loadInventoryBaseData_();
+    document.getElementById('modalBody').innerHTML = buildCategoriesModalBody_();
+    enhanceSelects_(document.getElementById('modalBody'));
   } catch (err) { showErrorToast_(err); }
 }
 
-// ---------------- تاب منتج جديد ----------------
-function buildProductTabHtml_() {
-  if (invTreeCache.mainCategories.length === 0) {
-    return '<div class="card"><div class="empty-state"><span class="emoji">⚠️</span><div class="msg">لازم تضيف فئة رئيسية وفرعية الأول من تاب "الفئات"</div></div></div>';
-  }
-  return '<div class="card" style="max-width:640px;">' +
-    '<div class="card-heading">🆕 إضافة منتج جديد</div><div class="card-desc">اختار الفئة الأول، بعدين اكتب بيانات المنتج</div>' +
-    '<div class="inline-add-row"><div class="field"><label>الفئة الرئيسية <span class="req">*</span></label>' +
+// ------------------------------------------------------------
+// مودال: منتج جديد
+// ------------------------------------------------------------
+function openAddProductModal_() {
+  if (!invTreeCache.mainCategories.length) { showToast_('لازم تضيفي فئة رئيسية وفرعية الأول', 'error'); openCategoriesModal_(); return; }
+  const body = '<div class="inline-add-row"><div class="field"><label>الفئة الرئيسية <span class="req">*</span></label>' +
     '<select id="prodMainCat" onchange="onProductMainCatChange_()">' + mainCategoryOptions_() + '</select></div>' +
-    '<button class="inline-add-btn" onclick="openAddCategoryModal_(\'رئيسية\')">+ فئة جديدة</button></div>' +
-    '<div class="inline-add-row" style="margin-top:14px;"><div class="field"><label>الفئة الفرعية <span class="req">*</span></label>' +
+    '<button class="inline-add-btn" onclick="closeModal(); openCategoriesModal_();">+ فئة</button></div>' +
+    '<div class="field" style="margin-top:14px;"><label>الفئة الفرعية <span class="req">*</span></label>' +
     '<select id="prodSubCat">' + subCategoryOptionsForParent_(invTreeCache.mainCategories[0].code) + '</select></div>' +
-    '<button class="inline-add-btn" onclick="openAddCategoryModal_(\'فرعية\')">+ فئة فرعية</button></div>' +
-    '<div class="form-grid" style="margin-top:18px;">' +
-      '<div class="field"><label>اسم المنتج <span class="req">*</span></label><input type="text" id="prodName" placeholder="مثال: تيشرت أساسي قطن"></div>' +
-      '<div class="field"><label>سعر البيع الأساسي <span class="req">*</span></label><input type="number" id="prodPrice" placeholder="0"></div>' +
-      '<div class="field"><label>رابط صورة (اختياري)</label><input type="text" id="prodImage" placeholder="https://..."></div>' +
-      '<div class="field"><label>الوصف (اختياري)</label><input type="text" id="prodDesc"></div>' +
+    '<div class="form-grid" style="margin-top:14px;">' +
+      '<div class="field"><label>اسم المنتج <span class="req">*</span></label><input type="text" id="prodName" placeholder="مثال: تيشرت أساسي"></div>' +
+      '<div class="field"><label>سعر البيع <span class="req">*</span></label><input type="number" id="prodPrice" placeholder="0"></div>' +
     '</div>' +
-    '<div class="hint" style="margin-top:10px;">💡 لو المنتج عنده ألوان/مقاسات، سيبه من غير متغيرات دلوقتي — وروح تاب "المتغيرات" بعد الحفظ عشان تضيفهم.</div>' +
-    '<button class="btn block" style="margin-top:16px;" onclick="submitProduct_()">✅ حفظ المنتج</button></div>';
+    '<div class="hint" style="margin-top:8px;">💡 بعد الحفظ افتحي "إضافة متغير" لو المنتج له ألوان/مقاسات</div>';
+
+  openModal('🆕 منتج جديد', '', body, '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn success" onclick="submitProduct_()">✅ حفظ المنتج</button>');
 }
 
 function onProductMainCatChange_() {
   document.getElementById('prodSubCat').innerHTML = subCategoryOptionsForParent_(document.getElementById('prodMainCat').value);
-}
-
-function openAddCategoryModal_(type) {
-  const isSub = type === 'فرعية';
-  openModal(isSub ? 'إضافة فئة فرعية' : 'إضافة فئة رئيسية', isSub ? 'هتُضاف تحت الفئة الرئيسية المختارة دلوقتي' : 'فئة جديدة من المستوى الأول',
-    '<div class="field"><label>الاسم</label><input type="text" id="modalCatName" placeholder="اكتب الاسم"></div>',
-    '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" onclick="submitModalCategory_(\'' + type + '\')">إضافة</button>');
-}
-
-async function submitModalCategory_(type) {
-  const name = document.getElementById('modalCatName').value.trim();
-  if (!name) { showToast_('اكتب الاسم', 'error'); return; }
-  const payload = { name: name, type: type };
-  if (type === 'فرعية') payload.parentCode = document.getElementById('prodMainCat').value;
-  try {
-    const res = await api.createCategory({ username: state.user.username }, payload);
-    closeModal(); showToast_('تمت إضافة "' + res.name + '" ✅', 'success');
-    await loadInventoryBaseData_();
-    if (type === 'رئيسية') { document.getElementById('prodMainCat').innerHTML = mainCategoryOptions_(res.code); onProductMainCatChange_(); }
-    else document.getElementById('prodSubCat').innerHTML = subCategoryOptionsForParent_(document.getElementById('prodMainCat').value);
-  } catch (err) { showErrorToast_(err); }
+  refreshSelect_('prodSubCat');
 }
 
 async function submitProduct_() {
   const payload = {
     mainCategory: document.getElementById('prodMainCat').value, subCategory: document.getElementById('prodSubCat').value,
-    name: document.getElementById('prodName').value.trim(), basePrice: Number(document.getElementById('prodPrice').value),
-    image: document.getElementById('prodImage').value, description: document.getElementById('prodDesc').value
+    name: document.getElementById('prodName').value.trim(), basePrice: Number(document.getElementById('prodPrice').value)
   };
-  if (!payload.subCategory) { showToast_('اختار فئة فرعية', 'error'); return; }
+  if (!payload.subCategory) { showToast_('اختاري فئة فرعية', 'error'); return; }
   if (!payload.name || !payload.basePrice) { showToast_('اسم المنتج والسعر مطلوبين', 'error'); return; }
   try {
     const res = await api.addProduct({ username: state.user.username }, payload);
     showToast_('تم حفظ المنتج ✅ الكود: ' + res.code, 'success');
-    await loadInventoryBaseData_(); switchInvTab_('variant');
+    closeModal();
+    await loadInventoryBaseData_();
+    setContent_(buildInventoryMainHtml_());
   } catch (err) { showErrorToast_(err); }
 }
 
-// ---------------- تاب المتغيرات ----------------
-function buildVariantTabHtml_() {
+// ------------------------------------------------------------
+// مودال: إضافة متغير (لون/مقاس)
+// ------------------------------------------------------------
+function openAddVariantModal_(presetProductCode) {
   const products = Object.values(invProductsCache || {});
-  if (products.length === 0) return '<div class="card"><div class="empty-state"><span class="emoji">⚠️</span><div class="msg">لسه مفيش منتجات — ضيف منتج الأول من تاب "منتج جديد"</div></div></div>';
-
+  if (products.length === 0) { showToast_('لازم تضيفي منتج الأول', 'error'); return; }
   const showWarehouse = invWarehousesCache && invWarehousesCache.length > 1;
-  return '<div class="grid grid-2">' +
-    '<div class="card"><div class="card-heading">🎨 إضافة متغير (لون/مقاس)</div><div class="card-desc">اختار المنتج، وحدد اللون والمقاس والكمية</div>' +
-      '<div class="field"><label>المنتج <span class="req">*</span></label><select id="varProductSelect" onchange="onVariantProductChange_()">' + productOptions_(products) + '</select></div>' +
-      '<div class="form-grid" style="margin-top:14px;">' +
-        '<div class="field"><label>اللون</label><input type="text" id="varColor" placeholder="مثال: أحمر"></div>' +
-        '<div class="field"><label>المقاس</label><input type="text" id="varSize" placeholder="مثال: L"></div>' +
-        '<div class="field"><label>الكمية <span class="req">*</span></label><input type="number" id="varQty" placeholder="0"></div>' +
-        '<div class="field"><label>سعر التكلفة <span class="req">*</span></label><input type="number" id="varCost" placeholder="0"></div>' +
-        '<div class="field"><label>سعر بيع خاص (اختياري)</label><input type="number" id="varSpecialPrice"></div>' +
-        '<div class="field"><label>حد التنبيه المنخفض</label><input type="number" id="varLowStock" value="5"></div>' +
-      '</div>' +
-      (showWarehouse ? '<div class="field" style="margin-top:14px;"><label>المخزن</label><select id="varWarehouse">' + warehouseOptions_() + '</select></div>' : '') +
-      '<button class="btn block" style="margin-top:16px;" onclick="submitVariant_()">✅ إضافة المتغير</button></div>' +
-    '<div class="card"><div class="card-heading">📋 متغيرات المنتج المختار</div><div id="existingVariantsList" style="margin-top:14px;"></div></div></div>';
-}
 
-function productOptions_(products) { return products.map(function (p) { return '<option value="' + p.code + '">' + p.name + ' (' + p.code + ')</option>'; }).join(''); }
-function warehouseOptions_() { return invWarehousesCache.map(function (w) { return '<option value="' + w.id + '">' + w.name + '</option>'; }).join(''); }
-function onVariantProductChange_() { renderExistingVariants_(); }
+  const body = '<div class="field"><label>المنتج <span class="req">*</span></label><select id="varProductSelect">' +
+    products.map(function (p) { return '<option value="' + p.code + '"' + (p.code === presetProductCode ? ' selected' : '') + '>' + p.name + ' (' + p.code + ')</option>'; }).join('') + '</select></div>' +
+    '<div class="form-grid" style="margin-top:14px;">' +
+      '<div class="field"><label>اللون</label><input type="text" id="varColor" placeholder="مثال: أسود"></div>' +
+      '<div class="field"><label>المقاس</label><input type="text" id="varSize" placeholder="مثال: M"></div>' +
+      '<div class="field"><label>الكمية <span class="req">*</span></label><input type="number" id="varQty" placeholder="0"></div>' +
+      '<div class="field"><label>سعر التكلفة <span class="req">*</span></label><input type="number" id="varCost" placeholder="0"></div>' +
+    '</div>' +
+    (showWarehouse ? '<div class="field" style="margin-top:14px;"><label>المخزن</label><select id="varWarehouse">' + invWarehousesCache.map(function (w) { return '<option value="' + w.id + '">' + w.name + '</option>'; }).join('') + '</select></div>' : '');
 
-function renderExistingVariants_() {
-  const code = document.getElementById('varProductSelect').value;
-  const product = invProductsCache[code];
-  const el = document.getElementById('existingVariantsList');
-  if (!product || product.variants.length === 0) { el.innerHTML = emptyRow_('🏷️', 'لسه مفيش متغيرات لهذا المنتج'); return; }
-  el.innerHTML = product.variants.map(function (v) {
-    return '<div class="list-item"><span>' + (v.color || '—') + ' / ' + (v.size || '—') + '</span>' +
-      '<span><span class="pill success">الكمية: ' + v.quantity + '</span> تكلفة: ' + v.cost + '</span></div>';
-  }).join('');
+  openModal('🎨 إضافة متغير', 'لون/مقاس جديد لمنتج موجود', body, '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn success" onclick="submitVariant_()">✅ إضافة</button>');
 }
 
 async function submitVariant_() {
   const payload = {
     productCode: document.getElementById('varProductSelect').value, color: document.getElementById('varColor').value,
     size: document.getElementById('varSize').value, quantity: Number(document.getElementById('varQty').value),
-    cost: Number(document.getElementById('varCost').value),
-    specialPrice: document.getElementById('varSpecialPrice').value ? Number(document.getElementById('varSpecialPrice').value) : '',
-    lowStockThreshold: Number(document.getElementById('varLowStock').value) || 5
+    cost: Number(document.getElementById('varCost').value)
   };
   const warehouseEl = document.getElementById('varWarehouse');
   if (warehouseEl) payload.warehouseId = warehouseEl.value;
@@ -634,41 +734,26 @@ async function submitVariant_() {
   try {
     await api.addVariant({ username: state.user.username }, payload);
     showToast_('تمت إضافة المتغير ✅', 'success');
-    document.getElementById('varColor').value = ''; document.getElementById('varSize').value = '';
-    document.getElementById('varQty').value = ''; document.getElementById('varCost').value = '';
-    await loadInventoryBaseData_(); renderExistingVariants_();
+    closeModal();
+    await loadInventoryBaseData_();
+    setContent_(buildInventoryMainHtml_());
   } catch (err) { showErrorToast_(err); }
 }
 
-function buildBrowseTabHtml_() {
-  const products = Object.values(invProductsCache || {});
-  if (products.length === 0) return '<div class="card"><div class="empty-state"><span class="emoji">📦</span><div class="msg">لسه مفيش منتجات مضافة</div></div></div>';
-  let html = '<div class="card">';
-  products.forEach(function (p) {
-    html += '<div style="padding:14px 0; border-bottom:1px solid var(--border);"><div class="card-row">' +
-      '<div><b>' + p.name + '</b> <span class="pill info">' + p.code + '</span> <span class="pill ' + (p.status === 'نشط' ? 'success' : 'danger') + '">' + p.status + '</span></div>' +
-      '<div><b>' + p.basePrice + '</b></div></div>';
-    if (p.variants.length > 0) {
-      html += '<div style="margin-top:10px;">' + p.variants.map(function (v) {
-        const low = v.quantity <= v.lowStockThreshold;
-        return '<span class="variant-chip">' + (v.color || '—') + '/' + (v.size || '—') + ' <span class="qty-tag" style="' + (low ? 'color:var(--danger);' : '') + '">' + v.quantity + '</span></span>';
-      }).join('') + '</div>';
-    } else html += '<div class="hint">منتج بدون متغيرات (يُباع مباشرة)</div>';
-    html += '</div>';
-  });
-  html += '</div>';
-  return html;
-}
-
+// ============================================================
 // ============================================================
 // شاشة المصروفات
 // ============================================================
 let expCategoriesCache = null;
 
+let expEmployeesCache = [];
+
 async function renderExpensesPage() {
   try {
     expCategoriesCache = await api.listExpenseCategories();
+    expEmployeesCache = await api.listEmployees(true);
     setContent_(buildExpensesPageHtml_());
+    onExpSubCatChange_();
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -679,8 +764,11 @@ function buildExpensesPageHtml_() {
       '<select id="expMainCat" onchange="onExpMainCatChange_()">' + expMainCatOptions_() + '</select></div>' +
       '<button class="inline-add-btn" onclick="openAddExpenseCategoryModal_(false)">+ فئة جديدة</button></div>' +
       '<div class="inline-add-row" style="margin-top:14px;"><div class="field"><label>الفئة الفرعية</label>' +
-      '<select id="expSubCat">' + expSubCatOptions_(expCategoriesCache.mainCategories[0] || '') + '</select></div>' +
+      '<select id="expSubCat" onchange="onExpSubCatChange_()">' + expSubCatOptions_(expCategoriesCache.mainCategories[0] || '') + '</select></div>' +
       '<button class="inline-add-btn" onclick="openAddExpenseCategoryModal_(true)">+ فئة فرعية</button></div>' +
+
+      '<div id="expDynamicFields" style="margin-top:14px;"></div>' +
+
       '<div class="form-grid" style="margin-top:16px;">' +
         '<div class="field"><label>الوصف</label><input type="text" id="expDesc" placeholder="اختياري"></div>' +
         '<div class="field"><label>المبلغ <span class="req">*</span></label><input type="number" id="expAmount" placeholder="0"></div>' +
@@ -692,8 +780,31 @@ function buildExpensesPageHtml_() {
         '<label style="display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:700; color:var(--text-dim); cursor:pointer;"><input type="checkbox" id="expIsRecurring" style="width:auto;"> مصروف متكرر؟</label>' +
       '</div>' +
       '<div id="expRecurrenceDaysWrap" style="display:none; margin-top:12px;"><div class="field"><label>يتكرر كل (يوم)</label><input type="number" id="expRecurrenceDays" value="30"></div></div>' +
-      '<button class="btn block" style="margin-top:18px;" onclick="submitExpense_()">✅ تسجيل المصروف</button></div>' +
+      '<button class="btn success block" style="margin-top:18px;" onclick="submitExpense_()">✅ تسجيل المصروف</button></div>' +
     '<div class="card"><div class="card-heading">📋 آخر المصروفات</div><div id="expensesHistoryList" style="margin-top:14px;">' + emptyRow_('📊', 'راجع التقارير لتفاصيل المصروفات الكاملة') + '</div></div></div>';
+}
+
+// ------------------------------------------------------------
+// الفئات الديناميكية: كل فئة فرعية ليها حقول إضافية خاصة بيها
+// عايزة تزودي قاعدة جديدة؟ ضيفي مفتاح جديد هنا بس
+// ------------------------------------------------------------
+const EXPENSE_DYNAMIC_RULES = {
+  'مرتبات': function () {
+    return '<div class="form-grid">' +
+      '<div class="field"><label>الموظف <span class="req">*</span></label><select id="expEmployeeSelect">' +
+      expEmployeesCache.map(function (e) { return '<option value="' + e.name + '">' + e.name + '</option>'; }).join('') + '</select></div>' +
+      '<div class="field"><label>بونص/مكافأة (اختياري)</label><input type="number" id="expBonus" placeholder="0"></div>' +
+      '</div>';
+  }
+};
+
+function onExpSubCatChange_() {
+  const subCat = document.getElementById('expSubCat') ? document.getElementById('expSubCat').value : '';
+  const wrap = document.getElementById('expDynamicFields');
+  if (!wrap) return;
+  const rule = EXPENSE_DYNAMIC_RULES[subCat];
+  wrap.innerHTML = rule ? rule() : '';
+  enhanceSelects_(wrap);
 }
 
 function expMainCatOptions_() {
@@ -704,7 +815,7 @@ function expSubCatOptions_(mainCat) {
   const subs = (expCategoriesCache.subCategoriesByMain && expCategoriesCache.subCategoriesByMain[mainCat]) || [];
   return '<option value="">بدون فئة فرعية</option>' + subs.map(function (s) { return '<option value="' + s + '">' + s + '</option>'; }).join('');
 }
-function onExpMainCatChange_() { document.getElementById('expSubCat').innerHTML = expSubCatOptions_(document.getElementById('expMainCat').value); }
+function onExpMainCatChange_() { document.getElementById('expSubCat').innerHTML = expSubCatOptions_(document.getElementById('expMainCat').value); refreshSelect_('expSubCat'); onExpSubCatChange_(); }
 
 function openAddExpenseCategoryModal_(isSub) {
   openModal(isSub ? 'فئة فرعية جديدة' : 'فئة رئيسية جديدة', isSub ? 'هتُضاف تحت "' + document.getElementById('expMainCat').value + '"' : 'فئة مصروفات جديدة من المستوى الأول',
@@ -743,6 +854,12 @@ async function submitExpense_() {
     isFixedAsset: document.getElementById('expIsFixedAsset').checked, isRecurring: document.getElementById('expIsRecurring').checked,
     recurrenceDays: document.getElementById('expIsRecurring').checked ? Number(document.getElementById('expRecurrenceDays').value) : ''
   };
+  const empSelect = document.getElementById('expEmployeeSelect');
+  if (empSelect) {
+    const emp = expEmployeesCache.find(function (e) { return e.name === empSelect.value; });
+    payload.employeeId = emp ? emp.id : null;
+    payload.bonus = Number(document.getElementById('expBonus').value) || null;
+  }
   if (!payload.mainCategory || !payload.amount) { showToast_('الفئة الرئيسية والمبلغ مطلوبين', 'error'); return; }
   try {
     await api.addExpense({ username: state.user.username }, payload);
@@ -768,7 +885,7 @@ function renderSalesPage() {
           '<div class="field"><label>تليفون العميل (اختياري)</label><input type="text" id="salesCustomerPhone"></div>' +
           '<div class="field"><label>التاريخ</label><input type="datetime-local" id="salesDate"></div>' +
         '</div>' +
-        '<button class="btn block" style="margin-top:16px;" onclick="submitSale_()">✅ تسجيل البيعة</button></div>' +
+        '<button class="btn success block" style="margin-top:16px;" onclick="submitSale_()">✅ تسجيل البيعة</button></div>' +
       '<div class="card"><div class="card-heading">📋 آخر المبيعات</div><div id="salesHistoryList" style="margin-top:14px;"></div></div></div>'
   );
   salesCart = [];
@@ -852,7 +969,7 @@ async function renderSuppliersPage() {
         '<div class="form-grid" style="margin-top:6px;">' +
           '<div class="field"><label>اسم المورد <span class="req">*</span></label><input type="text" id="supName"></div>' +
           '<div class="field"><label>رقم التواصل</label><input type="text" id="supContact"></div>' +
-        '</div><button class="btn block" style="margin-top:14px;" onclick="submitSupplier_(event)">➕ إضافة مورد</button>' +
+        '</div><button class="btn success block" style="margin-top:14px;" onclick="submitSupplier_(event)">➕ إضافة مورد</button>' +
         '<div class="card-heading" style="margin-top:26px;">📦 أوردر شراء جديد</div>' +
         '<div class="field" style="margin-top:8px;"><label>المورد <span class="req">*</span></label><select id="poSupplierSelect"></select></div>' +
         '<div class="field" style="margin-top:12px;"><input type="text" id="poSearchInput" oninput="poSearch_(this.value)" placeholder="ابحث عن منتج لإضافته..."></div>' +
@@ -860,7 +977,7 @@ async function renderSuppliersPage() {
         '<div class="form-grid">' +
           '<div class="field"><label>حالة الدفع</label><select id="poPaymentStatus"><option>مدفوع بالكامل</option><option>مدفوع جزئيًا</option><option>متأخر/غير مدفوع</option></select></div>' +
           '<div class="field"><label>المبلغ المدفوع (لو جزئي)</label><input type="number" id="poAmountPaid" value="0"></div>' +
-        '</div><button class="btn block" style="margin-top:14px;" onclick="submitPurchaseOrder_()">✅ تسجيل أوردر الشراء</button></div>' +
+        '</div><button class="btn success block" style="margin-top:14px;" onclick="submitPurchaseOrder_()">✅ تسجيل أوردر الشراء</button></div>' +
       '<div class="card"><div class="card-heading">📇 الموردون</div><div id="suppliersList" style="margin-top:10px;"></div>' +
         '<div class="card-heading" style="margin-top:26px;">🧾 أوردرات الشراء الأخيرة</div><div id="poList" style="margin-top:10px;"></div></div></div>'
   );
@@ -1037,7 +1154,7 @@ async function renderInvoicesPage() {
           '<div class="field"><label>الإجمالي <span class="req">*</span></label><input type="number" id="invTotal"></div>' +
           '<div class="field"><label>المدفوع</label><input type="number" id="invPaid" value="0"></div>' +
           '<div class="field"><label>تم التحصيل COD؟</label><select id="invIsCOD"><option value="false">لا</option><option value="true">نعم</option></select></div>' +
-        '</div><button class="btn block" style="margin-top:14px;" onclick="submitInvoice_()">➕ إنشاء فاتورة</button></div>' +
+        '</div><button class="btn success block" style="margin-top:14px;" onclick="submitInvoice_()">➕ إنشاء فاتورة</button></div>' +
       '<div class="card"><div class="card-heading">📋 الفواتير</div>' +
         '<div class="field"><select id="invStatusFilter" onchange="loadInvoices_()"><option value="">كل الحالات</option>' +
         '<option>مدفوعة بالكامل</option><option>مدفوعة جزئيًا</option><option>متأخرة</option><option>تم التحصيل COD</option></select></div>' +
@@ -1096,14 +1213,14 @@ async function renderCapitalPage() {
       '<div class="form-grid" style="margin-top:14px;">' +
         '<div class="field"><label>نوع الحركة</label><select id="capType"><option>إضافة رأس مال</option><option>سحب رأس مال</option></select></div>' +
         '<div class="field"><label>المبلغ <span class="req">*</span></label><input type="number" id="capAmount"></div>' +
-      '</div><button class="btn block" style="margin-top:16px;" onclick="submitCapitalMovement_()">✅ تسجيل الحركة</button>' +
+      '</div><button class="btn success block" style="margin-top:16px;" onclick="submitCapitalMovement_()">✅ تسجيل الحركة</button>' +
       '<div class="card-heading" style="margin-top:26px;">⚙️ نسب الشريك</div><div class="card-desc">نسبة توزيع الأرباح ونسبة الإدارة</div>' +
       '<div class="field"><label>الشريك</label><select id="ratePartnerSelect">' + summary.partners.map(function (p) { return '<option>' + p.name + '</option>'; }).join('') + '</select></div>' +
       '<div class="form-grid" style="margin-top:12px;">' +
         '<div class="field"><label>نسبة توزيع الأرباح %</label><input type="number" id="rateProfitShare"></div>' +
         '<div class="field"><label>نسبة/مبلغ الإدارة</label><input type="number" id="rateAdminValue"></div>' +
       '</div><div class="field" style="margin-top:12px;"><label>نوع نسبة الإدارة</label><select id="rateAdminType"><option value="نسبة %">نسبة %</option><option value="مبلغ ثابت">مبلغ ثابت</option></select></div>' +
-      '<button class="btn secondary block" style="margin-top:14px;" onclick="submitPartnerRates_()">💾 حفظ النسب</button></div>';
+      '<button class="btn success block" style="margin-top:14px;" onclick="submitPartnerRates_()">💾 حفظ النسب</button></div>';
 
     html += '<div class="card"><div class="card-heading">📊 الشركاء الحاليين</div><div style="margin-top:10px;">';
     html += summary.partners.length === 0 ? emptyRow_('🤝', 'لا يوجد شركاء مسجلين بعد') :
@@ -1148,7 +1265,7 @@ async function renderPettyCashPage() {
       '<div class="field"><label>نوع الحركة</label><select id="pcType"><option>إيداع</option><option>سحب</option><option>مصروف</option></select></div>' +
       '<div class="form-grid" style="margin-top:14px;"><div class="field"><label>المبلغ <span class="req">*</span></label><input type="number" id="pcAmount"></div>' +
       '<div class="field"><label>الوصف</label><input type="text" id="pcDesc"></div></div>' +
-      '<button class="btn block" style="margin-top:16px;" onclick="submitPettyCash_()">✅ تسجيل الحركة</button></div>';
+      '<button class="btn success block" style="margin-top:16px;" onclick="submitPettyCash_()">✅ تسجيل الحركة</button></div>';
     html += '<div class="card"><div class="card-heading">📋 آخر الحركات</div><div style="margin-top:12px;">';
     html += history.length === 0 ? emptyRow_('👛', 'لا يوجد حركات بعد') :
       history.map(function (h) {
@@ -1178,7 +1295,7 @@ function renderReportsPage() {
     '<div class="card"><div class="card-heading">📈 قائمة الدخل</div>' +
       '<div class="form-grid"><div class="field"><label>من تاريخ</label><input type="date" id="repStart" value="' + firstOfMonth + '"></div>' +
       '<div class="field"><label>إلى تاريخ</label><input type="date" id="repEnd" value="' + today + '"></div></div>' +
-      '<button class="btn" style="margin-top:16px;" onclick="loadIncomeStatement_()">📊 عرض</button></div>' +
+      '<button class="btn info-btn" style="margin-top:16px;" onclick="loadIncomeStatement_()">📊 عرض</button></div>' +
     '<div id="incomeStatementResult" style="margin-top:18px;"></div>' +
     '<div class="section-title">المواسم</div>' +
     '<div class="card"><div class="form-grid">' +
@@ -1235,15 +1352,15 @@ async function renderHrPage() {
         '<div class="field"><label>الوظيفة</label><input type="text" id="empJob"></div>' +
         '<div class="field"><label>الراتب الأساسي</label><input type="number" id="empSalary"></div>' +
         '<div class="field"><label>التليفون</label><input type="text" id="empPhone"></div></div>' +
-        '<button class="btn block" style="margin-top:14px;" onclick="submitEmployee_()">➕ إضافة موظف</button>' +
+        '<button class="btn success block" style="margin-top:14px;" onclick="submitEmployee_()">➕ إضافة موظف</button>' +
         '<div class="card-heading" style="margin-top:26px;">🕒 تسجيل حضور</div>' +
         '<div class="form-grid"><div class="field"><label>الموظف</label><select id="attEmployeeSelect"></select></div>' +
         '<div class="field"><label>الحالة</label><select id="attStatus"><option>حضور</option><option>غياب</option><option>إجازة</option></select></div></div>' +
-        '<button class="btn secondary block" style="margin-top:14px;" onclick="submitAttendance_()">تسجيل</button>' +
+        '<button class="btn success block" style="margin-top:14px;" onclick="submitAttendance_()">تسجيل</button>' +
         '<div class="card-heading" style="margin-top:26px;">💵 سلفة جديدة</div>' +
         '<div class="form-grid"><div class="field"><label>الموظف</label><select id="advEmployeeSelect"></select></div>' +
         '<div class="field"><label>المبلغ</label><input type="number" id="advAmount"></div></div>' +
-        '<button class="btn secondary block" style="margin-top:14px;" onclick="submitAdvance_()">تسجيل السلفة</button></div>' +
+        '<button class="btn success block" style="margin-top:14px;" onclick="submitAdvance_()">تسجيل السلفة</button></div>' +
       '<div class="card"><div class="card-heading">👥 الموظفون</div><div id="employeesList" style="margin-top:10px;"></div>' +
         '<div class="card-heading" style="margin-top:26px;">💰 مرتبات الشهر الحالي</div>' +
         '<button class="btn secondary" style="margin-top:8px;" onclick="runSalaries_()">تشغيل المرتبات</button><div id="salariesList" style="margin-top:14px;"></div></div></div>'
@@ -1318,7 +1435,7 @@ async function renderWarehousesPage() {
       '<div class="field" style="margin-top:14px;"><label>الوصف</label><input type="text" id="whDesc"></div>' +
       '<label style="display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:700; color:var(--text-dim); margin-top:14px; cursor:pointer;">' +
       '<input type="checkbox" id="whIsDefaultOnline" style="width:auto;"> المخزن الافتراضي لأوردرات الأونلاين</label>' +
-      '<button class="btn block" style="margin-top:16px;" onclick="submitWarehouse_()">➕ إضافة مخزن</button></div>' +
+      '<button class="btn success block" style="margin-top:16px;" onclick="submitWarehouse_()">➕ إضافة مخزن</button></div>' +
       '<div class="card"><div class="card-heading">📋 المخازن الحالية <span class="pill info">' + warehouses.length + '</span></div><div style="margin-top:12px;">';
     html += warehouses.length === 0 ? emptyRow_('🏬', 'لسه مفيش مخازن مسجلة') :
       warehouses.map(function (w) { return '<div class="list-item"><span><b>' + w.name + '</b><br><span style="color:var(--text-dim); font-size:11.5px;">' + (w.location || '—') + '</span></span>' + (w.isDefaultOnline ? '<span class="pill success">افتراضي أونلاين</span>' : '') + '</div>'; }).join('');
@@ -1401,7 +1518,7 @@ async function renderSettingsPage() {
       selectField_('موافقة الشركاء مفعّلة؟', 'setPartnerApprovalEnabled', s.partnerApprovalEnabled, [['true', 'نعم'], ['false', 'لا']]) +
       field_('EasyOrders API Key', 'setEasyOrdersApiKey', s.easyOrdersApiKey) + field_('EasyOrders Secret', 'setEasyOrdersSecret', s.easyOrdersSecret) +
       field_('حد التنبيه الافتراضي للمخزون', 'setLowStockThresholdDefault', s.lowStockThresholdDefault) +
-      '</div><button class="btn block" style="margin-top:20px;" onclick="saveSettings_()">💾 حفظ الإعدادات</button></div>');
+      '</div><button class="btn success block" style="margin-top:20px;" onclick="saveSettings_()">💾 حفظ الإعدادات</button></div>');
   } catch (err) { showErrorToast_(err); }
 }
 
