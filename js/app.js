@@ -58,15 +58,17 @@ const PAGE_META = {
 // ------------------------------------------------------------
 // نظام المودال العام
 // ------------------------------------------------------------
-function openModal(title, desc, bodyHtml, actionsHtml) {
-  document.getElementById('modalBox').innerHTML =
+function openModal(title, desc, bodyHtml, actionsHtml, wide) {
+  const box = document.getElementById('modalBox');
+  box.classList.toggle('wide', !!wide);
+  box.innerHTML =
     '<div class="modal-close-x" onclick="closeModal()">✕</div>' +
     '<div class="modal-title">' + title + '</div>' +
     (desc ? '<div class="modal-desc">' + desc + '</div>' : '') +
     '<div id="modalBody">' + (bodyHtml || '') + '</div>' +
     '<div class="modal-actions">' + (actionsHtml || '') + '</div>';
   document.getElementById('modalOverlay').style.display = 'flex';
-  enhanceSelects_(document.getElementById('modalBox'));
+  enhanceSelects_(box);
 }
 function closeModal() { document.getElementById('modalOverlay').style.display = 'none'; }
 
@@ -308,8 +310,8 @@ function buildDashboardHtml_(d) {
   html += '<div class="grid grid-4">';
   html += statCard_('💰', 'إجمالي المبيعات (الشهر)', formatMoney_(d.sales.total, cur), 'أونلاين ' + formatMoney_(d.sales.online, cur) + ' · محل ' + formatMoney_(d.sales.store, cur), true);
   html += statCard_('💸', 'المصروفات (الشهر)', formatMoney_(d.expenses.total, cur), '', false);
-  html += statCard_('📈', 'صافي الربح', formatMoney_(d.profit.netProfit, cur), 'هامش ' + d.profit.npMargin + '%', true);
-  html += statCard_('🧾', 'عدد عمليات البيع', d.sales.count, '', false);
+  html += statCard_('⚠️', 'منتجات منخفضة', d.lowStockCount, '', false);
+  html += statCard_('⚖️', 'مستحقات (عملاء/موردين)', formatMoney_(d.receivables, cur) + ' / ' + formatMoney_(d.payables, cur), 'لينا / علينا', false);
   html += '</div>';
 
   html += '<div class="section-title">الخزنة <span class="count-chip">خصوصية 👁</span></div>';
@@ -327,9 +329,10 @@ function buildDashboardHtml_(d) {
   }
 
   html += '<div class="section-title">مؤشرات الربحية</div><div class="grid grid-4">';
+  html += statCard_('📈', 'صافي الربح', '<span class="' + (d.profit.netProfit >= 0 ? 'money-positive' : 'money-negative') + '">' + formatMoney_(d.profit.netProfit, cur) + '</span>', 'هامش ' + d.profit.npMargin + '%', true);
+  html += statCard_('🧾', 'عدد عمليات البيع', d.sales.count, '', false);
   html += statCard_('📐', 'GP / Sales', d.profit.gpMargin + '%', '', false);
   html += statCard_('📐', 'NP / Sales', d.profit.npMargin + '%', '', false);
-  html += statCard_('🎟️', 'مصروفات مقابل الأرباح', formatMoney_(d.expenses.total, cur), '', false);
   html += '</div>';
 
   html += '<div class="section-title">تنبيهات مخزون منخفض <span class="count-chip">' + d.lowStockCount + '</span></div><div class="card">';
@@ -936,12 +939,15 @@ async function loadSalesHistory_() {
     const el = document.getElementById('salesHistoryList');
     const cur = state.settings.currency || 'جنيه';
     if (sales.length === 0) { el.innerHTML = emptyRow_('🧾', 'لا يوجد مبيعات بعد'); return; }
-    el.innerHTML = sales.map(function (s) {
+    let html = '<div class="table-wrap"><table><thead><tr><th>رقم البيعة</th><th>المصدر</th><th>التاريخ</th><th>الإجمالي</th><th>الحالة</th><th></th></tr></thead><tbody>';
+    html += sales.map(function (s) {
       const statusPill = s.status === 'مكتملة' ? 'success' : 'warning';
-      return '<div class="list-item"><span>' + s.saleId + ' — ' + s.source + '<br><span style="color:var(--text-faint); font-size:11px;">' + formatDate_(s.date) + '</span></span>' +
-        '<span>' + formatMoney_(s.total, cur) + ' <span class="pill ' + statusPill + '">' + s.status + '</span>' +
-        (s.status === 'مكتملة' ? ' <button class="eye-btn" onclick="quickReturnSale_(\'' + s.saleId + '\')">↩️</button>' : '') + '</span></div>';
+      return '<tr><td>' + s.saleId + '</td><td>' + s.source + '</td><td>' + formatDate_(s.date) + '</td>' +
+        '<td class="money-positive">' + formatMoney_(s.total, cur) + '</td><td><span class="pill ' + statusPill + '">' + s.status + '</span></td>' +
+        '<td>' + (s.status === 'مكتملة' ? '<button class="eye-btn" onclick="quickReturnSale_(\'' + s.saleId + '\')">↩️</button>' : '') + '</td></tr>';
     }).join('');
+    html += '</tbody></table></div>';
+    el.innerHTML = html;
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -1000,15 +1006,71 @@ async function loadSuppliers_() {
     const suppliers = await api.getSuppliers();
     document.getElementById('poSupplierSelect').innerHTML = suppliers.map(function (s) { return '<option>' + s.name + '</option>'; }).join('') || '<option value="">أضف مورد الأول</option>';
     document.getElementById('suppliersList').innerHTML = suppliers.length === 0 ? emptyRow_('🏭', 'لا يوجد موردين بعد') :
-      suppliers.map(function (s) { return '<div class="list-item"><span>' + s.name + '</span><span style="color:var(--text-dim);">' + (s.contact || '—') + '</span></div>'; }).join('');
+      suppliers.map(function (s) {
+        return '<div class="list-item" style="cursor:pointer;" onclick="openSupplierDetailModal_(\'' + s.name.replace(/'/g, "\\'") + '\')"><span><b>' + s.name + '</b></span><span style="color:var(--text-dim);">' + (s.contact || '—') + ' ›</span></div>';
+      }).join('');
   } catch (err) { showErrorToast_(err); }
+}
+
+// ------------------------------------------------------------
+// صفحة تفاصيل المورد — Modal بـ3 تابات (بيانات / المشتريات / كشف حساب)
+// ------------------------------------------------------------
+let supplierDetailTab = 'data';
+let supplierDetailCache = null;
+
+async function openSupplierDetailModal_(supplierName) {
+  try {
+    supplierDetailCache = await api.getSupplierStatement(supplierName);
+    supplierDetailTab = 'data';
+    openModal('📇 ' + supplierName, '', buildSupplierDetailHtml_(), '<button class="btn secondary" onclick="closeModal()">إغلاق</button>', true);
+  } catch (err) { showErrorToast_(err); }
+}
+
+function buildSupplierDetailHtml_() {
+  const cur = state.settings.currency || 'جنيه';
+  const s = supplierDetailCache;
+  let html = '<div class="subtabs">' +
+    '<div class="subtab' + (supplierDetailTab === 'data' ? ' active' : '') + '" onclick="switchSupplierTab_(\'data\')">📇 البيانات</div>' +
+    '<div class="subtab' + (supplierDetailTab === 'purchases' ? ' active' : '') + '" onclick="switchSupplierTab_(\'purchases\')">📦 المشتريات</div>' +
+    '<div class="subtab' + (supplierDetailTab === 'statement' ? ' active' : '') + '" onclick="switchSupplierTab_(\'statement\')">🧾 كشف الحساب</div>' +
+  '</div>';
+
+  if (supplierDetailTab === 'data') {
+    html += '<div class="form-grid">' +
+      '<div class="field"><label>الاسم</label><input type="text" value="' + s.supplier.name + '" disabled></div>' +
+      '<div class="field"><label>رقم التواصل</label><input type="text" value="' + (s.supplier.contact || '—') + '" disabled></div>' +
+    '</div><div class="hint" style="margin-top:10px;">' + (s.supplier.notes || 'لا يوجد ملاحظات') + '</div>';
+  } else if (supplierDetailTab === 'purchases') {
+    html += '<div class="table-wrap"><table><thead><tr><th>رقم الأوردر</th><th>التاريخ</th><th>الإجمالي</th><th>الحالة</th></tr></thead><tbody>';
+    html += s.purchases.length === 0 ? '<tr><td colspan="4">' + emptyRow_('📦', 'لا يوجد مشتريات بعد') + '</td></tr>' :
+      s.purchases.map(function (p) {
+        const pill = p.paymentStatus === 'مدفوع بالكامل' ? 'success' : (p.paymentStatus === 'مدفوع جزئيًا' ? 'warning' : 'danger');
+        return '<tr><td>' + p.orderNumber + '</td><td>' + formatDate_(p.date) + '</td><td><b>' + formatMoney_(p.total, cur) + '</b></td><td><span class="pill ' + pill + '">' + p.paymentStatus + '</span></td></tr>';
+      }).join('');
+    html += '</tbody></table></div>';
+  } else {
+    const balance = s.totalRemaining;
+    html += '<div class="grid grid-3">' +
+      statCard_('💰', 'إجمالي المشتريات', formatMoney_(s.totalPurchases, cur), '', false) +
+      statCard_('✅', 'إجمالي المدفوع', formatMoney_(s.totalPaid, cur), '', false) +
+      '<div class="card stat-card"><div class="stat-icon">⚖️</div><div class="card-label">الرصيد (متبقي له)</div>' +
+        '<div class="card-value ' + (balance > 0 ? 'money-negative' : 'money-positive') + '">' + formatMoney_(balance, cur) + '</div>' +
+        '<div class="card-sub">' + (balance > 0 ? 'مستحق للمورد (دائن)' : 'لا يوجد مستحقات') + '</div></div>' +
+    '</div>';
+  }
+  return html;
+}
+
+function switchSupplierTab_(tab) {
+  supplierDetailTab = tab;
+  document.getElementById('modalBody').innerHTML = buildSupplierDetailHtml_();
 }
 
 async function poSearch_(query) {
   if (!query || query.length < 2) { document.getElementById('poSearchResults').innerHTML = ''; return; }
   try {
     const results = await api.searchProducts(query);
-    document.getElementById('poSearchResults').innerHTML = results.map(function (p) {
+    let html = results.map(function (p) {
       return p.variants.map(function (v) {
         const label = (p.name + ' — ' + v.color + ' ' + v.size).replace(/'/g, '');
         return '<div class="product-tile" onclick="addToPoCart_(\'' + v.code + '\', \'' + label + '\', ' + v.cost + ')">' +
@@ -1016,6 +1078,46 @@ async function poSearch_(query) {
           '<div class="product-tile-meta">' + v.color + ' · ' + v.size + '</div></div><b>آخر تكلفة: ' + v.cost + '</b></div>';
       }).join('');
     }).join('');
+
+    if (results.length === 0) {
+      const safeQuery = query.replace(/'/g, "\\'");
+      html = '<div class="callout-notfound" id="poNotFoundPrompt">' +
+        '⚠️ المنتج "' + query + '" غير موجود في المخزون — ' +
+        '<span style="color:var(--accent); font-weight:800; cursor:pointer; text-decoration:underline;" onclick="openPoQuickAddForm_(\'' + safeQuery + '\')">تريدين إضافته؟</span>' +
+        '</div><div id="poQuickAddInline"></div>';
+    }
+    document.getElementById('poSearchResults').innerHTML = html;
+  } catch (err) { showErrorToast_(err); }
+}
+
+// ------------------------------------------------------------
+// إضافة منتج جديد Inline من داخل شاشة أمر الشراء (بدون مغادرتها)
+// 3 خانات بس: الاسم / السعر (التكلفة) / الكود (اختياري)
+// ------------------------------------------------------------
+async function openPoQuickAddForm_(prefillName) {
+  document.getElementById('poQuickAddInline').innerHTML =
+    '<div class="card" style="background:var(--surface-2); margin-top:10px; padding:14px;">' +
+      '<div class="form-grid" style="grid-template-columns: 2fr 1fr 1fr;">' +
+        '<div class="field"><label>اسم المنتج</label><input type="text" id="poQuickName" value="' + prefillName + '"></div>' +
+        '<div class="field"><label>سعر التكلفة</label><input type="number" id="poQuickPrice" placeholder="0"></div>' +
+        '<div class="field"><label>الكود (اختياري)</label><input type="text" id="poQuickCode" placeholder="تلقائي"></div>' +
+      '</div>' +
+      '<button class="btn success block" style="margin-top:10px;" onclick="submitPoQuickAdd_()">✅ إضافة المنتج للمخزون وللأوردر</button>' +
+    '</div>';
+}
+
+async function submitPoQuickAdd_() {
+  const name = document.getElementById('poQuickName').value.trim();
+  const price = Number(document.getElementById('poQuickPrice').value);
+  const manualCode = document.getElementById('poQuickCode').value.trim();
+  if (!name || !price) { showToast_('الاسم والسعر مطلوبين', 'error'); return; }
+
+  try {
+    const result = await api.quickAddProduct({ username: state.user.username }, name, price, manualCode);
+    showToast_('تمت إضافة "' + name + '" للمخزون ✅', 'success');
+    addToPoCart_(result.variantCode, name, price);
+    document.getElementById('poSearchResults').innerHTML = '';
+    document.getElementById('poSearchInput').value = '';
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -1178,18 +1280,24 @@ async function loadInvoices_() {
   try {
     const invoices = await api.listInvoices(status ? { status: status } : {});
     const cur = state.settings.currency || 'جنيه';
-    document.getElementById('invoicesList').innerHTML = invoices.length === 0 ? emptyRow_('📄', 'لا يوجد فواتير') :
-      invoices.map(function (inv) {
-        const pill = inv.status === 'مدفوعة بالكامل' ? 'success' : (inv.status === 'متأخرة' ? 'danger' : 'warning');
-        return '<div class="list-item"><span>' + inv.customerName + '</span><span>' + formatMoney_(inv.total, cur) + ' <span class="pill ' + pill + '">' + inv.status + '</span>' +
-          (inv.remaining > 0 ? ' <button class="eye-btn" onclick="openPayInvoiceModal_(\'' + inv.invoiceId + '\', ' + inv.remaining + ')">💳</button>' : '') + '</span></div>';
-      }).join('');
+    const el = document.getElementById('invoicesList');
+    if (invoices.length === 0) { el.innerHTML = emptyRow_('📄', 'لا يوجد فواتير'); return; }
+    let html = '<div class="table-wrap"><table><thead><tr><th>العميل</th><th>الإجمالي</th><th>المتبقي</th><th>الحالة</th><th></th></tr></thead><tbody>';
+    html += invoices.map(function (inv) {
+      const pill = inv.status === 'مدفوعة بالكامل' ? 'success' : (inv.status === 'متأخرة' ? 'danger' : 'warning');
+      return '<tr><td>' + inv.customerName + '</td><td class="money-positive">' + formatMoney_(inv.total, cur) + '</td>' +
+        '<td class="' + (inv.remaining > 0 ? 'money-negative' : '') + '">' + formatMoney_(inv.remaining, cur) + '</td>' +
+        '<td><span class="pill ' + pill + '">' + inv.status + '</span></td>' +
+        '<td>' + (inv.remaining > 0 ? '<button class="btn sm info-btn" onclick="openPayInvoiceModal_(\'' + inv.invoiceId + '\', ' + inv.remaining + ')">💳 تحصيل</button>' : '') + '</td></tr>';
+    }).join('');
+    html += '</tbody></table></div>';
+    el.innerHTML = html;
   } catch (err) { showErrorToast_(err); }
 }
 
 function openPayInvoiceModal_(invoiceId, remaining) {
   openModal('تحصيل فاتورة', 'المتبقي حاليًا: ' + remaining, '<div class="field"><label>المبلغ المحصّل</label><input type="number" id="modalPayAmount" value="' + remaining + '"></div>',
-    '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" onclick="confirmPayInvoice_(\'' + invoiceId + '\')">تأكيد التحصيل</button>');
+    '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn success" onclick="confirmPayInvoice_(\'' + invoiceId + '\')">تأكيد التحصيل</button>');
 }
 
 async function confirmPayInvoice_(invoiceId) {
