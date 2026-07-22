@@ -119,10 +119,33 @@ api.createCategory = async function (session, payload) {
 api.addProduct = async function (session, payload) {
   const { data, error } = await supabaseClient.rpc('rpc_add_product', {
     p_name: payload.name, p_sub_category_code: payload.subCategory, p_base_price: payload.basePrice,
-    p_image: payload.image || '', p_description: payload.description || ''
+    p_image: payload.image || '', p_description: payload.description || '', p_manual_code: payload.manualCode || null
   });
   if (error) throw error;
   return { success: true, code: data[0].code };
+};
+
+// إضافة سريعة Inline من شاشة أمر الشراء — بتحط المنتج تلقائيًا تحت فئة "عام"
+// لو مش موجودة بتتعمل مرة واحدة بس، وبترجع كود المتغير الجاهز للإضافة للسلة فورًا
+api.quickAddProduct = async function (session, name, price, manualCode) {
+  const tree = await api.getProductTree();
+  let generalMain = tree.mainCategories.find(function (c) { return c.name === 'عام'; });
+  if (!generalMain) {
+    generalMain = await api.createCategory(session, { name: 'عام', type: 'رئيسية' });
+  }
+  const freshTree = await api.getProductTree();
+  let generalSub = freshTree.subCategories.find(function (c) { return c.name === 'عام' && c.parent === generalMain.code; });
+  if (!generalSub) {
+    generalSub = await api.createCategory(session, { name: 'عام', type: 'فرعية', parentCode: generalMain.code });
+  }
+
+  const product = await api.addProduct(session, {
+    name: name, subCategory: generalSub.code, basePrice: price, manualCode: manualCode || null
+  });
+  const variant = await api.addVariant(session, {
+    productCode: product.code, color: '', size: '', quantity: 0, cost: price
+  });
+  return { productCode: product.code, variantCode: variant.variantCode };
 };
 
 api.addVariant = async function (session, payload) {
