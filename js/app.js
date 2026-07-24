@@ -2235,3 +2235,60 @@ async function deleteAttachment_(id) {
     refreshAttachmentsModal_();
   } catch (err) { showErrorToast_(err); }
 }
+
+// ============================================================
+// اختصارات لوحة المفاتيح
+// ============================================================
+const KEYBOARD_SHORTCUTS_HELP = [
+  { keys: 'Ctrl + K', desc: 'التركيز على البحث الشامل' },
+  { keys: 'Esc', desc: 'إغلاق أي نافذة منبثقة' },
+  { keys: 'Ctrl + Enter', desc: 'تأكيد بيعة الكاشير (لو السلة فيها أصناف)' },
+  { keys: 'Alt + D', desc: 'الذهاب للداشبورد' },
+  { keys: 'Alt + P', desc: 'الذهاب لشاشة الكاشير' },
+  { keys: 'Alt + I', desc: 'الذهاب لشاشة المخزون' },
+  { keys: 'Alt + S', desc: 'الذهاب لشاشة المبيعات' },
+  { keys: '?', desc: 'عرض قائمة الاختصارات دي' }
+];
+
+document.addEventListener('keydown', function (e) {
+  const tag = (e.target.tagName || '').toLowerCase();
+  const typing = tag === 'input' || tag === 'textarea' || tag === 'select';
+
+  if (e.key === 'Escape') {
+    const overlay = document.getElementById('modalOverlay');
+    if (overlay && overlay.style.display !== 'none') { closeModal(); return; }
+    const dropdown = document.getElementById('globalSearchDropdown');
+    if (dropdown) dropdown.style.display = 'none';
+    const notifDropdown = document.getElementById('notifDropdown');
+    if (notifDropdown) notifDropdown.style.display = 'none';
+    return;
+  }
+
+  if (e.ctrlKey && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    const input = document.getElementById('globalSearchInput');
+    if (input) input.focus();
+    return;
+  }
+
+  if (e.ctrlKey && e.key === 'Enter') {
+    if (state.currentPage === 'pos' && typeof submitPosSale_ === 'function' && posCart.length > 0) { e.preventDefault(); submitPosSale_(); }
+    return;
+  }
+
+  if (!typing && e.altKey) {
+    const map = { d: 'dashboard', p: 'pos', i: 'inventory', s: 'sales' };
+    const target = map[e.key.toLowerCase()];
+    if (target) { e.preventDefault(); navigate(target); }
+    return;
+  }
+
+  if (!typing && e.key === '?') { e.preventDefault(); showKeyboardShortcutsHelp_(); }
+});
+
+function showKeyboardShortcutsHelp_() {
+  const rows = KEYBOARD_SHORTCUTS_HELP.map(function (s) {
+    return '<div class="list-item"><span>' + s.desc + '</span><span class="pill info" style="font-family:monospace;">' + s.keys + '</span></div>';
+  }).join('');
+  openModal('⌨️ اختصارات لوحة المفاتيح', '', '<div>' + rows + '</div>', '<button class="btn secondary" onclick="closeModal()">إغلاق</button>');
+}
