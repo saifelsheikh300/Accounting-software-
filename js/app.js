@@ -1682,7 +1682,6 @@ async function renderSettingsPage() {
       field_('نسبة الضريبة %', 'setTaxRate', s.taxRate) +
       selectField_('موافقة الشركاء مفعّلة؟', 'setPartnerApprovalEnabled', s.partnerApprovalEnabled, [['true', 'نعم'], ['false', 'لا']]) +
       field_('EasyOrders API Key', 'setEasyOrdersApiKey', s.easyOrdersApiKey) + field_('EasyOrders Secret', 'setEasyOrdersSecret', s.easyOrdersSecret) +
-      field_('Gemini API Key (للذكاء الاصطناعي)', 'setGeminiApiKey', s.geminiApiKey) +
       field_('حد التنبيه الافتراضي للمخزون', 'setLowStockThresholdDefault', s.lowStockThresholdDefault) +
       '</div><button class="btn success block" style="margin-top:20px;" onclick="saveSettings_()">💾 حفظ الإعدادات</button></div>');
   } catch (err) { showErrorToast_(err); }
@@ -1702,7 +1701,6 @@ async function saveSettings_() {
     adminFeeEnabled: document.getElementById('setAdminFeeEnabled').value, taxEnabled: document.getElementById('setTaxEnabled').value,
     taxRate: document.getElementById('setTaxRate').value, partnerApprovalEnabled: document.getElementById('setPartnerApprovalEnabled').value,
     easyOrdersApiKey: document.getElementById('setEasyOrdersApiKey').value, easyOrdersSecret: document.getElementById('setEasyOrdersSecret').value,
-    geminiApiKey: document.getElementById('setGeminiApiKey').value,
     lowStockThresholdDefault: document.getElementById('setLowStockThresholdDefault').value
   };
   try {
@@ -2332,8 +2330,6 @@ async function loadSalesForecast_() {
 }
 
 async function loadAiInsights_() {
-  const apiKey = state.settings.geminiApiKey;
-  if (!apiKey) { showToast_('حطي Gemini API Key في الإعدادات الأول', 'error'); return; }
   document.getElementById('aiResult').innerHTML = '<div class="empty-state" style="padding:20px;"><span class="emoji">✨</span><div class="msg" style="font-size:12px;">بيفكر...</div></div>';
   try {
     const income = await api.getIncomeStatement(document.getElementById('repStart').value, document.getElementById('repEnd').value);
@@ -2343,7 +2339,7 @@ async function loadAiInsights_() {
     const context = 'إجمالي المبيعات: ' + formatMoney_(income.totalSales, cur) + '\nصافي الربح: ' + formatMoney_(income.netProfitBeforeTax, cur) +
       '\nعدد الأصناف الراكدة (60 يوم بدون بيع): ' + stagnant.length +
       '\nمتوسط المبيعات الأسبوعي: ' + formatMoney_(forecast.averageWeekly, cur) + '\nالتوقع للأسبوع الجاي: ' + formatMoney_(forecast.nextWeekForecast, cur);
-    const insight = await api.getAiInsights(apiKey, context);
+    const insight = await api.getAiInsights(context);
     document.getElementById('aiResult').innerHTML = '<div class="card" style="background:var(--surface-2); white-space:pre-wrap; line-height:1.9; font-size:13px;">' + insight + '</div>';
   } catch (err) { showErrorToast_(err); }
 }
