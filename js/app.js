@@ -1181,7 +1181,8 @@ async function loadPurchaseOrders_() {
       orders.map(function (o) {
         const pill = o.paymentStatus === 'مدفوع بالكامل' ? 'success' : (o.paymentStatus === 'مدفوع جزئيًا' ? 'warning' : 'danger');
         return '<div class="list-item"><span>' + o.supplierName + '</span><span>' + formatMoney_(o.total, cur) + ' <span class="pill ' + pill + '">' + o.paymentStatus + '</span>' +
-          (o.remaining > 0 ? ' <button class="eye-btn" onclick="openPaySupplierModal_(\'' + o.orderId + '\', ' + o.remaining + ')">💳</button>' : '') + '</span></div>';
+          (o.remaining > 0 ? ' <button class="eye-btn" onclick="openPaySupplierModal_(\'' + o.orderId + '\', ' + o.remaining + ')">💳</button>' : '') +
+          ' <button class="eye-btn" onclick="openAttachmentsModal_(\'purchase_order\', \'' + o.orderId + '\', \'' + o.supplierName + '\')">📎</button></span></div>';
       }).join('');
   } catch (err) { showErrorToast_(err); }
 }
@@ -1306,7 +1307,8 @@ async function loadInvoices_() {
       return '<tr><td>' + inv.customerName + '</td><td class="money-positive">' + formatMoney_(inv.total, cur) + '</td>' +
         '<td class="' + (inv.remaining > 0 ? 'money-negative' : '') + '">' + formatMoney_(inv.remaining, cur) + '</td>' +
         '<td><span class="pill ' + pill + '">' + inv.status + '</span></td>' +
-        '<td>' + (inv.remaining > 0 ? '<button class="btn sm info-btn" onclick="openPayInvoiceModal_(\'' + inv.invoiceId + '\', ' + inv.remaining + ')">💳 تحصيل</button>' : '') + '</td></tr>';
+        '<td>' + (inv.remaining > 0 ? '<button class="btn sm info-btn" onclick="openPayInvoiceModal_(\'' + inv.invoiceId + '\', ' + inv.remaining + ')">💳 تحصيل</button>' : '') +
+        ' <button class="btn sm secondary" onclick="openAttachmentsModal_(\'invoice\', \'' + inv.invoiceId + '\', \'' + inv.invoiceNumber + '\')">📎</button></td></tr>';
     }).join('');
     html += '</tbody></table></div>';
     el.innerHTML = html;
@@ -1707,11 +1709,14 @@ async function saveSettings_() {
 // ============================================================
 async function refreshNotifications() {
   try {
-    const notifs = await api.getNotifications();
+    const computed = await api.getNotifications();
+    let dbNotifs = [];
+    try { dbNotifs = await api.getDbNotifications(); } catch (e) { /* الجدول لسه مش موجود لو الدفعة 4 مش اتشغلت */ }
+    const merged = dbNotifs.map(function (n) { return { type: 'db', severity: 'info', message: n.title + (n.body ? ' — ' + n.body : ''), time: n.time, id: n.id, linkPage: n.linkPage }; }).concat(computed);
     const badge = document.getElementById('notifBadge');
-    if (notifs.length > 0) { badge.style.display = 'flex'; badge.textContent = notifs.length > 9 ? '9+' : notifs.length; }
+    if (merged.length > 0) { badge.style.display = 'flex'; badge.textContent = merged.length > 9 ? '9+' : merged.length; }
     else badge.style.display = 'none';
-    window.__notifications = notifs;
+    window.__notifications = merged;
   } catch (err) { /* صامت — التنبيهات مش حرجة */ }
 }
 
@@ -1722,8 +1727,18 @@ function toggleNotifications() {
   dropdown.style.display = 'block';
   dropdown.innerHTML = '<div class="notif-header">🔔 التنبيهات</div>' + (
     notifs.length === 0 ? '<div class="empty-state" style="padding:24px;"><span class="emoji" style="font-size:22px;">✅</span><div class="msg" style="font-size:12px;">مفيش تنبيهات جديدة</div></div>' :
-    notifs.map(function (n) { return '<div class="notif-item"><div class="notif-dot ' + n.severity + '"></div><div><div class="notif-text">' + n.message + '</div>' + (n.time ? '<div class="notif-time">' + formatDate_(n.time) + '</div>' : '') + '</div></div>'; }).join('')
+    notifs.map(function (n) {
+      const clickable = n.id ? ' style="cursor:pointer;" onclick="onNotifClick_(\'' + n.id + '\', ' + (n.linkPage ? '\'' + n.linkPage + '\'' : 'null') + ')"' : '';
+      return '<div class="notif-item"' + clickable + '><div class="notif-dot ' + n.severity + '"></div><div><div class="notif-text">' + n.message + '</div>' + (n.time ? '<div class="notif-time">' + formatDate_(n.time) + '</div>' : '') + '</div></div>';
+    }).join('')
   );
+}
+
+async function onNotifClick_(id, linkPage) {
+  try { await api.markNotificationRead(id); } catch (e) {}
+  document.getElementById('notifDropdown').style.display = 'none';
+  refreshNotifications();
+  if (linkPage) navigate(linkPage);
 }
 
 document.addEventListener('click', function (e) {
@@ -2129,5 +2144,94 @@ async function updateCheck_(id, status) {
     await api.updateCheckStatus({ username: state.user.username }, id, status);
     showToast_('تم تحديث حالة الشيك ✅', 'success');
     renderChecksPage();
+  } catch (err) { showErrorToast_(err); }
+}
+
+// ============================================================
+// البحث الموحّد (Smart Search)
+// ============================================================
+let globalSearchDebounce_;
+function onGlobalSearchInput_(value) {
+  clearTimeout(globalSearchDebounce_);
+  const dropdown = document.getElementById('globalSearchDropdown');
+  if (!value || value.trim().length < 2) { dropdown.style.display = 'none'; return; }
+  globalSearchDebounce_ = setTimeout(async function () {
+    try {
+      const result = await api.globalSearch(value.trim());
+      const groups = [
+        { key: 'products', label: '🏷️ منتجات' }, { key: 'customers', label: '👤 عملاء' },
+        { key: 'suppliers', label: '🚚 موردون' }, { key: 'invoices', label: '📄 فواتير' }
+      ];
+      let html = '';
+      groups.forEach(function (g) {
+        const items = result[g.key] || [];
+        if (items.length === 0) return;
+        html += '<div style="padding:8px 12px 4px; font-size:11px; font-weight:800; color:var(--text-faint);">' + g.label + '</div>';
+        html += items.map(function (it) {
+          return '<div class="list-item" style="padding:8px 12px; cursor:pointer;" onclick="onGlobalSearchResultClick_(\'' + it.page + '\')"><span>' + it.label + '</span></div>';
+        }).join('');
+      });
+      if (!html) html = '<div class="empty-state" style="padding:20px;"><span class="emoji" style="font-size:20px;">🔍</span><div class="msg" style="font-size:12px;">مفيش نتائج</div></div>';
+      dropdown.innerHTML = html;
+      dropdown.style.display = 'block';
+    } catch (err) { /* صامت */ }
+  }, 350);
+}
+
+function onGlobalSearchResultClick_(page) {
+  document.getElementById('globalSearchDropdown').style.display = 'none';
+  document.getElementById('globalSearchInput').value = '';
+  if (page) navigate(page);
+}
+
+document.addEventListener('click', function (e) {
+  const dropdown = document.getElementById('globalSearchDropdown');
+  if (!dropdown) return;
+  if (dropdown.style.display === 'block' && !dropdown.contains(e.target) && e.target.id !== 'globalSearchInput') dropdown.style.display = 'none';
+});
+
+// ============================================================
+// المرفقات — Modal عام يُستخدم من أي شاشة
+// ============================================================
+let attachmentsModalCtx_ = null;
+
+async function openAttachmentsModal_(entityType, entityId, label) {
+  attachmentsModalCtx_ = { entityType: entityType, entityId: entityId };
+  openModal('📎 مرفقات — ' + (label || ''), '', '<div id="attachmentsModalBody">جاري التحميل...</div>',
+    '<button class="btn secondary" onclick="closeModal()">إغلاق</button>');
+  await refreshAttachmentsModal_();
+}
+
+async function refreshAttachmentsModal_() {
+  try {
+    const files = await api.listAttachments(attachmentsModalCtx_.entityType, attachmentsModalCtx_.entityId);
+    let html = '<div class="field"><input type="file" id="attachmentFileInput"></div>' +
+      '<button class="btn success block" style="margin-top:10px;" onclick="submitAttachmentUpload_()">⬆️ رفع الملف</button>' +
+      '<div style="margin-top:16px;">';
+    html += files.length === 0 ? emptyRow_('📎', 'لسه مفيش مرفقات') :
+      files.map(function (f) {
+        return '<div class="list-item"><a href="' + f.fileUrl + '" target="_blank" style="color:var(--info); text-decoration:none;">📄 ' + f.fileName + '</a>' +
+          '<button class="btn secondary" style="padding:2px 8px; font-size:11px;" onclick="deleteAttachment_(\'' + f.id + '\')">🗑️</button></div>';
+      }).join('');
+    html += '</div>';
+    document.getElementById('attachmentsModalBody').innerHTML = html;
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function submitAttachmentUpload_() {
+  const input = document.getElementById('attachmentFileInput');
+  if (!input.files || input.files.length === 0) { showToast_('اختاري ملف الأول', 'error'); return; }
+  try {
+    await api.uploadAttachment(state.user, attachmentsModalCtx_.entityType, attachmentsModalCtx_.entityId, input.files[0]);
+    showToast_('تم رفع الملف ✅', 'success');
+    refreshAttachmentsModal_();
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function deleteAttachment_(id) {
+  try {
+    await api.deleteAttachment(id);
+    showToast_('تم الحذف', 'success');
+    refreshAttachmentsModal_();
   } catch (err) { showErrorToast_(err); }
 }
