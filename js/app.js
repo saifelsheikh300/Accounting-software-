@@ -28,11 +28,15 @@ const NAV_GROUPS = [
   { label: 'المالية', items: [
     { key: 'capital', label: 'رأس المال والشركاء', icon: '🤝', module: 'Capital' },
     { key: 'pettycash', label: 'العهدة', icon: '👛', module: 'PettyCash' },
+    { key: 'treasury', label: 'الخزنة والبنوك', icon: '🏦', module: 'Reports' },
+    { key: 'accounts', label: 'شجرة الحسابات', icon: '🗂️', module: 'Reports' },
+    { key: 'costcenters', label: 'مراكز التكلفة', icon: '🎯', module: 'Expenses' },
     { key: 'reports', label: 'التقارير', icon: '📈', module: 'Reports' }
   ]},
   { label: 'الإدارة', items: [
     { key: 'hr', label: 'الموارد البشرية', icon: '👥', module: 'HR' },
     { key: 'users', label: 'المستخدمون والصلاحيات', icon: '🔐', module: 'Users' },
+    { key: 'recyclebin', label: 'سلة المحذوفات', icon: '🗑️', module: 'Inventory' },
     { key: 'settings', label: 'الإعدادات', icon: '⚙️', module: 'Settings' }
   ]}
 ];
@@ -52,7 +56,11 @@ const PAGE_META = {
   reports: ['التقارير', 'قائمة الدخل، الضريبة، المواسم'],
   hr: ['الموارد البشرية', 'الموظفون، المرتبات، الحضور، السلف'],
   users: ['المستخدمون والصلاحيات', 'إدارة اليوزرات وصلاحيات كل قسم'],
-  settings: ['الإعدادات', 'إعدادات البراند والنظام']
+  settings: ['الإعدادات', 'إعدادات البراند والنظام'],
+  treasury: ['الخزنة والبنوك', 'حسابات كاش وبنوك متعددة والتحويل بينها'],
+  accounts: ['شجرة الحسابات', 'الهيكل المحاسبي الكامل للبراند'],
+  costcenters: ['مراكز التكلفة', 'ربط المصروفات والمبيعات بمركز تكلفة'],
+  recyclebin: ['سلة المحذوفات', 'استرجاع أي عنصر اتحذف بالغلط']
 };
 
 // ------------------------------------------------------------
@@ -202,7 +210,9 @@ function navigate(pageKey) {
     inventory: renderInventoryPage, warehouses: renderWarehousesPage, expenses: renderExpensesPage, suppliers: renderSuppliersPage,
     orders: renderOrdersPage, invoices: renderInvoicesPage, capital: renderCapitalPage,
     pettycash: renderPettyCashPage, reports: renderReportsPage, hr: renderHrPage,
-    users: renderUsersPage, settings: renderSettingsPage
+    users: renderUsersPage, settings: renderSettingsPage,
+    treasury: renderTreasuryPage, accounts: renderAccountsPage,
+    costcenters: renderCostCentersPage, recyclebin: renderRecycleBinPage
   };
   (renderers[pageKey] || renderComingSoon_)();
 }
@@ -1708,3 +1718,159 @@ window.addEventListener('DOMContentLoaded', async function () {
   document.getElementById('loginPassword').addEventListener('keydown', function (e) { if (e.key === 'Enter') handleLogin(); });
   setInterval(function () { if (state.user) refreshNotifications(); }, 90000);
 });
+
+// ============================================================
+// شجرة الحسابات
+// ============================================================
+async function renderAccountsPage() {
+  try {
+    const accounts = await api.getAccounts();
+    const cur = state.settings.currency || 'جنيه';
+    let html = '<div class="card"><div class="card-heading">🗂️ حساب جديد</div>' +
+      '<div class="form-grid"><div class="field"><label>اسم الحساب <span class="req">*</span></label><input type="text" id="accName"></div>' +
+      '<div class="field"><label>النوع <span class="req">*</span></label><select id="accType"><option>أصول</option><option>خصوم</option><option>حقوق ملكية</option><option>إيرادات</option><option>مصروفات</option></select></div></div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>كود الحساب الأب (اختياري)</label><input type="text" id="accParentCode" placeholder="مثال: 1"></div>' +
+      '<div class="field"><label>حساب تجميعي (Group)؟</label><select id="accIsGroup"><option value="false">لا</option><option value="true">نعم</option></select></div></div>' +
+      '<button class="btn success block" style="margin-top:16px;" onclick="submitAccount_()">✅ إضافة الحساب</button></div>';
+
+    html += '<div class="section-title">شجرة الحسابات الحالية</div><div class="card">';
+    html += accounts.length === 0 ? emptyRow_('🗂️', 'لسه مفيش حسابات مضافة') :
+      accounts.map(function (a) {
+        return '<div class="list-item"><span><b>' + a.code + '</b> — ' + a.name + (a.isGroup ? ' <span class="pill">تجميعي</span>' : '') + '</span><span class="pill">' + a.type + '</span></div>';
+      }).join('');
+    html += '</div>';
+    setContent_(html);
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function submitAccount_() {
+  const name = document.getElementById('accName').value.trim();
+  const type = document.getElementById('accType').value;
+  const parentCode = document.getElementById('accParentCode').value.trim();
+  const isGroup = document.getElementById('accIsGroup').value === 'true';
+  if (!name) { showToast_('اسم الحساب مطلوب', 'error'); return; }
+  try {
+    await api.addAccount({ username: state.user.username }, { name: name, type: type, parentCode: parentCode || null, isGroup: isGroup });
+    showToast_('تم إضافة الحساب ✅', 'success');
+    renderAccountsPage();
+  } catch (err) { showErrorToast_(err); }
+}
+
+// ============================================================
+// الخزنة والبنوك المتعددة
+// ============================================================
+async function renderTreasuryPage() {
+  try {
+    const accounts = await api.listTreasuryAccounts();
+    const cur = state.settings.currency || 'جنيه';
+    const totalBalance = accounts.reduce(function (s, a) { return s + Number(a.currentBalance); }, 0);
+
+    let html = '<div class="grid grid-4">' + statCard_('🏦', 'إجمالي الأرصدة', formatMoney_(totalBalance, cur), '', true) + '</div>';
+
+    html += '<div class="grid grid-2" style="margin-top:22px;">';
+    html += '<div class="card"><div class="card-heading">➕ حساب خزنة/بنك جديد</div>' +
+      '<div class="field"><label>الاسم <span class="req">*</span></label><input type="text" id="trName"></div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>النوع</label><select id="trType"><option>كاش</option><option>بنك</option></select></div>' +
+      '<div class="field"><label>الرصيد الافتتاحي</label><input type="number" id="trOpening" value="0"></div></div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>اسم البنك (لو بنك)</label><input type="text" id="trBankName"></div>' +
+      '<div class="field"><label>رقم الحساب</label><input type="text" id="trAccNumber"></div></div>' +
+      '<button class="btn success block" style="margin-top:16px;" onclick="submitTreasuryAccount_()">✅ إضافة</button></div>';
+
+    html += '<div class="card"><div class="card-heading">🔁 تحويل بين حسابات</div>' +
+      '<div class="field"><label>من حساب</label><select id="trFrom">' + accounts.map(function (a) { return '<option value="' + a.id + '">' + a.name + ' (' + formatMoney_(a.currentBalance, cur) + ')</option>'; }).join('') + '</select></div>' +
+      '<div class="field" style="margin-top:10px;"><label>إلى حساب</label><select id="trTo">' + accounts.map(function (a) { return '<option value="' + a.id + '">' + a.name + '</option>'; }).join('') + '</select></div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>المبلغ</label><input type="number" id="trAmount"></div>' +
+      '<div class="field"><label>ملاحظة</label><input type="text" id="trNotes"></div></div>' +
+      '<button class="btn block" style="margin-top:16px;" onclick="submitTreasuryTransfer_()">🔁 تحويل</button></div>';
+    html += '</div>';
+
+    html += '<div class="section-title">الحسابات الحالية</div><div class="card">';
+    html += accounts.length === 0 ? emptyRow_('🏦', 'لسه مفيش حسابات خزنة/بنوك مضافة') :
+      accounts.map(function (a) {
+        return '<div class="list-item"><span>' + (a.type === 'بنك' ? '🏦' : '💵') + ' ' + a.name + (a.bankName ? ' — ' + a.bankName : '') + '</span><span><b>' + formatMoney_(a.currentBalance, cur) + '</b></span></div>';
+      }).join('');
+    html += '</div>';
+    setContent_(html);
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function submitTreasuryAccount_() {
+  const name = document.getElementById('trName').value.trim();
+  if (!name) { showToast_('الاسم مطلوب', 'error'); return; }
+  try {
+    await api.addTreasuryAccount({ username: state.user.username }, {
+      name: name, type: document.getElementById('trType').value,
+      bankName: document.getElementById('trBankName').value, accountNumber: document.getElementById('trAccNumber').value,
+      openingBalance: Number(document.getElementById('trOpening').value) || 0
+    });
+    showToast_('تم إضافة الحساب ✅', 'success');
+    renderTreasuryPage();
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function submitTreasuryTransfer_() {
+  const fromId = document.getElementById('trFrom').value, toId = document.getElementById('trTo').value;
+  const amount = Number(document.getElementById('trAmount').value);
+  if (!amount) { showToast_('المبلغ مطلوب', 'error'); return; }
+  if (fromId === toId) { showToast_('اختاري حسابين مختلفين', 'error'); return; }
+  try {
+    await api.transferBetweenTreasuries({ username: state.user.username }, fromId, toId, amount, document.getElementById('trNotes').value);
+    showToast_('تم التحويل ✅', 'success');
+    renderTreasuryPage();
+  } catch (err) { showErrorToast_(err); }
+}
+
+// ============================================================
+// مراكز التكلفة
+// ============================================================
+async function renderCostCentersPage() {
+  try {
+    const centers = await api.listCostCenters();
+    let html = '<div class="card"><div class="card-heading">🎯 مركز تكلفة جديد</div>' +
+      '<div class="form-grid"><div class="field"><label>الاسم <span class="req">*</span></label><input type="text" id="ccName"></div>' +
+      '<div class="field"><label>الوصف</label><input type="text" id="ccDesc"></div></div>' +
+      '<button class="btn success block" style="margin-top:16px;" onclick="submitCostCenter_()">✅ إضافة</button></div>';
+
+    html += '<div class="section-title">مراكز التكلفة الحالية</div><div class="card">';
+    html += centers.length === 0 ? emptyRow_('🎯', 'لسه مفيش مراكز تكلفة مضافة') :
+      centers.map(function (c) { return '<div class="list-item"><span>' + c.name + (c.description ? '<br><span style="color:var(--text-faint); font-size:11px;">' + c.description + '</span>' : '') + '</span></div>'; }).join('');
+    html += '</div>';
+    setContent_(html);
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function submitCostCenter_() {
+  const name = document.getElementById('ccName').value.trim();
+  if (!name) { showToast_('الاسم مطلوب', 'error'); return; }
+  try {
+    await api.addCostCenter({ username: state.user.username }, { name: name, description: document.getElementById('ccDesc').value });
+    showToast_('تم إضافة مركز التكلفة ✅', 'success');
+    renderCostCentersPage();
+  } catch (err) { showErrorToast_(err); }
+}
+
+// ============================================================
+// سلة المحذوفات
+// ============================================================
+async function renderRecycleBinPage() {
+  try {
+    const items = await api.listDeletedRecords();
+    let html = '<div class="card">';
+    html += items.length === 0 ? emptyRow_('🗑️', 'سلة المحذوفات فاضية دلوقتي') :
+      items.map(function (it) {
+        return '<div class="list-item"><span><span class="pill">' + it.tableLabel + '</span> ' + it.label +
+          '<br><span style="color:var(--text-faint); font-size:11px;">اتحذف: ' + formatDate_(it.deletedAt) + '</span></span>' +
+          '<button class="btn secondary" onclick="restoreDeletedItem_(\'' + it.table + '\', \'' + it.id + '\')">↩️ استرجاع</button></div>';
+      }).join('');
+    html += '</div>';
+    setContent_(html);
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function restoreDeletedItem_(table, id) {
+  try {
+    await api.restoreDeletedRecord({ username: state.user.username }, table, id);
+    showToast_('تم الاسترجاع ✅', 'success');
+    renderRecycleBinPage();
+  } catch (err) { showErrorToast_(err); }
+}
