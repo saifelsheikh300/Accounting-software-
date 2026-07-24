@@ -32,6 +32,8 @@ const NAV_GROUPS = [
     { key: 'treasury', label: 'الخزنة والبنوك', icon: '🏦', module: 'Reports' },
     { key: 'accounts', label: 'شجرة الحسابات', icon: '🗂️', module: 'Reports' },
     { key: 'costcenters', label: 'مراكز التكلفة', icon: '🎯', module: 'Expenses' },
+    { key: 'checks', label: 'الشيكات', icon: '📑', module: 'Reports' },
+    { key: 'currencies', label: 'العملات وأسعار الصرف', icon: '💱', module: 'Settings' },
     { key: 'reports', label: 'التقارير', icon: '📈', module: 'Reports' }
   ]},
   { label: 'الإدارة', items: [
@@ -62,6 +64,8 @@ const PAGE_META = {
   treasury: ['الخزنة والبنوك', 'حسابات كاش وبنوك متعددة والتحويل بينها'],
   accounts: ['شجرة الحسابات', 'الهيكل المحاسبي الكامل للبراند'],
   costcenters: ['مراكز التكلفة', 'ربط المصروفات والمبيعات بمركز تكلفة'],
+  checks: ['الشيكات', 'متابعة الشيكات الواردة والصادرة وحالتها'],
+  currencies: ['العملات وأسعار الصرف', 'إدارة العملات الإضافية وسعر الصرف اليومي'],
   recyclebin: ['سلة المحذوفات', 'استرجاع أي عنصر اتحذف بالغلط']
 };
 
@@ -215,7 +219,8 @@ function navigate(pageKey) {
     pettycash: renderPettyCashPage, reports: renderReportsPage, hr: renderHrPage,
     users: renderUsersPage, settings: renderSettingsPage,
     treasury: renderTreasuryPage, accounts: renderAccountsPage,
-    costcenters: renderCostCentersPage, recyclebin: renderRecycleBinPage
+    costcenters: renderCostCentersPage, recyclebin: renderRecycleBinPage,
+    checks: renderChecksPage, currencies: renderCurrenciesPage
   };
   (renderers[pageKey] || renderComingSoon_)();
 }
@@ -1418,6 +1423,11 @@ function renderReportsPage() {
       '<div class="field"><label>إلى تاريخ</label><input type="date" id="repEnd" value="' + today + '"></div></div>' +
       '<button class="btn info-btn" style="margin-top:16px;" onclick="loadIncomeStatement_()">📊 عرض</button></div>' +
     '<div id="incomeStatementResult" style="margin-top:18px;"></div>' +
+    '<div class="section-title">📊 الربحية الحقيقية</div>' +
+    '<div class="card"><div class="card-row" style="gap:10px; flex-wrap:wrap;">' +
+      '<button class="btn info-btn" onclick="loadProfitabilityByProduct_()">🏷️ حسب الصنف</button>' +
+      '<button class="btn info-btn" onclick="loadProfitabilityByCustomer_()">👤 حسب العميل</button></div>' +
+      '<div id="profitabilityResult" style="margin-top:14px;"></div></div>' +
     '<div class="section-title">المواسم</div>' +
     '<div class="card"><div class="form-grid">' +
       '<div class="field"><label>اسم الموسم</label><input type="text" id="seasonName"></div>' +
@@ -1982,5 +1992,142 @@ async function approvePr_(id, approve) {
     await api.approvePurchaseRequest({ username: state.user.username }, id, approve);
     showToast_(approve ? 'تم الاعتماد ✅' : 'تم الرفض', approve ? 'success' : 'warning');
     renderPurchaseRequestsPage();
+  } catch (err) { showErrorToast_(err); }
+}
+
+// ============================================================
+// الربحية الحقيقية (تُستدعى من صفحة التقارير)
+// ============================================================
+async function loadProfitabilityByProduct_() {
+  const start = document.getElementById('repStart').value, end = document.getElementById('repEnd').value;
+  try {
+    const rows = await api.getProfitabilityByProduct(start, end);
+    const cur = state.settings.currency || 'جنيه';
+    let html = '<div class="table-wrap"><table><thead><tr><th>الصنف</th><th>الكمية</th><th>الإيراد</th><th>التكلفة</th><th>الربح</th><th>الهامش%</th></tr></thead><tbody>';
+    html += rows.length === 0 ? '<tr><td colspan="6">لا توجد بيانات في الفترة دي</td></tr>' :
+      rows.map(function (r) {
+        return '<tr><td>' + r.productName + ' (' + r.variantCode + ')</td><td>' + r.qtySold + '</td><td>' + formatMoney_(r.revenue, cur) + '</td><td>' + formatMoney_(r.cost, cur) + '</td><td><b>' + formatMoney_(r.profit, cur) + '</b></td><td>' + r.marginPercent + '%</td></tr>';
+      }).join('');
+    html += '</tbody></table></div>';
+    document.getElementById('profitabilityResult').innerHTML = html;
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function loadProfitabilityByCustomer_() {
+  const start = document.getElementById('repStart').value, end = document.getElementById('repEnd').value;
+  try {
+    const rows = await api.getProfitabilityByCustomer(start, end);
+    const cur = state.settings.currency || 'جنيه';
+    let html = '<div class="table-wrap"><table><thead><tr><th>العميل</th><th>عدد الفواتير</th><th>الإيراد</th><th>التكلفة</th><th>الربح</th></tr></thead><tbody>';
+    html += rows.length === 0 ? '<tr><td colspan="5">لا توجد بيانات في الفترة دي</td></tr>' :
+      rows.map(function (r) {
+        return '<tr><td>' + r.customerName + '</td><td>' + r.ordersCount + '</td><td>' + formatMoney_(r.revenue, cur) + '</td><td>' + formatMoney_(r.cost, cur) + '</td><td><b>' + formatMoney_(r.profit, cur) + '</b></td></tr>';
+      }).join('');
+    html += '</tbody></table></div>';
+    document.getElementById('profitabilityResult').innerHTML = html;
+  } catch (err) { showErrorToast_(err); }
+}
+
+// ============================================================
+// العملات وأسعار الصرف
+// ============================================================
+async function renderCurrenciesPage() {
+  try {
+    const currencies = await api.listCurrencies();
+    const rates = await api.listExchangeRates();
+    let html = '<div class="grid grid-2">';
+    html += '<div class="card"><div class="card-heading">💱 عملة جديدة</div>' +
+      '<div class="form-grid"><div class="field"><label>كود العملة (مثال: USD)</label><input type="text" id="curCode" maxlength="6"></div>' +
+      '<div class="field"><label>الاسم</label><input type="text" id="curName"></div></div>' +
+      '<button class="btn success block" style="margin-top:16px;" onclick="submitCurrency_()">➕ إضافة</button></div>';
+
+    html += '<div class="card"><div class="card-heading">📈 تحديث سعر صرف</div>' +
+      '<div class="field"><label>العملة</label><select id="rateCurrency">' + currencies.filter(function (c) { return !c.is_base; }).map(function (c) { return '<option value="' + c.code + '">' + c.code + ' - ' + c.name + '</option>'; }).join('') + '</select></div>' +
+      '<div class="field" style="margin-top:10px;"><label>السعر مقابل ' + (currencies.find(function (c) { return c.is_base; }) || {}).code + '</label><input type="number" step="0.0001" id="rateValue"></div>' +
+      '<button class="btn block" style="margin-top:16px;" onclick="submitExchangeRate_()">📈 حفظ السعر</button></div>';
+    html += '</div>';
+
+    html += '<div class="section-title">آخر أسعار الصرف</div><div class="card">';
+    html += rates.length === 0 ? emptyRow_('💱', 'لسه مفيش أسعار صرف مسجلة') :
+      rates.map(function (r) { return '<div class="list-item"><span>' + r.currencyCode + ' — ' + formatDate_(r.date) + '</span><b>' + r.rate + '</b></div>'; }).join('');
+    html += '</div>';
+    setContent_(html);
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function submitCurrency_() {
+  const code = document.getElementById('curCode').value.trim().toUpperCase();
+  const name = document.getElementById('curName').value.trim();
+  if (!code || !name) { showToast_('الكود والاسم مطلوبين', 'error'); return; }
+  try {
+    await api.addCurrency({ username: state.user.username }, code, name);
+    showToast_('تم إضافة العملة ✅', 'success');
+    renderCurrenciesPage();
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function submitExchangeRate_() {
+  const code = document.getElementById('rateCurrency').value;
+  const rate = Number(document.getElementById('rateValue').value);
+  if (!rate) { showToast_('السعر مطلوب', 'error'); return; }
+  try {
+    await api.setExchangeRate({ username: state.user.username }, code, rate);
+    showToast_('تم حفظ سعر الصرف ✅', 'success');
+    renderCurrenciesPage();
+  } catch (err) { showErrorToast_(err); }
+}
+
+// ============================================================
+// الشيكات
+// ============================================================
+async function renderChecksPage() {
+  try {
+    const checks = await api.listChecks();
+    const cur = state.settings.currency || 'جنيه';
+    let html = '<div class="card"><div class="card-heading">📑 شيك جديد</div>' +
+      '<div class="form-grid"><div class="field"><label>رقم الشيك</label><input type="text" id="chkNumber"></div>' +
+      '<div class="field"><label>النوع</label><select id="chkDirection"><option value="واردة">واردة (من عميل)</option><option value="صادرة">صادرة (لمورد)</option></select></div></div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>اسم الطرف</label><input type="text" id="chkParty"></div>' +
+      '<div class="field"><label>المبلغ</label><input type="number" id="chkAmount"></div></div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>تاريخ الاستحقاق</label><input type="date" id="chkDueDate"></div>' +
+      '<div class="field"><label>اسم البنك</label><input type="text" id="chkBank"></div></div>' +
+      '<button class="btn success block" style="margin-top:16px;" onclick="submitCheck_()">✅ إضافة الشيك</button></div>';
+
+    html += '<div class="section-title">الشيكات الحالية</div><div class="card">';
+    html += checks.length === 0 ? emptyRow_('📑', 'لسه مفيش شيكات مسجلة') :
+      checks.map(function (c) {
+        const pill = c.status === 'تم التحصيل' ? 'success' : (c.status === 'مرتجعة/مرفوضة' ? 'danger' : (c.status === 'ملغاة' ? 'secondary' : 'warning'));
+        const actions = c.status === 'تحت التحصيل'
+          ? '<button class="btn success" style="padding:4px 10px; font-size:11px;" onclick="updateCheck_(\'' + c.id + '\', \'تم التحصيل\')">تحصيل</button>' +
+            '<button class="btn danger" style="padding:4px 10px; font-size:11px;" onclick="updateCheck_(\'' + c.id + '\', \'مرتجعة/مرفوضة\')">ارتجاع</button>'
+          : '';
+        return '<div class="list-item"><span>' + (c.direction === 'واردة' ? '⬇️' : '⬆️') + ' <b>' + c.checkNumber + '</b> — ' + c.partyName +
+          '<br><span style="color:var(--text-faint); font-size:11px;">استحقاق: ' + c.dueDate + ' — ' + formatMoney_(c.amount, cur) + '</span></span>' +
+          '<span style="display:flex; align-items:center; gap:6px;"><span class="pill ' + pill + '">' + c.status + '</span>' + actions + '</span></div>';
+      }).join('');
+    html += '</div>';
+    setContent_(html);
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function submitCheck_() {
+  const payload = {
+    checkNumber: document.getElementById('chkNumber').value.trim(), direction: document.getElementById('chkDirection').value,
+    partyName: document.getElementById('chkParty').value.trim(), amount: Number(document.getElementById('chkAmount').value),
+    dueDate: document.getElementById('chkDueDate').value, bankName: document.getElementById('chkBank').value
+  };
+  if (!payload.checkNumber || !payload.partyName || !payload.amount || !payload.dueDate) { showToast_('كل الحقول الأساسية مطلوبة', 'error'); return; }
+  try {
+    await api.addCheck(state.user, payload);
+    showToast_('تم إضافة الشيك ✅', 'success');
+    renderChecksPage();
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function updateCheck_(id, status) {
+  try {
+    await api.updateCheckStatus({ username: state.user.username }, id, status);
+    showToast_('تم تحديث حالة الشيك ✅', 'success');
+    renderChecksPage();
   } catch (err) { showErrorToast_(err); }
 }
