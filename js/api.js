@@ -695,3 +695,50 @@ api.addCostCenter = async function (session, payload) {
   if (error) throw error;
   return { success: true };
 };
+
+// ------------------------------------------------------------
+// نقل مخزون بين المخازن/الفروع
+// ------------------------------------------------------------
+api.transferStock = async function (session, payload) {
+  const { data, error } = await supabaseClient.rpc('rpc_transfer_stock', {
+    p_from_warehouse_id: payload.fromWarehouseId, p_to_warehouse_id: payload.toWarehouseId,
+    p_items: payload.items, p_notes: payload.notes || ''
+  });
+  if (error) throw error;
+  return { success: true, transferNumber: data[0].transfer_number };
+};
+
+api.listStockTransfers = async function (limit) {
+  const { data, error } = await supabaseClient.from('stock_transfers')
+    .select('*, from:warehouses!stock_transfers_from_warehouse_id_fkey(name), to:warehouses!stock_transfers_to_warehouse_id_fkey(name)')
+    .order('transfer_date', { ascending: false }).limit(limit || 20);
+  if (error) throw error;
+  return (data || []).map(function (t) {
+    return { transferNumber: t.transfer_number, date: t.transfer_date, fromName: t.from ? t.from.name : '', toName: t.to ? t.to.name : '', notes: t.notes };
+  });
+};
+
+// ------------------------------------------------------------
+// طلبات الشراء والاعتماد
+// ------------------------------------------------------------
+api.createPurchaseRequest = async function (session, payload) {
+  const { data, error } = await supabaseClient.rpc('rpc_create_purchase_request', {
+    p_supplier_name: payload.supplierName || '', p_items: payload.items, p_notes: payload.notes || ''
+  });
+  if (error) throw error;
+  return { success: true, requestNumber: data[0].request_number };
+};
+
+api.listPurchaseRequests = async function () {
+  const { data, error } = await supabaseClient.from('purchase_requests').select('*').order('request_date', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(function (r) {
+    return { id: r.id, requestNumber: r.request_number, date: r.request_date, supplierName: r.supplier_name, notes: r.notes, status: r.status };
+  });
+};
+
+api.approvePurchaseRequest = async function (session, requestId, approve) {
+  const { error } = await supabaseClient.rpc('rpc_approve_purchase_request', { p_request_id: requestId, p_approve: approve });
+  if (error) throw error;
+  return { success: true };
+};
