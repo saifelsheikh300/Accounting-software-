@@ -400,7 +400,7 @@ api.listInvoices = async function (filters) {
   if (filters.status) q = q.eq('status', filters.status);
   const { data, error } = await q;
   if (error) throw error;
-  return (data || []).map(function (i) { return { invoiceId: i.id, customerName: i.customer_name, total: i.total, paid: i.paid, remaining: i.remaining, status: i.status }; });
+  return (data || []).map(function (i) { return { invoiceId: i.id, invoiceNumber: i.invoice_number, customerName: i.customer_name, total: i.total, paid: i.paid, remaining: i.remaining, status: i.status }; });
 };
 
 api.payInvoiceInstallment = async function (session, invoiceId, amount) {
@@ -807,6 +807,61 @@ api.addCheck = async function (session, payload) {
 
 api.updateCheckStatus = async function (session, checkId, status) {
   const { error } = await supabaseClient.rpc('rpc_update_check_status', { p_check_id: checkId, p_status: status });
+  if (error) throw error;
+  return { success: true };
+};
+
+// ------------------------------------------------------------
+// البحث الموحّد (Smart Search)
+// ------------------------------------------------------------
+api.globalSearch = async function (query) {
+  const { data, error } = await supabaseClient.rpc('rpc_global_search', { p_query: query });
+  if (error) throw error;
+  return data || {};
+};
+
+// ------------------------------------------------------------
+// الإشعارات الداخلية (جدول notifications الحقيقي)
+// ------------------------------------------------------------
+api.getDbNotifications = async function () {
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user) return [];
+  const { data, error } = await supabaseClient.from('notifications').select('*')
+    .or('user_id.eq.' + user.id + ',user_id.is.null').eq('is_read', false).order('created_at', { ascending: false }).limit(20);
+  if (error) throw error;
+  return (data || []).map(function (n) { return { id: n.id, title: n.title, body: n.body, linkPage: n.link_page, time: n.created_at }; });
+};
+
+api.markNotificationRead = async function (id) {
+  const { error } = await supabaseClient.from('notifications').update({ is_read: true }).eq('id', id);
+  if (error) throw error;
+  return { success: true };
+};
+
+// ------------------------------------------------------------
+// المرفقات
+// ------------------------------------------------------------
+api.listAttachments = async function (entityType, entityId) {
+  const { data, error } = await supabaseClient.from('attachments').select('*').eq('entity_type', entityType).eq('entity_id', String(entityId)).order('uploaded_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(function (a) { return { id: a.id, fileName: a.file_name, fileUrl: a.file_url, uploadedAt: a.uploaded_at }; });
+};
+
+api.uploadAttachment = async function (session, entityType, entityId, file) {
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  const path = entityType + '/' + entityId + '/' + Date.now() + '_' + file.name;
+  const { error: upErr } = await supabaseClient.storage.from('attachments').upload(path, file);
+  if (upErr) throw upErr;
+  const { data: urlData } = supabaseClient.storage.from('attachments').getPublicUrl(path);
+  const { error } = await supabaseClient.from('attachments').insert({
+    entity_type: entityType, entity_id: String(entityId), file_name: file.name, file_url: urlData.publicUrl, uploaded_by: user ? user.id : null
+  });
+  if (error) throw error;
+  return { success: true, url: urlData.publicUrl };
+};
+
+api.deleteAttachment = async function (id, filePath) {
+  const { error } = await supabaseClient.from('attachments').delete().eq('id', id);
   if (error) throw error;
   return { success: true };
 };
