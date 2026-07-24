@@ -560,3 +560,138 @@ api.updateSettingsBulk = async function (session, settingsObject) {
   if (error) throw error;
   return { success: true };
 };
+
+// ------------------------------------------------------------
+// شجرة الحسابات (Chart of Accounts)
+// ------------------------------------------------------------
+api.getAccounts = async function () {
+  const { data, error } = await supabaseClient.from('accounts').select('*').eq('active', true).order('code');
+  if (error) throw error;
+  return (data || []).map(function (a) {
+    return { code: a.code, name: a.name, type: a.type, isGroup: a.is_group, parentId: a.parent_id };
+  });
+};
+
+api.addAccount = async function (session, payload) {
+  const { data, error } = await supabaseClient.rpc('rpc_add_account', {
+    p_name: payload.name, p_type: payload.type, p_parent_code: payload.parentCode || null, p_is_group: !!payload.isGroup
+  });
+  if (error) throw error;
+  return { success: true, code: data[0].code };
+};
+
+// ------------------------------------------------------------
+// أرصدة أول مدة (Opening Balances)
+// ------------------------------------------------------------
+api.listOpeningBalances = async function () {
+  const { data, error } = await supabaseClient.from('opening_balances').select('*, accounts(name,code), product_variants(code)').order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(function (o) {
+    return {
+      id: o.id, asOfDate: o.as_of_date, accountName: o.accounts ? (o.accounts.code + ' - ' + o.accounts.name) : '',
+      variantCode: o.product_variants ? o.product_variants.code : '', amount: o.amount, quantity: o.quantity,
+      description: o.description, locked: o.locked
+    };
+  });
+};
+
+api.addOpeningBalance = async function (session, payload) {
+  let accountId = null, variantId = null;
+  if (payload.accountCode) {
+    const { data: acc } = await supabaseClient.from('accounts').select('id').eq('code', payload.accountCode).single();
+    accountId = acc ? acc.id : null;
+  }
+  if (payload.variantCode) {
+    const { data: v } = await supabaseClient.from('product_variants').select('id').eq('code', payload.variantCode).single();
+    variantId = v ? v.id : null;
+  }
+  const { error } = await supabaseClient.from('opening_balances').insert({
+    as_of_date: payload.asOfDate, account_id: accountId, variant_id: variantId,
+    amount: payload.amount || 0, quantity: payload.quantity || null, description: payload.description || ''
+  });
+  if (error) throw error;
+  return { success: true };
+};
+
+api.lockOpeningBalances = async function (session) {
+  const { error } = await supabaseClient.rpc('rpc_lock_opening_balances');
+  if (error) throw error;
+  return { success: true };
+};
+
+// ------------------------------------------------------------
+// الخزنة والبنوك المتعددة
+// ------------------------------------------------------------
+api.listTreasuryAccounts = async function () {
+  const { data, error } = await supabaseClient.from('treasury_accounts').select('*').eq('active', true).order('type');
+  if (error) throw error;
+  return (data || []).map(function (t) {
+    return { id: t.id, name: t.name, type: t.type, bankName: t.bank_name, accountNumber: t.account_number, currentBalance: t.current_balance };
+  });
+};
+
+api.addTreasuryAccount = async function (session, payload) {
+  const { error } = await supabaseClient.from('treasury_accounts').insert({
+    name: payload.name, type: payload.type, bank_name: payload.bankName || '', account_number: payload.accountNumber || '',
+    opening_balance: payload.openingBalance || 0, current_balance: payload.openingBalance || 0
+  });
+  if (error) throw error;
+  return { success: true };
+};
+
+api.transferBetweenTreasuries = async function (session, fromId, toId, amount, notes) {
+  const { error } = await supabaseClient.rpc('rpc_transfer_between_treasuries', { p_from_id: fromId, p_to_id: toId, p_amount: amount, p_notes: notes || '' });
+  if (error) throw error;
+  return { success: true };
+};
+
+// ------------------------------------------------------------
+// سلة المحذوفات
+// ------------------------------------------------------------
+api.listDeletedRecords = async function () {
+  const results = [];
+  const { data: products } = await supabaseClient.from('products').select('id,name,code,deleted_at').not('deleted_at', 'is', null);
+  (products || []).forEach(function (p) { results.push({ table: 'products', tableLabel: 'منتج', id: p.id, label: p.name + ' (' + p.code + ')', deletedAt: p.deleted_at }); });
+
+  const { data: variants } = await supabaseClient.from('product_variants').select('id,code,deleted_at').not('deleted_at', 'is', null);
+  (variants || []).forEach(function (v) { results.push({ table: 'product_variants', tableLabel: 'متغير منتج', id: v.id, label: v.code, deletedAt: v.deleted_at }); });
+
+  const { data: customers } = await supabaseClient.from('customers').select('phone,name,deleted_at').not('deleted_at', 'is', null);
+  (customers || []).forEach(function (c) { results.push({ table: 'customers', tableLabel: 'عميل', id: c.phone, label: (c.name || c.phone), deletedAt: c.deleted_at }); });
+
+  const { data: suppliers } = await supabaseClient.from('suppliers').select('id,name,deleted_at').not('deleted_at', 'is', null);
+  (suppliers || []).forEach(function (s) { results.push({ table: 'suppliers', tableLabel: 'مورد', id: s.id, label: s.name, deletedAt: s.deleted_at }); });
+
+  const { data: employees } = await supabaseClient.from('employees').select('id,name,deleted_at').not('deleted_at', 'is', null);
+  (employees || []).forEach(function (e) { results.push({ table: 'employees', tableLabel: 'موظف', id: e.id, label: e.name, deletedAt: e.deleted_at }); });
+
+  results.sort(function (a, b) { return new Date(b.deletedAt) - new Date(a.deletedAt); });
+  return results;
+};
+
+api.softDeleteRecord = async function (session, table, id) {
+  const { error } = await supabaseClient.rpc('rpc_soft_delete', { p_table: table, p_id: String(id) });
+  if (error) throw error;
+  return { success: true };
+};
+
+api.restoreDeletedRecord = async function (session, table, id) {
+  const { error } = await supabaseClient.rpc('rpc_restore_deleted', { p_table: table, p_id: String(id) });
+  if (error) throw error;
+  return { success: true };
+};
+
+// ------------------------------------------------------------
+// مراكز التكلفة
+// ------------------------------------------------------------
+api.listCostCenters = async function () {
+  const { data, error } = await supabaseClient.from('cost_centers').select('*').eq('active', true).order('name');
+  if (error) throw error;
+  return (data || []).map(function (c) { return { id: c.id, name: c.name, description: c.description }; });
+};
+
+api.addCostCenter = async function (session, payload) {
+  const { error } = await supabaseClient.from('cost_centers').insert({ name: payload.name, description: payload.description || '' });
+  if (error) throw error;
+  return { success: true };
+};
