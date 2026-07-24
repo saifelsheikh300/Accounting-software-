@@ -865,3 +865,33 @@ api.deleteAttachment = async function (id, filePath) {
   if (error) throw error;
   return { success: true };
 };
+
+// ------------------------------------------------------------
+// الذكاء الاصطناعي — تحليلات إحصائية + رأي Gemini النصي (اختياري)
+// ------------------------------------------------------------
+api.getStagnantStock = async function (days) {
+  const { data, error } = await supabaseClient.rpc('rpc_stagnant_stock', { p_days: days || 60 });
+  if (error) throw error;
+  return data || [];
+};
+
+api.getSalesForecast = async function () {
+  const { data, error } = await supabaseClient.rpc('rpc_sales_forecast');
+  if (error) throw error;
+  return data || {};
+};
+
+api.getAiInsights = async function (apiKey, contextText) {
+  if (!apiKey) throw new Error('محتاجة تحطي Gemini API Key في الإعدادات الأول');
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey;
+  const prompt = 'انت مستشار مالي لبراند ملابس صغير. دي بيانات الأداء الحالية بتاعته:\n\n' + contextText +
+    '\n\nاديني تحليل قصير (٤-٦ أسطر) بالعامية المصرية: إيه اللي لافت، وإيه أهم توصية عملية واحدة أو اتنين ممكن يعملها دلوقتي. متكررش الأرقام اللي فاتت، ركزي على الاستنتاج.';
+  const res = await fetch(url, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message || 'حصل خطأ من Gemini');
+  const text = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts[0] ? data.candidates[0].content.parts[0].text : '';
+  return text || 'مفيش رد من الـAI حاليًا، جربي تاني.';
+};
