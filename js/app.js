@@ -1430,6 +1430,12 @@ function renderReportsPage() {
       '<button class="btn info-btn" onclick="loadProfitabilityByProduct_()">🏷️ حسب الصنف</button>' +
       '<button class="btn info-btn" onclick="loadProfitabilityByCustomer_()">👤 حسب العميل</button></div>' +
       '<div id="profitabilityResult" style="margin-top:14px;"></div></div>' +
+    '<div class="section-title">🤖 الذكاء الاصطناعي</div>' +
+    '<div class="card"><div class="card-row" style="gap:10px; flex-wrap:wrap;">' +
+      '<button class="btn info-btn" onclick="loadStagnantStock_()">📦 أصناف راكدة</button>' +
+      '<button class="btn info-btn" onclick="loadSalesForecast_()">📈 توقع المبيعات</button>' +
+      '<button class="btn" onclick="loadAiInsights_()">✨ تحليل ذكي (Gemini)</button></div>' +
+      '<div id="aiResult" style="margin-top:14px;"></div></div>' +
     '<div class="section-title">المواسم</div>' +
     '<div class="card"><div class="form-grid">' +
       '<div class="field"><label>اسم الموسم</label><input type="text" id="seasonName"></div>' +
@@ -1676,6 +1682,7 @@ async function renderSettingsPage() {
       field_('نسبة الضريبة %', 'setTaxRate', s.taxRate) +
       selectField_('موافقة الشركاء مفعّلة؟', 'setPartnerApprovalEnabled', s.partnerApprovalEnabled, [['true', 'نعم'], ['false', 'لا']]) +
       field_('EasyOrders API Key', 'setEasyOrdersApiKey', s.easyOrdersApiKey) + field_('EasyOrders Secret', 'setEasyOrdersSecret', s.easyOrdersSecret) +
+      field_('Gemini API Key (للذكاء الاصطناعي)', 'setGeminiApiKey', s.geminiApiKey) +
       field_('حد التنبيه الافتراضي للمخزون', 'setLowStockThresholdDefault', s.lowStockThresholdDefault) +
       '</div><button class="btn success block" style="margin-top:20px;" onclick="saveSettings_()">💾 حفظ الإعدادات</button></div>');
   } catch (err) { showErrorToast_(err); }
@@ -1695,6 +1702,7 @@ async function saveSettings_() {
     adminFeeEnabled: document.getElementById('setAdminFeeEnabled').value, taxEnabled: document.getElementById('setTaxEnabled').value,
     taxRate: document.getElementById('setTaxRate').value, partnerApprovalEnabled: document.getElementById('setPartnerApprovalEnabled').value,
     easyOrdersApiKey: document.getElementById('setEasyOrdersApiKey').value, easyOrdersSecret: document.getElementById('setEasyOrdersSecret').value,
+    geminiApiKey: document.getElementById('setGeminiApiKey').value,
     lowStockThresholdDefault: document.getElementById('setLowStockThresholdDefault').value
   };
   try {
@@ -2291,4 +2299,51 @@ function showKeyboardShortcutsHelp_() {
     return '<div class="list-item"><span>' + s.desc + '</span><span class="pill info" style="font-family:monospace;">' + s.keys + '</span></div>';
   }).join('');
   openModal('⌨️ اختصارات لوحة المفاتيح', '', '<div>' + rows + '</div>', '<button class="btn secondary" onclick="closeModal()">إغلاق</button>');
+}
+
+// ============================================================
+// الذكاء الاصطناعي — أصناف راكدة + توقع مبيعات + تحليل Gemini
+// ============================================================
+async function loadStagnantStock_() {
+  document.getElementById('aiResult').innerHTML = '<div class="empty-state" style="padding:20px;"><span class="emoji">⏳</span></div>';
+  try {
+    const rows = await api.getStagnantStock(60);
+    let html = '<div class="card-heading" style="font-size:13px; margin-bottom:8px;">📦 أصناف مالهاش حركة بيع من 60 يوم</div>';
+    html += rows.length === 0 ? emptyRow_('✅', 'مفيش أصناف راكدة، الوضع تمام') :
+      '<div class="table-wrap"><table><thead><tr><th>الصنف</th><th>الكمية المتاحة</th><th>آخر بيعة</th></tr></thead><tbody>' +
+      rows.map(function (r) {
+        return '<tr><td>' + r.productName + ' (' + r.variantCode + ')</td><td>' + r.quantity + '</td><td>' + (r.daysSinceLastSale ? 'من ' + r.daysSinceLastSale + ' يوم' : 'لسه معملهاش بيعة خالص') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+    document.getElementById('aiResult').innerHTML = html;
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function loadSalesForecast_() {
+  document.getElementById('aiResult').innerHTML = '<div class="empty-state" style="padding:20px;"><span class="emoji">⏳</span></div>';
+  try {
+    const f = await api.getSalesForecast();
+    const cur = state.settings.currency || 'جنيه';
+    let html = '<div class="card-heading" style="font-size:13px; margin-bottom:8px;">📈 توقع مبيعات الأسبوع الجاي</div>';
+    html += rowLine_('متوسط المبيعات الأسبوعي (آخر 8 أسابيع)', formatMoney_(f.averageWeekly, cur));
+    html += rowLine_('الاتجاه (فرق آخر أسبوعين)', (f.trend >= 0 ? '↑ +' : '↓ ') + formatMoney_(Math.abs(f.trend), cur));
+    html += rowLine_('التوقع للأسبوع الجاي', formatMoney_(f.nextWeekForecast, cur), true);
+    document.getElementById('aiResult').innerHTML = html;
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function loadAiInsights_() {
+  const apiKey = state.settings.geminiApiKey;
+  if (!apiKey) { showToast_('حطي Gemini API Key في الإعدادات الأول', 'error'); return; }
+  document.getElementById('aiResult').innerHTML = '<div class="empty-state" style="padding:20px;"><span class="emoji">✨</span><div class="msg" style="font-size:12px;">بيفكر...</div></div>';
+  try {
+    const income = await api.getIncomeStatement(document.getElementById('repStart').value, document.getElementById('repEnd').value);
+    const stagnant = await api.getStagnantStock(60);
+    const forecast = await api.getSalesForecast();
+    const cur = state.settings.currency || 'جنيه';
+    const context = 'إجمالي المبيعات: ' + formatMoney_(income.totalSales, cur) + '\nصافي الربح: ' + formatMoney_(income.netProfitBeforeTax, cur) +
+      '\nعدد الأصناف الراكدة (60 يوم بدون بيع): ' + stagnant.length +
+      '\nمتوسط المبيعات الأسبوعي: ' + formatMoney_(forecast.averageWeekly, cur) + '\nالتوقع للأسبوع الجاي: ' + formatMoney_(forecast.nextWeekForecast, cur);
+    const insight = await api.getAiInsights(apiKey, context);
+    document.getElementById('aiResult').innerHTML = '<div class="card" style="background:var(--surface-2); white-space:pre-wrap; line-height:1.9; font-size:13px;">' + insight + '</div>';
+  } catch (err) { showErrorToast_(err); }
 }
