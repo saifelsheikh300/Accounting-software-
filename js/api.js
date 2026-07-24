@@ -742,3 +742,71 @@ api.approvePurchaseRequest = async function (session, requestId, approve) {
   if (error) throw error;
   return { success: true };
 };
+
+// ------------------------------------------------------------
+// الربحية الحقيقية
+// ------------------------------------------------------------
+api.getProfitabilityByProduct = async function (start, end) {
+  const { data, error } = await supabaseClient.rpc('rpc_profitability_by_product', { p_start: start, p_end: end });
+  if (error) throw error;
+  return data || [];
+};
+
+api.getProfitabilityByCustomer = async function (start, end) {
+  const { data, error } = await supabaseClient.rpc('rpc_profitability_by_customer', { p_start: start, p_end: end });
+  if (error) throw error;
+  return data || [];
+};
+
+// ------------------------------------------------------------
+// العملات وأسعار الصرف
+// ------------------------------------------------------------
+api.listCurrencies = async function () {
+  const { data, error } = await supabaseClient.from('currencies').select('*').order('is_base', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+api.addCurrency = async function (session, code, name) {
+  const { error } = await supabaseClient.from('currencies').insert({ code: code, name: name, is_base: false });
+  if (error) throw error;
+  return { success: true };
+};
+
+api.listExchangeRates = async function () {
+  const { data, error } = await supabaseClient.from('exchange_rates').select('*, currencies(name)').order('rate_date', { ascending: false }).limit(30);
+  if (error) throw error;
+  return (data || []).map(function (r) { return { currencyCode: r.currency_code, currencyName: r.currencies ? r.currencies.name : '', date: r.rate_date, rate: r.rate_to_base }; });
+};
+
+api.setExchangeRate = async function (session, currencyCode, rate, date) {
+  const { error } = await supabaseClient.rpc('rpc_set_exchange_rate', { p_currency_code: currencyCode, p_rate: rate, p_date: date || new Date().toISOString().slice(0, 10) });
+  if (error) throw error;
+  return { success: true };
+};
+
+// ------------------------------------------------------------
+// الشيكات
+// ------------------------------------------------------------
+api.listChecks = async function () {
+  const { data, error } = await supabaseClient.from('checks').select('*').order('due_date');
+  if (error) throw error;
+  return (data || []).map(function (c) {
+    return { id: c.id, checkNumber: c.check_number, direction: c.direction, partyName: c.party_name, amount: c.amount, dueDate: c.due_date, bankName: c.bank_name, status: c.status };
+  });
+};
+
+api.addCheck = async function (session, payload) {
+  const { error } = await supabaseClient.from('checks').insert({
+    check_number: payload.checkNumber, direction: payload.direction, party_name: payload.partyName,
+    amount: payload.amount, due_date: payload.dueDate, bank_name: payload.bankName || '', notes: payload.notes || '', created_by: session.id || null
+  });
+  if (error) throw error;
+  return { success: true };
+};
+
+api.updateCheckStatus = async function (session, checkId, status) {
+  const { error } = await supabaseClient.rpc('rpc_update_check_status', { p_check_id: checkId, p_status: status });
+  if (error) throw error;
+  return { success: true };
+};
