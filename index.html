@@ -42,6 +42,10 @@
           <div><div id="pageTitle">الداشبورد</div><div id="pageSubtitle"></div></div>
         </div>
         <div class="header-right">
+          <div style="position:relative;">
+            <input type="text" id="globalSearchInput" placeholder="🔍 بحث شامل..." oninput="onGlobalSearchInput_(this.value)" style="width:170px; padding:8px 12px; border-radius:10px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:12.5px;">
+            <div id="globalSearchDropdown" style="display:none; position:absolute; top:110%; left:0; width:260px; max-height:340px; overflow-y:auto; background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); z-index:200;"></div>
+          </div>
           <div class="user-chip">
             <div class="user-avatar" id="userAvatar">؟</div>
             <div><div class="uname" id="userNameChip">—</div><div class="urole" id="userRoleChip">—</div></div>
