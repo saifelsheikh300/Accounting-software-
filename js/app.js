@@ -22,6 +22,7 @@ const NAV_GROUPS = [
     { key: 'warehouses', label: 'المخازن', icon: '🏬', module: 'Inventory' },
     { key: 'expenses', label: 'المصروفات', icon: '💸', module: 'Expenses' },
     { key: 'suppliers', label: 'الموردون والمشتريات', icon: '🚚', module: 'Suppliers' },
+    { key: 'purchaserequests', label: 'طلبات الشراء والاعتماد', icon: '📝', module: 'Suppliers' },
     { key: 'orders', label: 'الأوردرات والعملاء', icon: '🧍', module: 'Orders' },
     { key: 'invoices', label: 'الفواتير', icon: '📄', module: 'Invoices' }
   ]},
@@ -49,6 +50,7 @@ const PAGE_META = {
   warehouses: ['المخازن', 'إدارة الفروع/المخازن المتعددة'],
   expenses: ['المصروفات', 'تسجيل وتصنيف كل المصروفات'],
   suppliers: ['الموردون والمشتريات', 'تسجيل مشتريات جديدة ومتابعة الموردين'],
+  purchaserequests: ['طلبات الشراء والاعتماد', 'مرحلة الطلب قبل تحويله لأمر شراء فعلي'],
   orders: ['الأوردرات والعملاء', 'طلبات الأونلاين وسجل العملاء'],
   invoices: ['الفواتير', 'متابعة حالة التحصيل'],
   capital: ['رأس المال والشركاء', 'نسب الملكية والأرباح'],
@@ -208,6 +210,7 @@ function navigate(pageKey) {
   const renderers = {
     dashboard: renderDashboardPage, pos: renderPosPage, sales: renderSalesPage,
     inventory: renderInventoryPage, warehouses: renderWarehousesPage, expenses: renderExpensesPage, suppliers: renderSuppliersPage,
+    purchaserequests: renderPurchaseRequestsPage,
     orders: renderOrdersPage, invoices: renderInvoicesPage, capital: renderCapitalPage,
     pettycash: renderPettyCashPage, reports: renderReportsPage, hr: renderHrPage,
     users: renderUsersPage, settings: renderSettingsPage,
@@ -1558,7 +1561,33 @@ async function renderWarehousesPage() {
     html += warehouses.length === 0 ? emptyRow_('🏬', 'لسه مفيش مخازن مسجلة') :
       warehouses.map(function (w) { return '<div class="list-item"><span><b>' + w.name + '</b><br><span style="color:var(--text-dim); font-size:11.5px;">' + (w.location || '—') + '</span></span>' + (w.isDefaultOnline ? '<span class="pill success">افتراضي أونلاين</span>' : '') + '</div>'; }).join('');
     html += '</div></div></div>';
+
+    if (warehouses.length >= 2) {
+      html += '<div class="section-title">🔁 نقل مخزون بين المخازن</div><div class="card">' +
+        '<div class="form-grid"><div class="field"><label>من مخزن</label><select id="stFrom">' + warehouses.map(function (w) { return '<option value="' + w.id + '">' + w.name + '</option>'; }).join('') + '</select></div>' +
+        '<div class="field"><label>إلى مخزن</label><select id="stTo">' + warehouses.map(function (w) { return '<option value="' + w.id + '">' + w.name + '</option>'; }).join('') + '</select></div></div>' +
+        '<div class="field" style="margin-top:10px;"><label>كود الصنف</label><input type="text" id="stVariantCode" placeholder="مثال: 21001-AH-M"></div>' +
+        '<div class="field" style="margin-top:10px;"><label>الكمية</label><input type="number" id="stQty"></div>' +
+        '<div class="field" style="margin-top:10px;"><label>ملاحظة</label><input type="text" id="stNotes"></div>' +
+        '<button class="btn block" style="margin-top:16px;" onclick="submitStockTransfer_()">🔁 نقل</button></div>';
+    }
+
     setContent_(html);
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function submitStockTransfer_() {
+  const fromId = document.getElementById('stFrom').value, toId = document.getElementById('stTo').value;
+  const variantCode = document.getElementById('stVariantCode').value.trim(), qty = Number(document.getElementById('stQty').value);
+  if (fromId === toId) { showToast_('اختاري مخزنين مختلفين', 'error'); return; }
+  if (!variantCode || !qty) { showToast_('كود الصنف والكمية مطلوبين', 'error'); return; }
+  try {
+    await api.transferStock({ username: state.user.username }, {
+      fromWarehouseId: fromId, toWarehouseId: toId, items: [{ variant_code: variantCode, qty: qty }],
+      notes: document.getElementById('stNotes').value
+    });
+    showToast_('تم النقل ✅', 'success');
+    renderWarehousesPage();
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -1872,5 +1901,86 @@ async function restoreDeletedItem_(table, id) {
     await api.restoreDeletedRecord({ username: state.user.username }, table, id);
     showToast_('تم الاسترجاع ✅', 'success');
     renderRecycleBinPage();
+  } catch (err) { showErrorToast_(err); }
+}
+
+// ============================================================
+// طلبات الشراء والاعتماد
+// ============================================================
+let prItemsCart = [];
+
+async function renderPurchaseRequestsPage() {
+  try {
+    prItemsCart = [];
+    const requests = await api.listPurchaseRequests();
+    let html = '<div class="grid grid-2">';
+    html += '<div class="card"><div class="card-heading">📝 طلب شراء جديد</div>' +
+      '<div class="field"><label>اسم المورد (اختياري)</label><input type="text" id="prSupplierName"></div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>كود الصنف (اختياري)</label><input type="text" id="prVariantCode"></div>' +
+      '<div class="field"><label>أو وصف صنف حر</label><input type="text" id="prFreeText"></div></div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>الكمية</label><input type="number" id="prQty"></div>' +
+      '<div class="field"><label>السعر المتوقع</label><input type="number" id="prPrice"></div></div>' +
+      '<button class="btn secondary block" style="margin-top:12px;" onclick="addItemToPrCart_()">➕ إضافة للسلة</button>' +
+      '<div id="prCartList" style="margin-top:12px;"></div>' +
+      '<div class="field" style="margin-top:10px;"><label>ملاحظة عامة</label><input type="text" id="prNotes"></div>' +
+      '<button class="btn success block" style="margin-top:16px;" onclick="submitPurchaseRequest_()">✅ إرسال الطلب للاعتماد</button></div>';
+
+    html += '<div class="card"><div class="card-heading">📋 الطلبات الحالية</div><div style="margin-top:10px;">';
+    html += requests.length === 0 ? emptyRow_('📝', 'لسه مفيش طلبات شراء') :
+      requests.map(function (r) {
+        const pill = r.status === 'معتمد' ? 'success' : (r.status === 'مرفوض' ? 'danger' : 'warning');
+        const actions = r.status === 'بانتظار الاعتماد'
+          ? '<button class="btn success" style="padding:4px 10px; font-size:11px;" onclick="approvePr_(\'' + r.id + '\', true)">اعتماد</button>' +
+            '<button class="btn danger" style="padding:4px 10px; font-size:11px;" onclick="approvePr_(\'' + r.id + '\', false)">رفض</button>'
+          : '';
+        return '<div class="list-item"><span><b>' + r.requestNumber + '</b>' + (r.supplierName ? ' — ' + r.supplierName : '') +
+          '<br><span style="color:var(--text-faint); font-size:11px;">' + formatDate_(r.date) + '</span></span>' +
+          '<span style="display:flex; align-items:center; gap:6px;"><span class="pill ' + pill + '">' + r.status + '</span>' + actions + '</span></div>';
+      }).join('');
+    html += '</div></div></div>';
+    setContent_(html);
+  } catch (err) { showErrorToast_(err); }
+}
+
+function addItemToPrCart_() {
+  const variantCode = document.getElementById('prVariantCode').value.trim();
+  const freeText = document.getElementById('prFreeText').value.trim();
+  const qty = Number(document.getElementById('prQty').value);
+  const price = Number(document.getElementById('prPrice').value) || 0;
+  if (!variantCode && !freeText) { showToast_('لازم كود صنف أو وصف حر', 'error'); return; }
+  if (!qty) { showToast_('الكمية مطلوبة', 'error'); return; }
+  prItemsCart.push({ variant_code: variantCode, freeText: freeText, qty: qty, estimatedPrice: price });
+  document.getElementById('prVariantCode').value = ''; document.getElementById('prFreeText').value = '';
+  document.getElementById('prQty').value = ''; document.getElementById('prPrice').value = '';
+  renderPrCart_();
+}
+
+function renderPrCart_() {
+  const el = document.getElementById('prCartList');
+  if (!el) return;
+  el.innerHTML = prItemsCart.length === 0 ? '' : prItemsCart.map(function (it, idx) {
+    return '<div class="list-item" style="padding:8px 12px;"><span>' + (it.variant_code || it.freeText) + ' × ' + it.qty + '</span>' +
+      '<button class="btn secondary" style="padding:2px 8px; font-size:11px;" onclick="removeFromPrCart_(' + idx + ')">✕</button></div>';
+  }).join('');
+}
+
+function removeFromPrCart_(idx) { prItemsCart.splice(idx, 1); renderPrCart_(); }
+
+async function submitPurchaseRequest_() {
+  if (prItemsCart.length === 0) { showToast_('ضيفي صنف واحد على الأقل للسلة', 'error'); return; }
+  try {
+    await api.createPurchaseRequest({ username: state.user.username }, {
+      supplierName: document.getElementById('prSupplierName').value, items: prItemsCart, notes: document.getElementById('prNotes').value
+    });
+    showToast_('تم إرسال طلب الشراء ✅', 'success');
+    renderPurchaseRequestsPage();
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function approvePr_(id, approve) {
+  try {
+    await api.approvePurchaseRequest({ username: state.user.username }, id, approve);
+    showToast_(approve ? 'تم الاعتماد ✅' : 'تم الرفض', approve ? 'success' : 'warning');
+    renderPurchaseRequestsPage();
   } catch (err) { showErrorToast_(err); }
 }
