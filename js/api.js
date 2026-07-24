@@ -881,17 +881,14 @@ api.getSalesForecast = async function () {
   return data || {};
 };
 
-api.getAiInsights = async function (apiKey, contextText) {
-  if (!apiKey) throw new Error('محتاجة تحطي Gemini API Key في الإعدادات الأول');
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey;
-  const prompt = 'انت مستشار مالي لبراند ملابس صغير. دي بيانات الأداء الحالية بتاعته:\n\n' + contextText +
-    '\n\nاديني تحليل قصير (٤-٦ أسطر) بالعامية المصرية: إيه اللي لافت، وإيه أهم توصية عملية واحدة أو اتنين ممكن يعملها دلوقتي. متكررش الأرقام اللي فاتت، ركزي على الاستنتاج.';
-  const res = await fetch(url, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+api.getAiInsights = async function (contextText) {
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  const res = await fetch(SUPABASE_URL + '/functions/v1/ai-insights', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (session ? session.access_token : SUPABASE_ANON_KEY) },
+    body: JSON.stringify({ contextText: contextText })
   });
   const data = await res.json();
-  if (data.error) throw new Error(data.error.message || 'حصل خطأ من Gemini');
-  const text = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts[0] ? data.candidates[0].content.parts[0].text : '';
-  return text || 'مفيش رد من الـAI حاليًا، جربي تاني.';
+  if (data.error) throw new Error(data.error);
+  return data.text || 'مفيش رد من الـAI حاليًا، جربي تاني.';
 };
