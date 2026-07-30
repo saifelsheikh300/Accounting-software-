@@ -1219,38 +1219,104 @@ async function poSearch_(query) {
 
 // ------------------------------------------------------------
 // إضافة منتج جديد Inline من داخل شاشة أمر الشراء (بدون مغادرتها)
-// 3 خانات بس: الاسم / السعر (التكلفة) / الكود (اختياري)
+// بتسمح باختيار الفئة الرئيسية/الفرعية الحقيقية + الكمية المشتراة
 // ------------------------------------------------------------
+let poTreeCache = null;
+
 async function openPoQuickAddForm_(prefillName) {
+  try {
+    poTreeCache = await api.getProductTree();
+  } catch (err) { showErrorToast_(err); return; }
+  if (!poTreeCache.mainCategories.length) {
+    document.getElementById('poQuickAddInline').innerHTML = '<div class="hint" style="color:var(--danger);">لازم تضيفي فئة رئيسية وفرعية الأول من صفحة المخزون</div>';
+    return;
+  }
+  renderPoQuickAddForm_(prefillName);
+}
+
+function renderPoQuickAddForm_(prefillName) {
+  const mainOpts = poTreeCache.mainCategories.map(function (m) { return '<option value="' + m.code + '">' + m.name + '</option>'; }).join('');
   document.getElementById('poQuickAddInline').innerHTML =
     '<div class="card" style="background:var(--surface-2); margin-top:10px; padding:14px;">' +
-      '<div class="form-grid" style="grid-template-columns: 2fr 1fr 1fr;">' +
-        '<div class="field"><label>اسم المنتج</label><input type="text" id="poQuickName" value="' + prefillName + '"></div>' +
+      '<div class="inline-add-row"><div class="field"><label>الفئة الرئيسية</label>' +
+      '<select id="poQuickMainCat" onchange="onPoQuickMainCatChange_()">' + mainOpts + '</select></div>' +
+      '<button class="inline-add-btn" onclick="openPoQuickAddCategoryPrompt_(false)">+ فئة</button></div>' +
+      '<div class="inline-add-row" style="margin-top:10px;"><div class="field"><label>الفئة الفرعية</label>' +
+      '<select id="poQuickSubCat">' + poSubCategoryOptions_(poTreeCache.mainCategories[0].code) + '</select></div>' +
+      '<button class="inline-add-btn" onclick="openPoQuickAddCategoryPrompt_(true)">+ فئة فرعية</button></div>' +
+      '<div class="form-grid" style="margin-top:12px;">' +
+        '<div class="field"><label>اسم المنتج</label><input type="text" id="poQuickName" value="' + (prefillName || '').replace(/"/g, '') + '"></div>' +
         '<div class="field"><label>سعر التكلفة</label><input type="number" id="poQuickPrice" placeholder="0"></div>' +
+      '</div>' +
+      '<div class="form-grid">' +
+        '<div class="field"><label>الكمية المشتراة</label><input type="number" id="poQuickQty" value="1"></div>' +
         '<div class="field"><label>الكود (اختياري)</label><input type="text" id="poQuickCode" placeholder="تلقائي"></div>' +
       '</div>' +
       '<button class="btn success block" style="margin-top:10px;" onclick="submitPoQuickAdd_()">✅ إضافة المنتج للمخزون وللأوردر</button>' +
     '</div>';
+  enhanceSelects_(document.getElementById('poQuickAddInline'));
+}
+
+function poSubCategoryOptions_(parentCode) {
+  const subs = poTreeCache.subCategories.filter(function (s) { return s.parent === parentCode; });
+  if (!subs.length) return '<option value="">لا يوجد فئات فرعية — أضيفي واحدة</option>';
+  return subs.map(function (s) { return '<option value="' + s.code + '">' + s.name + '</option>'; }).join('');
+}
+
+function onPoQuickMainCatChange_() {
+  document.getElementById('poQuickSubCat').innerHTML = poSubCategoryOptions_(document.getElementById('poQuickMainCat').value);
+  refreshSelect_('poQuickSubCat');
+}
+
+function openPoQuickAddCategoryPrompt_(isSub) {
+  const parentCode = isSub ? document.getElementById('poQuickMainCat').value : '';
+  openModal(isSub ? 'فئة فرعية جديدة' : 'فئة رئيسية جديدة', '',
+    '<div class="field"><label>الاسم</label><input type="text" id="poQuickNewCatName"></div>',
+    '<button class="btn secondary" onclick="submitPoQuickAddCategoryCancel_()">إلغاء</button><button class="btn success" onclick="submitPoQuickAddCategory_(' + isSub + ', \'' + parentCode + '\')">إضافة</button>');
+}
+
+function submitPoQuickAddCategoryCancel_() {
+  closeModal();
+  renderPoQuickAddForm_(document.getElementById('poQuickName') ? document.getElementById('poQuickName').value : '');
+}
+
+async function submitPoQuickAddCategory_(isSub, parentCode) {
+  const name = document.getElementById('poQuickNewCatName').value.trim();
+  if (!name) { showToast_('اكتب اسم الفئة', 'error'); return; }
+  try {
+    await api.createCategory({ username: state.user.username }, { name: name, type: isSub ? 'فرعية' : 'رئيسية', parentCode: isSub ? parentCode : null });
+    poTreeCache = await api.getProductTree();
+    const prevName = document.getElementById('poQuickName') ? document.getElementById('poQuickName').value : '';
+    closeModal();
+    renderPoQuickAddForm_(prevName);
+    showToast_('تمت إضافة الفئة ✅', 'success');
+  } catch (err) { showErrorToast_(err); }
 }
 
 async function submitPoQuickAdd_() {
   const name = document.getElementById('poQuickName').value.trim();
   const price = Number(document.getElementById('poQuickPrice').value);
+  const qty = Number(document.getElementById('poQuickQty').value) || 1;
   const manualCode = document.getElementById('poQuickCode').value.trim();
+  const subCategory = document.getElementById('poQuickSubCat').value;
+  if (!subCategory) { showToast_('اختاري فئة فرعية', 'error'); return; }
   if (!name || !price) { showToast_('الاسم والسعر مطلوبين', 'error'); return; }
 
   try {
-    const result = await api.quickAddProduct({ username: state.user.username }, name, price, manualCode);
+    const res = await api.addProductWithVariants({ username: state.user.username }, {
+      name: name, subCategory: subCategory, basePrice: price,
+      variants: [{ color: '', size: '', quantity: 0, cost: price }], manualCode: manualCode || null
+    });
     showToast_('تمت إضافة "' + name + '" للمخزون ✅', 'success');
-    addToPoCart_(result.variantCode, name, price);
+    addToPoCart_(res.variantCodes[0], name, price, qty);
     document.getElementById('poSearchResults').innerHTML = '';
     document.getElementById('poSearchInput').value = '';
   } catch (err) { showErrorToast_(err); }
 }
 
-function addToPoCart_(variantCode, label, cost) {
+function addToPoCart_(variantCode, label, cost, qty) {
   const existing = poCart.find(function (i) { return i.variantCode === variantCode; });
-  if (existing) existing.qty += 1; else poCart.push({ variantCode: variantCode, label: label, price: cost, qty: 1 });
+  if (existing) existing.qty += (qty || 1); else poCart.push({ variantCode: variantCode, label: label, price: cost, qty: qty || 1 });
   renderPoCart_();
 }
 
