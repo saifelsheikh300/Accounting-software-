@@ -159,19 +159,48 @@ api.addVariant = async function (session, payload) {
 };
 
 api.getInventoryIndex = async function () {
-  const { data: products, error } = await supabaseClient.from('products').select('*, product_variants(*), sub_category:sub_category_id(name)');
+  const { data: products, error } = await supabaseClient.from('products').select('*, product_variants(*), sub_category:sub_category_id(code, name)').is('deleted_at', null);
   if (error) throw error;
   const result = { products: {} };
   products.forEach(function (p) {
     result.products[p.code] = {
       code: p.code, name: p.name, basePrice: p.base_price, image: p.image_url, hasVariants: p.has_variants, status: p.status,
+      subCategoryCode: p.sub_category ? p.sub_category.code : '',
       subCategoryName: p.sub_category ? p.sub_category.name : '',
-      variants: (p.product_variants || []).map(function (v) {
+      variants: (p.product_variants || []).filter(function (v) { return !v.deleted_at; }).map(function (v) {
         return { code: v.code, productCode: p.code, color: v.color, size: v.size, quantity: v.quantity, cost: v.cost, specialPrice: v.special_price, warehouseId: v.warehouse_id, lowStockThreshold: v.low_stock_threshold, status: v.status };
       })
     };
   });
   return { products: result.products };
+};
+
+// تعديل اسم فئة (رئيسية أو فرعية)
+api.updateCategory = async function (session, code, newName) {
+  const { error } = await supabaseClient.rpc('rpc_update_category', { p_code: code, p_new_name: newName });
+  if (error) throw error;
+  return { success: true };
+};
+
+// تعديل بيانات منتج موجود (الاسم/السعر/الفئة الفرعية)
+api.updateProduct = async function (session, payload) {
+  const { error } = await supabaseClient.rpc('rpc_update_product', {
+    p_code: payload.code, p_name: payload.name, p_base_price: payload.basePrice,
+    p_sub_category_code: payload.subCategory, p_image: payload.image || null, p_description: payload.description || null
+  });
+  if (error) throw error;
+  return { success: true };
+};
+
+// إضافة منتج + كل متغيراته (ألوان/مقاسات) دفعة واحدة في نداء واحد Atomic
+api.addProductWithVariants = async function (session, payload) {
+  const { data, error } = await supabaseClient.rpc('rpc_add_product_with_variants', {
+    p_name: payload.name, p_sub_category_code: payload.subCategory, p_base_price: payload.basePrice,
+    p_variants: payload.variants || [], p_image: payload.image || '', p_description: payload.description || '',
+    p_manual_code: payload.manualCode || null
+  });
+  if (error) throw error;
+  return { productCode: data.productCode, variantCodes: data.variantCodes || [] };
 };
 
 api.searchProducts = async function (query) {
