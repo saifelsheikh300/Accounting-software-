@@ -405,13 +405,15 @@ function toggleTreasuryEye_(key) { state.treasuryRevealed[key] = !state.treasury
 // ============================================================
 let posCart = [];
 
+let posAllProducts = [];
+
 function renderPosPage() {
   setContent_(
     '<div class="grid grid-2">' +
       '<div class="card">' +
-        '<div class="card-heading">🔍 بحث عن منتج</div>' +
-        '<div class="card-desc">اكتب اسم أو كود المنتج عشان تضيفه للسلة</div>' +
-        '<div class="field"><input type="text" id="posSearchInput" oninput="posSearch_(this.value)" placeholder="مثال: تيشرت أساسي..."></div>' +
+        '<div class="card-heading">🛍️ المنتجات</div>' +
+        '<div class="card-desc">دوسي على أي منتج عشان تضيفيه للسلة، أو دوري لو عايزة تفلتري</div>' +
+        '<div class="field"><input type="text" id="posSearchInput" oninput="posSearch_(this.value)" placeholder="فلترة (اختياري)..."></div>' +
         '<div id="posSearchResults" style="margin-top:14px;"></div>' +
       '</div>' +
       '<div class="card">' +
@@ -430,6 +432,33 @@ function renderPosPage() {
   );
   posCart = [];
   loadPosSummary_();
+  loadPosProductGrid_();
+}
+
+async function loadPosProductGrid_() {
+  document.getElementById('posSearchResults').innerHTML = emptyRow_('⏳', 'جاري التحميل...');
+  try {
+    const idx = await api.getInventoryIndex();
+    posAllProducts = Object.values(idx.products)
+      .filter(function (p) { return p.status === 'نشط'; })
+      .map(function (p) { return { code: p.code, name: p.name, basePrice: p.basePrice, variants: p.variants.filter(function (v) { return v.status === 'نشط'; }) }; })
+      .sort(function (a, b) { return a.code.localeCompare(b.code); });
+    renderPosProductGrid_(posAllProducts);
+  } catch (err) { showErrorToast_(err); }
+}
+
+function renderPosProductGrid_(list) {
+  document.getElementById('posSearchResults').innerHTML = list.length === 0 ? emptyRow_('📦', 'لا يوجد منتجات') : buildProductResultsHtml_(list, 'addToPosCart_');
+}
+
+function posSearch_(query) {
+  const q = (query || '').trim().toLowerCase();
+  if (!q) { renderPosProductGrid_(posAllProducts); return; }
+  const filtered = posAllProducts.filter(function (p) {
+    if (p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)) return true;
+    return p.variants.some(function (v) { return v.code.toLowerCase().includes(q) || (v.color || '').toLowerCase().includes(q) || (v.size || '').toLowerCase().includes(q); });
+  });
+  renderPosProductGrid_(filtered);
 }
 
 function openPosReturnModal_() {
@@ -462,14 +491,6 @@ function confirmPosReturn_(saleId) {
       showToast_('تم المرتجع ✅', 'success'); loadPosSummary_();
     } catch (err) { showErrorToast_(err); }
   });
-}
-
-async function posSearch_(query) {
-  if (!query || query.length < 2) { document.getElementById('posSearchResults').innerHTML = ''; return; }
-  try {
-    const results = await api.searchProducts(query);
-    document.getElementById('posSearchResults').innerHTML = buildProductResultsHtml_(results, 'addToPosCart_');
-  } catch (err) { showErrorToast_(err); }
 }
 
 function buildProductResultsHtml_(results, addFnName) {
