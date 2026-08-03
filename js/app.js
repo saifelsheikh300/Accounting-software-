@@ -1444,19 +1444,41 @@ async function searchCustomerHistory_() {
 async function renderInvoicesPage() {
   setContent_(
     '<div class="grid grid-2">' +
-      '<div class="card"><div class="card-heading">📄 فاتورة جديدة</div>' +
-        '<div class="form-grid" style="margin-top:6px;">' +
-          '<div class="field"><label>اسم العميل <span class="req">*</span></label><input type="text" id="invCustomerName"></div>' +
-          '<div class="field"><label>الإجمالي <span class="req">*</span></label><input type="number" id="invTotal"></div>' +
+      '<div class="card"><div class="card-heading">📂 فتح فاتورة جديدة لعميل</div>' +
+        '<div class="hint">افتحي حساب مفتوح للعميل، وبعدين ضيفي عليه أي منتجات ياخدها — دلوقتي أو بعد كذا ساعة، من غير ما تفتحي فاتورة جديدة كل مرة</div>' +
+        '<div class="form-grid" style="margin-top:10px;">' +
+          '<div class="field"><label>اسم العميل <span class="req">*</span></label><input type="text" id="invOpenCustomerName"></div>' +
+          '<div class="field"><label>رقم التليفون (اختياري)</label><input type="text" id="invOpenCustomerPhone"></div>' +
+        '</div>' +
+        '<button class="btn success block" style="margin-top:12px;" onclick="submitOpenInvoice_()">📂 فتح الفاتورة</button>' +
+        '<div class="section-title" style="margin-top:20px;">فاتورة سريعة بإجمالي يدوي</div>' +
+        '<div class="hint">من غير ربط بمنتجات معينة — لفاتورة تحصيل أونلاين مثلاً</div>' +
+        '<div class="form-grid" style="margin-top:8px;">' +
+          '<div class="field"><label>اسم العميل</label><input type="text" id="invCustomerName"></div>' +
+          '<div class="field"><label>الإجمالي</label><input type="number" id="invTotal"></div>' +
           '<div class="field"><label>المدفوع</label><input type="number" id="invPaid" value="0"></div>' +
           '<div class="field"><label>تم التحصيل COD؟</label><select id="invIsCOD"><option value="false">لا</option><option value="true">نعم</option></select></div>' +
-        '</div><button class="btn success block" style="margin-top:14px;" onclick="submitInvoice_()">➕ إنشاء فاتورة</button></div>' +
+        '</div><button class="btn secondary block" style="margin-top:10px;" onclick="submitInvoice_()">➕ إنشاء فاتورة سريعة</button></div>' +
       '<div class="card"><div class="card-heading">📋 الفواتير</div>' +
         '<div class="field"><select id="invStatusFilter" onchange="loadInvoices_()"><option value="">كل الحالات</option>' +
-        '<option>مدفوعة بالكامل</option><option>مدفوعة جزئيًا</option><option>متأخرة</option><option>تم التحصيل COD</option></select></div>' +
+        '<option>مفتوحة</option><option>مدفوعة بالكامل</option><option>مدفوعة جزئيًا</option><option>متأخرة</option><option>تم التحصيل COD</option></select></div>' +
         '<div id="invoicesList" style="margin-top:12px;"></div></div></div>'
   );
   loadInvoices_();
+}
+
+async function submitOpenInvoice_() {
+  const name = document.getElementById('invOpenCustomerName').value.trim();
+  const phone = document.getElementById('invOpenCustomerPhone').value.trim();
+  if (!name) { showToast_('اسم العميل مطلوب', 'error'); return; }
+  try {
+    const res = await api.openInvoice({ username: state.user.username }, { customerName: name, customerPhone: phone });
+    showToast_('تم فتح الفاتورة ✅ ' + res.invoiceNumber, 'success');
+    document.getElementById('invOpenCustomerName').value = '';
+    document.getElementById('invOpenCustomerPhone').value = '';
+    loadInvoices_();
+    openInvoiceDetailModal_(res.invoiceId);
+  } catch (err) { showErrorToast_(err); }
 }
 
 async function submitInvoice_() {
@@ -1478,15 +1500,112 @@ async function loadInvoices_() {
     if (invoices.length === 0) { el.innerHTML = emptyRow_('📄', 'لا يوجد فواتير'); return; }
     let html = '<div class="table-wrap"><table><thead><tr><th>العميل</th><th>الإجمالي</th><th>المتبقي</th><th>الحالة</th><th></th></tr></thead><tbody>';
     html += invoices.map(function (inv) {
-      const pill = inv.status === 'مدفوعة بالكامل' ? 'success' : (inv.status === 'متأخرة' ? 'danger' : 'warning');
-      return '<tr><td>' + inv.customerName + '</td><td class="money-positive">' + formatMoney_(inv.total, cur) + '</td>' +
+      const pill = inv.status === 'مدفوعة بالكامل' ? 'success' : (inv.status === 'متأخرة' ? 'danger' : (inv.status === 'مفتوحة' ? 'info' : 'warning'));
+      return '<tr style="cursor:pointer;" onclick="openInvoiceDetailModal_(\'' + inv.invoiceId + '\')">' +
+        '<td>' + inv.customerName + '</td><td class="money-positive">' + formatMoney_(inv.total, cur) + '</td>' +
         '<td class="' + (inv.remaining > 0 ? 'money-negative' : '') + '">' + formatMoney_(inv.remaining, cur) + '</td>' +
         '<td><span class="pill ' + pill + '">' + inv.status + '</span></td>' +
-        '<td>' + (inv.remaining > 0 ? '<button class="btn sm info-btn" onclick="openPayInvoiceModal_(\'' + inv.invoiceId + '\', ' + inv.remaining + ')">💳 تحصيل</button>' : '') +
+        '<td onclick="event.stopPropagation();">' + (inv.remaining > 0 ? '<button class="btn sm info-btn" onclick="openPayInvoiceModal_(\'' + inv.invoiceId + '\', ' + inv.remaining + ')">💳 تحصيل</button>' : '') +
         ' <button class="btn sm secondary" onclick="openAttachmentsModal_(\'invoice\', \'' + inv.invoiceId + '\', \'' + inv.invoiceNumber + '\')">📎</button></td></tr>';
     }).join('');
     html += '</tbody></table></div>';
     el.innerHTML = html;
+  } catch (err) { showErrorToast_(err); }
+}
+
+// ------------------------------------------------------------
+// مودال: تفاصيل فاتورة (الأصناف اللي اتضافت + إضافة أصناف جديدة)
+// ------------------------------------------------------------
+let invDetailCache = null;
+let invAddItemsCart = [];
+
+async function openInvoiceDetailModal_(invoiceId) {
+  try {
+    invDetailCache = await api.getInvoiceDetails(invoiceId);
+    invAddItemsCart = [];
+    openModal('📄 فاتورة ' + invDetailCache.invoice.invoice_number, invDetailCache.invoice.customer_name, buildInvoiceDetailHtml_(), buildInvoiceDetailActions_(), true);
+  } catch (err) { showErrorToast_(err); }
+}
+
+function buildInvoiceDetailActions_() {
+  const inv = invDetailCache.invoice;
+  return '<button class="btn secondary" onclick="closeModal(); loadInvoices_();">إغلاق</button>' +
+    (inv.remaining > 0 ? '<button class="btn info-btn" onclick="openPayInvoiceModal_(\'' + inv.id + '\', ' + inv.remaining + ')">💳 تحصيل</button>' : '');
+}
+
+function buildInvoiceDetailHtml_() {
+  const inv = invDetailCache.invoice;
+  const items = invDetailCache.items;
+  const cur = state.settings.currency || 'جنيه';
+  let html = '<div class="grid grid-3">' +
+    statCard_('💰', 'الإجمالي', formatMoney_(inv.total, cur), '', false) +
+    statCard_('✅', 'المدفوع', formatMoney_(inv.paid, cur), '', false) +
+    '<div class="card stat-card"><div class="stat-icon">⚖️</div><div class="card-label">المتبقي</div>' +
+      '<div class="card-value ' + (inv.remaining > 0 ? 'money-negative' : 'money-positive') + '">' + formatMoney_(inv.remaining, cur) + '</div></div>' +
+  '</div>';
+
+  html += '<div class="section-title" style="margin-top:16px;">الأصناف المضافة على الفاتورة</div>';
+  html += '<div class="table-wrap"><table><thead><tr><th>المنتج</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th><th>وقت الإضافة</th></tr></thead><tbody>';
+  html += items.length === 0 ? '<tr><td colspan="5">' + emptyRow_('📦', 'لسه مفيش أصناف مضافة') + '</td></tr>' :
+    items.map(function (it) {
+      return '<tr><td>' + it.productName + (it.color || it.size ? ' (' + (it.color || '—') + '/' + (it.size || '—') + ')' : '') + '</td>' +
+        '<td>' + it.qty + '</td><td>' + it.unitPrice + '</td><td><b>' + it.lineTotal + '</b></td><td>' + formatDate_(it.addedAt) + '</td></tr>';
+    }).join('');
+  html += '</tbody></table></div>';
+
+  html += '<div class="section-title" style="margin-top:18px;">➕ إضافة أصناف جديدة للفاتورة</div>';
+  html += '<div class="field"><input type="text" id="invAddSearchInput" oninput="invAddSearch_(this.value)" placeholder="دوري على منتج تضيفيه..."></div>';
+  html += '<div id="invAddSearchResults"></div><div id="invAddCartList" style="margin-top:10px;"></div>';
+  html += '<button class="btn success block" style="margin-top:10px;" onclick="submitAddItemsToInvoice_(\'' + inv.id + '\')">✅ حفظ الأصناف على الفاتورة</button>';
+  return html;
+}
+
+async function invAddSearch_(query) {
+  if (!query || query.length < 2) { document.getElementById('invAddSearchResults').innerHTML = ''; return; }
+  try {
+    const results = await api.searchProducts(query);
+    let html = results.map(function (p) {
+      return p.variants.map(function (v) {
+        const label = (p.name + ' — ' + v.color + ' ' + v.size).replace(/'/g, '');
+        const price = v.specialPrice || p.basePrice;
+        return '<div class="product-tile" onclick="addToInvoiceCart_(\'' + v.code + '\', \'' + label + '\', ' + price + ')">' +
+          '<div class="product-thumb">👕</div><div class="product-tile-info"><div class="product-tile-name">' + p.name + '</div>' +
+          '<div class="product-tile-meta">' + v.color + ' · ' + v.size + ' · متاح: ' + v.quantity + '</div></div><b>' + price + '</b></div>';
+      }).join('');
+    }).join('');
+    document.getElementById('invAddSearchResults').innerHTML = html || '<div class="hint">مفيش نتايج</div>';
+  } catch (err) { showErrorToast_(err); }
+}
+
+function addToInvoiceCart_(variantCode, label, price) {
+  const existing = invAddItemsCart.find(function (i) { return i.variantCode === variantCode; });
+  if (existing) existing.qty += 1; else invAddItemsCart.push({ variantCode: variantCode, label: label, price: price, qty: 1 });
+  renderInvoiceAddCart_();
+}
+
+function renderInvoiceAddCart_() {
+  const el = document.getElementById('invAddCartList');
+  if (!el) return;
+  if (invAddItemsCart.length === 0) { el.innerHTML = ''; return; }
+  let total = 0;
+  el.innerHTML = invAddItemsCart.map(function (i, idx) {
+    total += i.price * i.qty;
+    return '<div class="list-item"><span>' + i.label + '</span><span>سعر <input type="number" value="' + i.price + '" style="width:65px; padding:5px;" onchange="updateInvoiceCartPrice_(' + idx + ', this.value)"> ' +
+      'كمية <input type="number" value="' + i.qty + '" style="width:50px; padding:5px;" onchange="updateInvoiceCartQty_(' + idx + ', this.value)"> ' +
+      '<span class="del-x" onclick="removeFromInvoiceCart_(' + idx + ')" style="cursor:pointer;">✕</span></span></div>';
+  }).join('') + '<div class="list-item"><b>إجمالي المضاف</b><b>' + total + '</b></div>';
+}
+function updateInvoiceCartPrice_(idx, val) { invAddItemsCart[idx].price = Number(val); renderInvoiceAddCart_(); }
+function updateInvoiceCartQty_(idx, val) { invAddItemsCart[idx].qty = Number(val); renderInvoiceAddCart_(); }
+function removeFromInvoiceCart_(idx) { invAddItemsCart.splice(idx, 1); renderInvoiceAddCart_(); }
+
+async function submitAddItemsToInvoice_(invoiceId) {
+  if (invAddItemsCart.length === 0) { showToast_('ضيفي صنف واحد على الأقل', 'error'); return; }
+  try {
+    await api.addItemsToInvoice({ username: state.user.username }, invoiceId, invAddItemsCart);
+    showToast_('تم إضافة الأصناف للفاتورة ✅', 'success');
+    invAddItemsCart = [];
+    openInvoiceDetailModal_(invoiceId);
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -1498,8 +1617,12 @@ function openPayInvoiceModal_(invoiceId, remaining) {
 async function confirmPayInvoice_(invoiceId) {
   const amount = Number(document.getElementById('modalPayAmount').value);
   if (!amount) { showToast_('اكتب مبلغ صحيح', 'error'); return; }
-  try { await api.payInvoiceInstallment({ username: state.user.username }, invoiceId, amount); closeModal(); showToast_('تم تسجيل التحصيل ✅', 'success'); loadInvoices_(); }
-  catch (err) { showErrorToast_(err); }
+  try {
+    await api.payInvoiceInstallment({ username: state.user.username }, invoiceId, amount);
+    showToast_('تم تسجيل التحصيل ✅', 'success');
+    if (invDetailCache && invDetailCache.invoice.id === invoiceId) { openInvoiceDetailModal_(invoiceId); }
+    else { closeModal(); loadInvoices_(); }
+  } catch (err) { showErrorToast_(err); }
 }
 
 // ============================================================
