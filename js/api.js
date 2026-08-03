@@ -477,7 +477,10 @@ api.getCapitalSummary = async function () {
 };
 
 api.addCapitalMovement = async function (session, payload) {
-  const { data, error } = await supabaseClient.rpc('rpc_add_capital_movement', { p_partner_name: payload.partnerName, p_type: payload.type, p_amount: payload.amount, p_notes: payload.notes || '' });
+  const { data, error } = await supabaseClient.rpc('rpc_add_capital_movement', {
+    p_partner_name: payload.partnerName, p_type: payload.type, p_amount: payload.amount, p_notes: payload.notes || '',
+    p_treasury_account_id: payload.treasuryAccountId || null
+  });
   if (error) throw error;
   return { success: true, newBalance: data };
 };
