@@ -423,6 +423,32 @@ api.createInvoice = async function (session, payload) {
   return { success: true };
 };
 
+// فتح فاتورة عميل كـ"حساب مفتوح" فاضي — تُضاف عليها أصناف بعد كده على أكتر من دفعة
+api.openInvoice = async function (session, payload) {
+  const { data, error } = await supabaseClient.rpc('rpc_open_invoice', {
+    p_customer_name: payload.customerName, p_customer_phone: payload.customerPhone || '', p_notes: payload.notes || ''
+  });
+  if (error) throw error;
+  return { invoiceId: data[0].invoice_id, invoiceNumber: data[0].invoice_number };
+};
+
+// إضافة أصناف حقيقية من المخزون لفاتورة موجودة (بتخصم من المخزون وتحدّث الإجمالي/المتبقي فورًا)
+api.addItemsToInvoice = async function (session, invoiceId, items) {
+  const { data, error } = await supabaseClient.rpc('rpc_add_items_to_invoice', {
+    p_invoice_id: invoiceId,
+    p_items: items.map(function (i) { return { variant_code: i.variantCode, qty: i.qty, price: i.price }; })
+  });
+  if (error) throw error;
+  return data;
+};
+
+// تفاصيل فاتورة كاملة: البيانات + كل الأصناف اللي اتضافت عليها من كل الدفعات
+api.getInvoiceDetails = async function (invoiceId) {
+  const { data, error } = await supabaseClient.rpc('rpc_get_invoice_details', { p_invoice_id: invoiceId });
+  if (error) throw error;
+  return data;
+};
+
 api.listInvoices = async function (filters) {
   filters = filters || {};
   let q = supabaseClient.from('invoices').select('*').order('invoice_date', { ascending: false });
