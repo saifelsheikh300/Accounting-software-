@@ -1787,6 +1787,7 @@ async function confirmPayInvoice_(invoiceId) {
 async function renderCapitalPage() {
   try {
     const summary = await api.getCapitalSummary();
+    const treasuryAccounts = await api.listTreasuryAccounts();
     const cur = state.settings.currency || 'جنيه';
     let html = '<div class="grid grid-2">';
     html += '<div class="card"><div class="card-heading">🤝 إضافة / سحب رأس مال</div><div class="card-desc">لو الشريك جديد، اكتب اسمه هنا وهيتسجل تلقائيًا</div>' +
@@ -1795,7 +1796,13 @@ async function renderCapitalPage() {
       '<div class="form-grid" style="margin-top:14px;">' +
         '<div class="field"><label>نوع الحركة</label><select id="capType"><option>إضافة رأس مال</option><option>سحب رأس مال</option></select></div>' +
         '<div class="field"><label>المبلغ <span class="req">*</span></label><input type="number" id="capAmount"></div>' +
-      '</div><button class="btn success block" style="margin-top:16px;" onclick="submitCapitalMovement_()">✅ تسجيل الحركة</button>' +
+      '</div>' +
+      '<div class="field" style="margin-top:12px;"><label>هتضاف/تتسحب من حساب</label><select id="capTreasuryAccount">' +
+        (treasuryAccounts.length === 0 ? '<option value="">لا يوجد حسابات خزنة/بنوك مضافة</option>' :
+          treasuryAccounts.map(function (t) { return '<option value="' + t.id + '">' + t.name + ' (' + t.type + ')</option>'; }).join('')) +
+      '</select></div>' +
+      (treasuryAccounts.length === 0 ? '<div class="hint">لسه معملتيش حساب خزنة/بنك — أضيفي واحد من صفحة "الخزنة والبنوك" الأول عشان تختاري منين هتضاف الفلوس</div>' : '') +
+      '<button class="btn success block" style="margin-top:16px;" onclick="submitCapitalMovement_()">✅ تسجيل الحركة</button>' +
       '<div class="card-heading" style="margin-top:26px;">⚙️ نسب الشريك</div><div class="card-desc">نسبة توزيع الأرباح ونسبة الإدارة</div>' +
       '<div class="field"><label>الشريك</label><select id="ratePartnerSelect">' + summary.partners.map(function (p) { return '<option>' + p.name + '</option>'; }).join('') + '</select></div>' +
       '<div class="form-grid" style="margin-top:12px;">' +
@@ -1818,7 +1825,10 @@ async function renderCapitalPage() {
 }
 
 async function submitCapitalMovement_() {
-  const payload = { partnerName: document.getElementById('capPartnerName').value.trim(), type: document.getElementById('capType').value, amount: Number(document.getElementById('capAmount').value) };
+  const payload = {
+    partnerName: document.getElementById('capPartnerName').value.trim(), type: document.getElementById('capType').value,
+    amount: Number(document.getElementById('capAmount').value), treasuryAccountId: document.getElementById('capTreasuryAccount').value || null
+  };
   if (!payload.partnerName || !payload.amount) { showToast_('اسم الشريك والمبلغ مطلوبين', 'error'); return; }
   try { await api.addCapitalMovement({ username: state.user.username }, payload); showToast_('تم تسجيل الحركة ✅', 'success'); renderCapitalPage(); }
   catch (err) { showErrorToast_(err); }
