@@ -419,8 +419,9 @@ function renderPosPage() {
         '<div id="posCartList" style="margin:14px 0;"></div>' +
         '<div class="form-grid">' +
           '<div class="field"><label>الخصم</label><input type="number" id="posDiscount" value="0"></div>' +
-          '<div class="field"><label>طريقة الدفع</label><select id="posPaymentMethod"><option>كاش</option><option>فودافون كاش</option><option>بطاقة</option><option>انستاباي</option></select></div>' +
+          '<div class="field"><label>طريقة الدفع</label><select id="posPaymentMethod" onchange="onPosPaymentMethodChange_()"><option>كاش</option><option>فودافون كاش</option><option>بطاقة</option><option>انستاباي</option><option value="آجل">آجل - فاتورة عميل</option></select></div>' +
         '</div>' +
+        '<div id="posInvoiceSection" style="display:none;"></div>' +
         '<button class="btn success block" style="margin-top:16px;" onclick="submitPosSale_()">✅ إتمام البيع</button>' +
         '<button class="btn danger block" style="margin-top:10px;" onclick="openPosReturnModal_()">↩️ مرتجع بيعة سابقة</button>' +
       '</div>' +
@@ -509,12 +510,92 @@ async function submitPosSale_() {
   if (posCart.length === 0) { showToast_('السلة فاضية', 'error'); return; }
   const discount = Number(document.getElementById('posDiscount').value) || 0;
   const paymentMethod = document.getElementById('posPaymentMethod').value;
+
+  if (paymentMethod === 'آجل') { await submitPosSaleOnInvoice_(discount); return; }
+
   try {
     const res = await api.posSale({ username: state.user.username }, posCart.map(function (i) { return { variantCode: i.variantCode, qty: i.qty, price: i.price }; }), discount, paymentMethod);
     showToast_('تمت البيعة بنجاح ✅ الإجمالي: ' + res.total, 'success');
     posCart = []; renderPosCart_();
     document.getElementById('posSearchResults').innerHTML = '';
     document.getElementById('posSearchInput').value = '';
+    loadPosSummary_();
+  } catch (err) { showErrorToast_(err); }
+}
+
+// ------------------------------------------------------------
+// البيع "آجل" من الكاشير مباشرة — إما فتح فاتورة عميل جديدة أو
+// الإضافة على فاتورة مفتوحة موجودة، بدل الدفع الفوري
+// ------------------------------------------------------------
+function onPosPaymentMethodChange_() {
+  const val = document.getElementById('posPaymentMethod').value;
+  const section = document.getElementById('posInvoiceSection');
+  if (val === 'آجل') {
+    section.style.display = 'block';
+    section.innerHTML =
+      '<div class="section-title" style="margin-top:6px;">فاتورة العميل</div>' +
+      '<div class="field"><select id="posInvoiceMode" onchange="onPosInvoiceModeChange_()"><option value="new">فتح فاتورة جديدة</option><option value="existing">إضافة على فاتورة مفتوحة</option></select></div>' +
+      '<div id="posInvoiceModeFields"></div>';
+    onPosInvoiceModeChange_();
+    enhanceSelects_(section);
+  } else { section.style.display = 'none'; section.innerHTML = ''; }
+}
+
+function onPosInvoiceModeChange_() {
+  const mode = document.getElementById('posInvoiceMode').value;
+  const el = document.getElementById('posInvoiceModeFields');
+  if (mode === 'new') {
+    el.innerHTML = '<div class="form-grid"><div class="field"><label>اسم العميل <span class="req">*</span></label><input type="text" id="posInvCustomerName"></div>' +
+      '<div class="field"><label>تليفون (اختياري)</label><input type="text" id="posInvCustomerPhone"></div></div>';
+  } else {
+    el.innerHTML = '<div class="field"><label>ابحثي عن الفاتورة (اسم العميل)</label><input type="text" id="posInvSearchInput" oninput="posInvoiceSearch_(this.value)"></div>' +
+      '<div id="posInvSearchResults"></div><input type="hidden" id="posSelectedInvoiceId">';
+  }
+}
+
+async function posInvoiceSearch_(query) {
+  if (!query || query.length < 2) { document.getElementById('posInvSearchResults').innerHTML = ''; return; }
+  try {
+    const invoices = await api.listInvoices({});
+    const matched = invoices.filter(function (i) { return i.status !== 'مدفوعة بالكامل' && i.customerName.toLowerCase().includes(query.toLowerCase()); });
+    document.getElementById('posInvSearchResults').innerHTML = matched.length === 0 ? emptyRow_('🔎', 'لا يوجد فواتير مفتوحة بهذا الاسم') :
+      matched.map(function (i) {
+        return '<div class="list-item" style="cursor:pointer;" onclick="selectPosInvoice_(\'' + i.invoiceId + '\', \'' + i.customerName.replace(/'/g, '') + '\')"><span>' + i.customerName + ' — ' + i.invoiceNumber + '</span><span class="pill warning">متبقي ' + i.remaining + '</span></div>';
+      }).join('');
+  } catch (err) { showErrorToast_(err); }
+}
+
+function selectPosInvoice_(id, name) {
+  document.getElementById('posSelectedInvoiceId').value = id;
+  document.getElementById('posInvSearchResults').innerHTML = '<div class="hint">✅ هيتضاف على فاتورة: ' + name + '</div>';
+}
+
+async function submitPosSaleOnInvoice_(discount) {
+  const mode = document.getElementById('posInvoiceMode').value;
+  const subtotal = posCart.reduce(function (s, i) { return s + i.price * i.qty; }, 0);
+  const ratio = discount > 0 && subtotal > 0 ? Math.max(0, (subtotal - discount) / subtotal) : 1;
+  const items = posCart.map(function (i) { return { variantCode: i.variantCode, qty: i.qty, price: Math.round(i.price * ratio * 100) / 100 }; });
+
+  try {
+    let invoiceId;
+    if (mode === 'new') {
+      const name = document.getElementById('posInvCustomerName').value.trim();
+      const phone = document.getElementById('posInvCustomerPhone').value.trim();
+      if (!name) { showToast_('اسم العميل مطلوب', 'error'); return; }
+      const opened = await api.openInvoice({ username: state.user.username }, { customerName: name, customerPhone: phone });
+      invoiceId = opened.invoiceId;
+    } else {
+      invoiceId = document.getElementById('posSelectedInvoiceId').value;
+      if (!invoiceId) { showToast_('اختاري فاتورة الأول', 'error'); return; }
+    }
+
+    await api.addItemsToInvoice({ username: state.user.username }, invoiceId, items);
+    showToast_('تم تسجيل الأصناف على الفاتورة ✅', 'success');
+    posCart = []; renderPosCart_();
+    document.getElementById('posSearchResults').innerHTML = '';
+    document.getElementById('posSearchInput').value = '';
+    document.getElementById('posPaymentMethod').value = 'كاش';
+    onPosPaymentMethodChange_();
     loadPosSummary_();
   } catch (err) { showErrorToast_(err); }
 }
@@ -1010,11 +1091,12 @@ function renderSalesPage() {
         '<div id="salesSearchResults" style="margin:10px 0;"></div><div id="salesCartList"></div>' +
         '<div class="form-grid" style="margin-top:14px;">' +
           '<div class="field"><label>الخصم</label><input type="number" id="salesDiscount" value="0"></div>' +
-          '<div class="field"><label>طريقة الدفع</label><select id="salesPaymentMethod"><option>كاش</option><option>فودافون كاش</option><option>بطاقة</option><option>انستاباي</option></select></div>' +
+          '<div class="field"><label>طريقة الدفع</label><select id="salesPaymentMethod" onchange="onSalesPaymentMethodChange_()"><option>كاش</option><option>فودافون كاش</option><option>بطاقة</option><option>انستاباي</option><option value="آجل">آجل - فاتورة عميل</option></select></div>' +
           '<div class="field"><label>اسم العميل (اختياري)</label><input type="text" id="salesCustomerName"></div>' +
           '<div class="field"><label>تليفون العميل (اختياري)</label><input type="text" id="salesCustomerPhone"></div>' +
           '<div class="field"><label>التاريخ</label><input type="datetime-local" id="salesDate"></div>' +
         '</div>' +
+        '<div id="salesInvoiceSection" style="display:none;"></div>' +
         '<button class="btn success block" style="margin-top:16px;" onclick="submitSale_()">✅ تسجيل البيعة</button></div>' +
       '<div class="card"><div class="card-heading">📋 آخر المبيعات</div><div id="salesHistoryList" style="margin-top:14px;"></div></div></div>'
   );
@@ -1048,15 +1130,89 @@ function removeFromSalesCart_(idx) { salesCart.splice(idx, 1); renderSalesCart_(
 
 async function submitSale_() {
   if (salesCart.length === 0) { showToast_('السلة فاضية', 'error'); return; }
+  const paymentMethod = document.getElementById('salesPaymentMethod').value;
+  const discount = Number(document.getElementById('salesDiscount').value) || 0;
+
+  if (paymentMethod === 'آجل') { await submitSaleOnInvoice_(discount); return; }
+
   const payload = {
     source: 'محل', items: salesCart.map(function (i) { return { variantCode: i.variantCode, qty: i.qty, price: i.price }; }),
-    discount: Number(document.getElementById('salesDiscount').value) || 0, paymentMethod: document.getElementById('salesPaymentMethod').value,
+    discount: discount, paymentMethod: paymentMethod,
     customerName: document.getElementById('salesCustomerName').value, customerPhone: document.getElementById('salesCustomerPhone').value,
     date: document.getElementById('salesDate').value
   };
   try {
     const res = await api.recordSale({ username: state.user.username }, payload);
     showToast_('تمت البيعة ✅ الإجمالي: ' + res.total, 'success'); renderSalesPage();
+  } catch (err) { showErrorToast_(err); }
+}
+
+// ------------------------------------------------------------
+// البيع "آجل" من شاشة المبيعات اليدوي — فتح فاتورة جديدة بنفس
+// بيانات العميل المكتوبة فوق، أو الإضافة على فاتورة مفتوحة
+// ------------------------------------------------------------
+function onSalesPaymentMethodChange_() {
+  const val = document.getElementById('salesPaymentMethod').value;
+  const section = document.getElementById('salesInvoiceSection');
+  if (val === 'آجل') {
+    section.style.display = 'block';
+    section.innerHTML =
+      '<div class="section-title" style="margin-top:6px;">فاتورة العميل</div>' +
+      '<div class="field"><select id="salesInvoiceMode" onchange="onSalesInvoiceModeChange_()">' +
+      '<option value="new">فتح فاتورة جديدة بنفس بيانات العميل فوق</option><option value="existing">إضافة على فاتورة مفتوحة</option></select></div>' +
+      '<div id="salesInvoiceModeFields"></div>';
+    onSalesInvoiceModeChange_();
+    enhanceSelects_(section);
+  } else { section.style.display = 'none'; section.innerHTML = ''; }
+}
+
+function onSalesInvoiceModeChange_() {
+  const mode = document.getElementById('salesInvoiceMode').value;
+  const el = document.getElementById('salesInvoiceModeFields');
+  if (mode === 'existing') {
+    el.innerHTML = '<div class="field"><label>ابحثي عن الفاتورة (اسم العميل)</label><input type="text" id="salesInvSearchInput" oninput="salesInvoiceSearch_(this.value)"></div>' +
+      '<div id="salesInvSearchResults"></div><input type="hidden" id="salesSelectedInvoiceId">';
+  } else { el.innerHTML = ''; }
+}
+
+async function salesInvoiceSearch_(query) {
+  if (!query || query.length < 2) { document.getElementById('salesInvSearchResults').innerHTML = ''; return; }
+  try {
+    const invoices = await api.listInvoices({});
+    const matched = invoices.filter(function (i) { return i.status !== 'مدفوعة بالكامل' && i.customerName.toLowerCase().includes(query.toLowerCase()); });
+    document.getElementById('salesInvSearchResults').innerHTML = matched.length === 0 ? emptyRow_('🔎', 'لا يوجد فواتير مفتوحة بهذا الاسم') :
+      matched.map(function (i) {
+        return '<div class="list-item" style="cursor:pointer;" onclick="selectSalesInvoice_(\'' + i.invoiceId + '\', \'' + i.customerName.replace(/'/g, '') + '\')"><span>' + i.customerName + ' — ' + i.invoiceNumber + '</span><span class="pill warning">متبقي ' + i.remaining + '</span></div>';
+      }).join('');
+  } catch (err) { showErrorToast_(err); }
+}
+
+function selectSalesInvoice_(id, name) {
+  document.getElementById('salesSelectedInvoiceId').value = id;
+  document.getElementById('salesInvSearchResults').innerHTML = '<div class="hint">✅ هيتضاف على فاتورة: ' + name + '</div>';
+}
+
+async function submitSaleOnInvoice_(discount) {
+  const mode = document.getElementById('salesInvoiceMode').value;
+  const subtotal = salesCart.reduce(function (s, i) { return s + i.price * i.qty; }, 0);
+  const ratio = discount > 0 && subtotal > 0 ? Math.max(0, (subtotal - discount) / subtotal) : 1;
+  const items = salesCart.map(function (i) { return { variantCode: i.variantCode, qty: i.qty, price: Math.round(i.price * ratio * 100) / 100 }; });
+
+  try {
+    let invoiceId;
+    if (mode === 'new') {
+      const name = document.getElementById('salesCustomerName').value.trim();
+      const phone = document.getElementById('salesCustomerPhone').value.trim();
+      if (!name) { showToast_('اسم العميل مطلوب لفتح فاتورة جديدة', 'error'); return; }
+      const opened = await api.openInvoice({ username: state.user.username }, { customerName: name, customerPhone: phone });
+      invoiceId = opened.invoiceId;
+    } else {
+      invoiceId = document.getElementById('salesSelectedInvoiceId').value;
+      if (!invoiceId) { showToast_('اختاري فاتورة الأول', 'error'); return; }
+    }
+    await api.addItemsToInvoice({ username: state.user.username }, invoiceId, items);
+    showToast_('تم تسجيل الأصناف على الفاتورة ✅', 'success');
+    renderSalesPage();
   } catch (err) { showErrorToast_(err); }
 }
 
