@@ -230,6 +230,22 @@ function renderComingSoon_() { document.getElementById('content').innerHTML = '<
 function setContent_(html) { document.getElementById('content').innerHTML = '<div class="page-fade">' + html + '</div>'; enhanceSelects_(document.getElementById('content')); }
 
 // ============================================================
+// هيلبر مشترك: حسابات الخزنة/البنوك — تُستخدم في أي شاشة بتحرك
+// فلوس (بيع/مصروف/شراء/تحصيل/عهدة/شيكات) عشان تحدد منين بالظبط
+// ============================================================
+let treasuryAccountsCache_ = null;
+
+async function getTreasuryAccountsCached_(forceRefresh) {
+  if (!treasuryAccountsCache_ || forceRefresh) treasuryAccountsCache_ = await api.listTreasuryAccounts();
+  return treasuryAccountsCache_;
+}
+
+function treasuryAccountOptionsHtml_(accounts) {
+  if (!accounts || accounts.length === 0) return '<option value="">لا يوجد حسابات — ضيفي من صفحة "الخزنة والبنوك"</option>';
+  return accounts.map(function (t) { return '<option value="' + t.id + '">' + t.name + ' (' + t.type + ')</option>'; }).join('');
+}
+
+// ============================================================
 // محرّك القوائم المنسدلة المخصصة (Custom Select) — بيحوّل أي
 // <select> عادي لقائمة بشكل البرنامج، مع الحفاظ الكامل على
 // قيمته وأحداث onchange بتاعته (شفاف تمامًا لباقي الكود)
@@ -423,6 +439,7 @@ function renderPosPage() {
           '<div class="field"><label>الخصم</label><input type="number" id="posDiscount" value="0"></div>' +
           '<div class="field"><label>طريقة الدفع</label><select id="posPaymentMethod" onchange="onPosPaymentMethodChange_()"><option>كاش</option><option>فودافون كاش</option><option>بطاقة</option><option>انستاباي</option><option value="آجل">آجل - فاتورة عميل</option></select></div>' +
         '</div>' +
+        '<div class="field" id="posTreasuryFieldWrap"><label>هتضاف لحساب</label><select id="posTreasuryAccount"><option value="">جاري التحميل...</option></select></div>' +
         '<div id="posInvoiceSection" style="display:none;"></div>' +
         '<button class="btn success block" style="margin-top:16px;" onclick="submitPosSale_()">✅ إتمام البيع</button>' +
         '<button class="btn danger block" style="margin-top:10px;" onclick="openPosReturnModal_()">↩️ مرتجع بيعة سابقة</button>' +
@@ -433,6 +450,15 @@ function renderPosPage() {
   posCart = [];
   loadPosSummary_();
   loadPosProductGrid_();
+  loadPosTreasuryOptions_();
+}
+
+async function loadPosTreasuryOptions_() {
+  try {
+    const accounts = await getTreasuryAccountsCached_();
+    document.getElementById('posTreasuryAccount').innerHTML = treasuryAccountOptionsHtml_(accounts);
+    refreshSelect_('posTreasuryAccount');
+  } catch (err) { /* صامت — مش بيمنع إتمام البيع لو فشل التحميل */ }
 }
 
 async function loadPosProductGrid_() {
@@ -534,13 +560,14 @@ async function submitPosSale_() {
 
   if (paymentMethod === 'آجل') { await submitPosSaleOnInvoice_(discount); return; }
 
+  const treasuryAccountId = document.getElementById('posTreasuryAccount').value || null;
   try {
-    const res = await api.posSale({ username: state.user.username }, posCart.map(function (i) { return { variantCode: i.variantCode, qty: i.qty, price: i.price }; }), discount, paymentMethod);
+    const res = await api.posSale({ username: state.user.username }, posCart.map(function (i) { return { variantCode: i.variantCode, qty: i.qty, price: i.price }; }), discount, paymentMethod, treasuryAccountId);
     showToast_('تمت البيعة بنجاح ✅ الإجمالي: ' + res.total, 'success');
     posCart = []; renderPosCart_();
-    document.getElementById('posSearchResults').innerHTML = '';
     document.getElementById('posSearchInput').value = '';
     loadPosSummary_();
+    loadPosProductGrid_();
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -551,6 +578,7 @@ async function submitPosSale_() {
 function onPosPaymentMethodChange_() {
   const val = document.getElementById('posPaymentMethod').value;
   const section = document.getElementById('posInvoiceSection');
+  document.getElementById('posTreasuryFieldWrap').style.display = val === 'آجل' ? 'none' : 'block';
   if (val === 'آجل') {
     section.style.display = 'block';
     section.innerHTML =
@@ -613,11 +641,11 @@ async function submitPosSaleOnInvoice_(discount) {
     await api.addItemsToInvoice({ username: state.user.username }, invoiceId, items);
     showToast_('تم تسجيل الأصناف على الفاتورة ✅', 'success');
     posCart = []; renderPosCart_();
-    document.getElementById('posSearchResults').innerHTML = '';
     document.getElementById('posSearchInput').value = '';
     document.getElementById('posPaymentMethod').value = 'كاش';
     onPosPaymentMethodChange_();
     loadPosSummary_();
+    loadPosProductGrid_();
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -986,7 +1014,20 @@ async function renderExpensesPage() {
     expEmployeesCache = await api.listEmployees(true);
     setContent_(buildExpensesPageHtml_());
     onExpSubCatChange_();
+    loadExpTreasuryOptions_();
   } catch (err) { showErrorToast_(err); }
+}
+
+async function loadExpTreasuryOptions_() {
+  try {
+    const accounts = await getTreasuryAccountsCached_();
+    document.getElementById('expTreasuryAccount').innerHTML = treasuryAccountOptionsHtml_(accounts);
+    refreshSelect_('expTreasuryAccount');
+  } catch (err) { /* صامت */ }
+}
+
+function onExpPaymentMethodChange_() {
+  document.getElementById('expTreasuryFieldWrap').style.display = document.getElementById('expPaymentMethod').value === 'آجل' ? 'none' : 'block';
 }
 
 function buildExpensesPageHtml_() {
@@ -1004,9 +1045,10 @@ function buildExpensesPageHtml_() {
       '<div class="form-grid" style="margin-top:16px;">' +
         '<div class="field"><label>الوصف</label><input type="text" id="expDesc" placeholder="اختياري"></div>' +
         '<div class="field"><label>المبلغ <span class="req">*</span></label><input type="number" id="expAmount" placeholder="0"></div>' +
-        '<div class="field"><label>طريقة الدفع</label><select id="expPaymentMethod"><option>كاش</option><option>فودافون كاش</option><option>بطاقة</option><option>انستاباي</option><option>آجل</option></select></div>' +
+        '<div class="field"><label>طريقة الدفع</label><select id="expPaymentMethod" onchange="onExpPaymentMethodChange_()"><option>كاش</option><option>فودافون كاش</option><option>بطاقة</option><option>انستاباي</option><option>آجل</option></select></div>' +
         '<div class="field"><label>التاريخ</label><input type="date" id="expDate" value="' + new Date().toISOString().slice(0, 10) + '"></div>' +
       '</div>' +
+      '<div class="field" id="expTreasuryFieldWrap"><label>هتتخصم من حساب</label><select id="expTreasuryAccount"><option value="">جاري التحميل...</option></select></div>' +
       '<div style="display:flex; gap:18px; margin-top:14px;">' +
         '<label style="display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:700; color:var(--text-dim); cursor:pointer;"><input type="checkbox" id="expIsFixedAsset" style="width:auto;"> أصل ثابت؟</label>' +
         '<label style="display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:700; color:var(--text-dim); cursor:pointer;"><input type="checkbox" id="expIsRecurring" style="width:auto;"> مصروف متكرر؟</label>' +
@@ -1084,7 +1126,8 @@ async function submitExpense_() {
     description: document.getElementById('expDesc').value, amount: Number(document.getElementById('expAmount').value),
     paymentMethod: document.getElementById('expPaymentMethod').value, date: document.getElementById('expDate').value,
     isFixedAsset: document.getElementById('expIsFixedAsset').checked, isRecurring: document.getElementById('expIsRecurring').checked,
-    recurrenceDays: document.getElementById('expIsRecurring').checked ? Number(document.getElementById('expRecurrenceDays').value) : ''
+    recurrenceDays: document.getElementById('expIsRecurring').checked ? Number(document.getElementById('expRecurrenceDays').value) : '',
+    treasuryAccountId: document.getElementById('expTreasuryAccount').value || null
   };
   const empSelect = document.getElementById('expEmployeeSelect');
   if (empSelect) {
@@ -1117,6 +1160,7 @@ function renderSalesPage() {
           '<div class="field"><label>تليفون العميل (اختياري)</label><input type="text" id="salesCustomerPhone"></div>' +
           '<div class="field"><label>التاريخ</label><input type="datetime-local" id="salesDate"></div>' +
         '</div>' +
+        '<div class="field" id="salesTreasuryFieldWrap"><label>هتضاف لحساب</label><select id="salesTreasuryAccount"><option value="">جاري التحميل...</option></select></div>' +
         '<div id="salesInvoiceSection" style="display:none;"></div>' +
         '<button class="btn success block" style="margin-top:16px;" onclick="submitSale_()">✅ تسجيل البيعة</button></div>' +
       '<div class="card"><div class="card-heading">📋 آخر المبيعات</div><div id="salesHistoryList" style="margin-top:14px;"></div></div></div>'
@@ -1124,6 +1168,15 @@ function renderSalesPage() {
   salesCart = [];
   document.getElementById('salesDate').value = new Date().toISOString().slice(0, 16);
   loadSalesHistory_();
+  loadSalesTreasuryOptions_();
+}
+
+async function loadSalesTreasuryOptions_() {
+  try {
+    const accounts = await getTreasuryAccountsCached_();
+    document.getElementById('salesTreasuryAccount').innerHTML = treasuryAccountOptionsHtml_(accounts);
+    refreshSelect_('salesTreasuryAccount');
+  } catch (err) { /* صامت */ }
 }
 
 async function salesSearch_(query) {
@@ -1160,7 +1213,7 @@ async function submitSale_() {
     source: 'محل', items: salesCart.map(function (i) { return { variantCode: i.variantCode, qty: i.qty, price: i.price }; }),
     discount: discount, paymentMethod: paymentMethod,
     customerName: document.getElementById('salesCustomerName').value, customerPhone: document.getElementById('salesCustomerPhone').value,
-    date: document.getElementById('salesDate').value
+    date: document.getElementById('salesDate').value, treasuryAccountId: document.getElementById('salesTreasuryAccount').value || null
   };
   try {
     const res = await api.recordSale({ username: state.user.username }, payload);
@@ -1175,6 +1228,7 @@ async function submitSale_() {
 function onSalesPaymentMethodChange_() {
   const val = document.getElementById('salesPaymentMethod').value;
   const section = document.getElementById('salesInvoiceSection');
+  document.getElementById('salesTreasuryFieldWrap').style.display = val === 'آجل' ? 'none' : 'block';
   if (val === 'آجل') {
     section.style.display = 'block';
     section.innerHTML =
@@ -1287,12 +1341,18 @@ async function renderSuppliersPage() {
         '<div class="form-grid">' +
           '<div class="field"><label>حالة الدفع</label><select id="poPaymentStatus"><option>مدفوع بالكامل</option><option>مدفوع جزئيًا</option><option>متأخر/غير مدفوع</option></select></div>' +
           '<div class="field"><label>المبلغ المدفوع (لو جزئي)</label><input type="number" id="poAmountPaid" value="0"></div>' +
-        '</div><button class="btn success block" style="margin-top:14px;" onclick="submitPurchaseOrder_()">✅ تسجيل أوردر الشراء</button></div>' +
+        '</div>' +
+        '<div class="field"><label>هيتخصم من حساب (المبلغ المدفوع فقط)</label><select id="poTreasuryAccount"><option value="">جاري التحميل...</option></select></div>' +
+        '<button class="btn success block" style="margin-top:14px;" onclick="submitPurchaseOrder_()">✅ تسجيل أوردر الشراء</button></div>' +
       '<div class="card"><div class="card-heading">📇 الموردون</div><div id="suppliersList" style="margin-top:10px;"></div>' +
         '<div class="card-heading" style="margin-top:26px;">🧾 أوردرات الشراء الأخيرة</div><div id="poList" style="margin-top:10px;"></div></div></div>'
   );
   poCart = [];
   loadSuppliers_(); loadPurchaseOrders_();
+  getTreasuryAccountsCached_().then(function (accounts) {
+    document.getElementById('poTreasuryAccount').innerHTML = treasuryAccountOptionsHtml_(accounts);
+    refreshSelect_('poTreasuryAccount');
+  }).catch(function () { /* صامت */ });
 }
 
 async function submitSupplier_(evt) {
@@ -1517,7 +1577,8 @@ async function submitPurchaseOrder_() {
   const payload = {
     supplierName: document.getElementById('poSupplierSelect').value,
     items: poCart.map(function (i) { return { variantCode: i.variantCode, qty: i.qty, price: i.price }; }),
-    paymentStatus: document.getElementById('poPaymentStatus').value, amountPaid: Number(document.getElementById('poAmountPaid').value) || 0
+    paymentStatus: document.getElementById('poPaymentStatus').value, amountPaid: Number(document.getElementById('poAmountPaid').value) || 0,
+    treasuryAccountId: document.getElementById('poTreasuryAccount').value || null
   };
   try {
     const res = await api.createPurchaseOrder({ username: state.user.username }, payload);
@@ -1539,16 +1600,20 @@ async function loadPurchaseOrders_() {
   } catch (err) { showErrorToast_(err); }
 }
 
-function openPaySupplierModal_(orderId, remaining) {
-  openModal('دفع دفعة للمورد', 'المتبقي: ' + remaining, '<div class="field"><label>المبلغ المدفوع</label><input type="number" id="modalSupplierPayAmount" value="' + remaining + '"></div>',
+async function openPaySupplierModal_(orderId, remaining) {
+  const accounts = await getTreasuryAccountsCached_().catch(function () { return []; });
+  openModal('دفع دفعة للمورد', 'المتبقي: ' + remaining,
+    '<div class="field"><label>المبلغ المدفوع</label><input type="number" id="modalSupplierPayAmount" value="' + remaining + '"></div>' +
+    '<div class="field"><label>هيتخصم من حساب</label><select id="modalSupplierTreasuryAccount">' + treasuryAccountOptionsHtml_(accounts) + '</select></div>',
     '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" onclick="confirmPaySupplier_(\'' + orderId + '\')">تأكيد الدفع</button>');
 }
 
 async function confirmPaySupplier_(orderId) {
   const amount = Number(document.getElementById('modalSupplierPayAmount').value);
+  const treasuryAccountId = document.getElementById('modalSupplierTreasuryAccount').value || null;
   if (!amount) { showToast_('اكتب مبلغ صحيح', 'error'); return; }
   try {
-    await api.paySupplierInstallment({ username: state.user.username }, orderId, amount);
+    await api.paySupplierInstallment({ username: state.user.username }, orderId, amount, treasuryAccountId);
     closeModal(); showToast_('تم تسجيل الدفعة ✅', 'success'); loadPurchaseOrders_();
   } catch (err) { showErrorToast_(err); }
 }
@@ -1786,16 +1851,20 @@ async function submitAddItemsToInvoice_(invoiceId) {
   } catch (err) { showErrorToast_(err); }
 }
 
-function openPayInvoiceModal_(invoiceId, remaining) {
-  openModal('تحصيل فاتورة', 'المتبقي حاليًا: ' + remaining, '<div class="field"><label>المبلغ المحصّل</label><input type="number" id="modalPayAmount" value="' + remaining + '"></div>',
+async function openPayInvoiceModal_(invoiceId, remaining) {
+  const accounts = await getTreasuryAccountsCached_().catch(function () { return []; });
+  openModal('تحصيل فاتورة', 'المتبقي حاليًا: ' + remaining,
+    '<div class="field"><label>المبلغ المحصّل</label><input type="number" id="modalPayAmount" value="' + remaining + '"></div>' +
+    '<div class="field"><label>هيضاف لحساب</label><select id="modalPayTreasuryAccount">' + treasuryAccountOptionsHtml_(accounts) + '</select></div>',
     '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn success" onclick="confirmPayInvoice_(\'' + invoiceId + '\')">تأكيد التحصيل</button>');
 }
 
 async function confirmPayInvoice_(invoiceId) {
   const amount = Number(document.getElementById('modalPayAmount').value);
+  const treasuryAccountId = document.getElementById('modalPayTreasuryAccount').value || null;
   if (!amount) { showToast_('اكتب مبلغ صحيح', 'error'); return; }
   try {
-    await api.payInvoiceInstallment({ username: state.user.username }, invoiceId, amount);
+    await api.payInvoiceInstallment({ username: state.user.username }, invoiceId, amount, treasuryAccountId);
     showToast_('تم تسجيل التحصيل ✅', 'success');
     if (invDetailCache && invDetailCache.invoice.id === invoiceId) { openInvoiceDetailModal_(invoiceId); }
     else { closeModal(); loadInvoices_(); }
@@ -1875,9 +1944,10 @@ async function renderPettyCashPage() {
     let html = '<div class="grid grid-4">' + statCard_('👛', 'رصيد العهدة الحالي', formatMoney_(balance, cur), '', true) + '</div>';
     html += '<div class="grid grid-2" style="margin-top:22px;">';
     html += '<div class="card"><div class="card-heading">➕ حركة عهدة جديدة</div>' +
-      '<div class="field"><label>نوع الحركة</label><select id="pcType"><option>إيداع</option><option>سحب</option><option>مصروف</option></select></div>' +
+      '<div class="field"><label>نوع الحركة</label><select id="pcType" onchange="onPcTypeChange_()"><option>إيداع</option><option>سحب</option><option>مصروف</option></select></div>' +
       '<div class="form-grid" style="margin-top:14px;"><div class="field"><label>المبلغ <span class="req">*</span></label><input type="number" id="pcAmount"></div>' +
       '<div class="field"><label>الوصف</label><input type="text" id="pcDesc"></div></div>' +
+      '<div class="field" id="pcTreasuryFieldWrap"><label>من/لحساب</label><select id="pcTreasuryAccount">' + treasuryAccountOptionsHtml_(await getTreasuryAccountsCached_().catch(function () { return []; })) + '</select></div>' +
       '<button class="btn success block" style="margin-top:16px;" onclick="submitPettyCash_()">✅ تسجيل الحركة</button></div>';
     html += '<div class="card"><div class="card-heading">📋 آخر الحركات</div><div style="margin-top:12px;">';
     html += history.length === 0 ? emptyRow_('👛', 'لا يوجد حركات بعد') :
@@ -1891,10 +1961,16 @@ async function renderPettyCashPage() {
   } catch (err) { showErrorToast_(err); }
 }
 
+function onPcTypeChange_() {
+  const type = document.getElementById('pcType').value;
+  document.getElementById('pcTreasuryFieldWrap').style.display = type === 'مصروف' ? 'none' : 'block';
+}
+
 async function submitPettyCash_() {
   const type = document.getElementById('pcType').value, amount = Number(document.getElementById('pcAmount').value), desc = document.getElementById('pcDesc').value;
+  const treasuryAccountId = document.getElementById('pcTreasuryAccount').value || null;
   if (!amount) { showToast_('المبلغ مطلوب', 'error'); return; }
-  try { await api.addPettyCashMovement({ username: state.user.username }, type, amount, desc); showToast_('تم تسجيل الحركة ✅', 'success'); renderPettyCashPage(); }
+  try { await api.addPettyCashMovement({ username: state.user.username }, type, amount, desc, treasuryAccountId); showToast_('تم تسجيل الحركة ✅', 'success'); renderPettyCashPage(); }
   catch (err) { showErrorToast_(err); }
 }
 
@@ -2604,7 +2680,7 @@ async function renderChecksPage() {
       checks.map(function (c) {
         const pill = c.status === 'تم التحصيل' ? 'success' : (c.status === 'مرتجعة/مرفوضة' ? 'danger' : (c.status === 'ملغاة' ? 'secondary' : 'warning'));
         const actions = c.status === 'تحت التحصيل'
-          ? '<button class="btn success" style="padding:4px 10px; font-size:11px;" onclick="updateCheck_(\'' + c.id + '\', \'تم التحصيل\')">تحصيل</button>' +
+          ? '<button class="btn success" style="padding:4px 10px; font-size:11px;" onclick="openCollectCheckModal_(\'' + c.id + '\')">تحصيل</button>' +
             '<button class="btn danger" style="padding:4px 10px; font-size:11px;" onclick="updateCheck_(\'' + c.id + '\', \'مرتجعة/مرفوضة\')">ارتجاع</button>'
           : '';
         return '<div class="list-item"><span>' + (c.direction === 'واردة' ? '⬇️' : '⬆️') + ' <b>' + c.checkNumber + '</b> — ' + c.partyName +
@@ -2630,9 +2706,21 @@ async function submitCheck_() {
   } catch (err) { showErrorToast_(err); }
 }
 
-async function updateCheck_(id, status) {
+async function openCollectCheckModal_(id) {
+  const accounts = await getTreasuryAccountsCached_().catch(function () { return []; });
+  openModal('تحصيل شيك', '', '<div class="field"><label>هيتضاف/يتخصم من حساب</label><select id="modalCheckTreasuryAccount">' + treasuryAccountOptionsHtml_(accounts) + '</select></div>',
+    '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn success" onclick="confirmCollectCheck_(\'' + id + '\')">✅ تأكيد التحصيل</button>');
+}
+
+async function confirmCollectCheck_(id) {
+  const treasuryAccountId = document.getElementById('modalCheckTreasuryAccount').value || null;
+  closeModal();
+  await updateCheck_(id, 'تم التحصيل', treasuryAccountId);
+}
+
+async function updateCheck_(id, status, treasuryAccountId) {
   try {
-    await api.updateCheckStatus({ username: state.user.username }, id, status);
+    await api.updateCheckStatus({ username: state.user.username }, id, status, treasuryAccountId);
     showToast_('تم تحديث حالة الشيك ✅', 'success');
     renderChecksPage();
   } catch (err) { showErrorToast_(err); }
