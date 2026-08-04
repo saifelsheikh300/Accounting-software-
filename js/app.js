@@ -507,16 +507,24 @@ async function posReturnSearch_(query) {
   } catch (err) { showErrorToast_(err); }
 }
 
-function confirmPosReturn_(saleId) {
-  openConfirmModal('تأكيد المرتجع', 'متأكد إنك عايز ترجّع البيعة "' + saleId + '"؟', async function () {
-    try {
-      const results = await api.posSearchSaleForReturn(saleId);
-      const sale = results.find(function (r) { return r.saleId === saleId; });
-      if (!sale) { showToast_('البيعة مش موجودة', 'error'); return; }
-      await api.posReturn({ username: state.user.username }, saleId, sale.items);
-      showToast_('تم المرتجع ✅', 'success'); loadPosSummary_();
-    } catch (err) { showErrorToast_(err); }
-  });
+async function confirmPosReturn_(saleId) {
+  const accounts = await getTreasuryAccountsCached_().catch(function () { return []; });
+  openModal('تأكيد المرتجع', 'متأكد إنك عايز ترجّع البيعة "' + saleId + '"؟',
+    '<div class="hint">لو البيعة كانت كاش، هتتخصم من حساب الخزنة اللي تحدديه. لو كانت آجل، مش هتلمس أي خزنة.</div>' +
+    '<div class="field" style="margin-top:10px;"><label>هتتخصم من حساب (لو كانت كاش)</label><select id="posReturnTreasuryAccount">' + treasuryAccountOptionsHtml_(accounts) + '</select></div>',
+    '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" onclick="doConfirmPosReturn_(\'' + saleId + '\')">تأكيد</button>');
+}
+
+async function doConfirmPosReturn_(saleId) {
+  const treasuryAccountId = document.getElementById('posReturnTreasuryAccount').value || null;
+  closeModal();
+  try {
+    const results = await api.posSearchSaleForReturn(saleId);
+    const sale = results.find(function (r) { return r.saleId === saleId; });
+    if (!sale) { showToast_('البيعة مش موجودة', 'error'); return; }
+    await api.posReturn({ username: state.user.username }, saleId, sale.items, treasuryAccountId);
+    showToast_('تم المرتجع ✅', 'success'); loadPosSummary_();
+  } catch (err) { showErrorToast_(err); }
 }
 
 function buildProductResultsHtml_(results, addFnName) {
@@ -1309,16 +1317,24 @@ async function loadSalesHistory_() {
   } catch (err) { showErrorToast_(err); }
 }
 
-function quickReturnSale_(saleId) {
-  openConfirmModal('تأكيد المرتجع', 'متأكد إنك عايز ترجّع البيعة "' + saleId + '" بالكامل؟', async function () {
-    try {
-      const sales = await api.listSales({ limit: 200 });
-      const sale = sales.find(function (s) { return s.saleId === saleId; });
-      if (!sale) { showToast_('البيعة مش موجودة', 'error'); return; }
-      await api.posReturn({ username: state.user.username }, saleId, sale.items);
-      showToast_('تم المرتجع ✅', 'success'); loadSalesHistory_();
-    } catch (err) { showErrorToast_(err); }
-  });
+async function quickReturnSale_(saleId) {
+  const accounts = await getTreasuryAccountsCached_().catch(function () { return []; });
+  openModal('تأكيد المرتجع', 'متأكد إنك عايز ترجّع البيعة "' + saleId + '" بالكامل؟',
+    '<div class="hint">لو البيعة كانت كاش، هتتخصم من حساب الخزنة اللي تحدديه. لو كانت آجل، مش هتلمس أي خزنة.</div>' +
+    '<div class="field" style="margin-top:10px;"><label>هتتخصم من حساب (لو كانت كاش)</label><select id="salesReturnTreasuryAccount">' + treasuryAccountOptionsHtml_(accounts) + '</select></div>',
+    '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" onclick="doQuickReturnSale_(\'' + saleId + '\')">تأكيد</button>');
+}
+
+async function doQuickReturnSale_(saleId) {
+  const treasuryAccountId = document.getElementById('salesReturnTreasuryAccount').value || null;
+  closeModal();
+  try {
+    const sales = await api.listSales({ limit: 200 });
+    const sale = sales.find(function (s) { return s.saleId === saleId; });
+    if (!sale) { showToast_('البيعة مش موجودة', 'error'); return; }
+    await api.posReturn({ username: state.user.username }, saleId, sale.items, treasuryAccountId);
+    showToast_('تم المرتجع ✅', 'success'); loadSalesHistory_();
+  } catch (err) { showErrorToast_(err); }
 }
 
 // ============================================================
