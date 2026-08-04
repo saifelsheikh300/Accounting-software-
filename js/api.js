@@ -538,11 +538,9 @@ api.recordAttendance = async function (session, employeeName, status) {
   return { success: true };
 };
 
-api.addEmployeeAdvance = async function (session, employeeName, amount) {
-  const { data: emp } = await supabaseClient.from('employees').select('id').eq('name', employeeName).single();
-  const { error } = await supabaseClient.from('advances').insert({ employee_id: emp.id, amount: amount });
+api.addEmployeeAdvance = async function (session, employeeName, amount, treasuryAccountId) {
+  const { error } = await supabaseClient.rpc('rpc_add_employee_advance', { p_employee_name: employeeName, p_amount: amount, p_treasury_account_id: treasuryAccountId || null });
   if (error) throw error;
-  await supabaseClient.rpc('fn_append_cash_flow', { p_direction: 'خارج', p_source: 'سلفة ' + employeeName, p_amount: amount, p_is_cash: true });
   return { success: true };
 };
 
@@ -560,12 +558,9 @@ api.listSalaries = async function (monthLabel) {
   return (data || []).map(function (s) { return { employeeName: s.employees ? s.employees.name : '', net: s.net, paid: s.paid ? 'نعم' : 'لا' }; });
 };
 
-api.paySalary = async function (session, monthLabel, employeeName) {
-  const { data: emp } = await supabaseClient.from('employees').select('id').eq('name', employeeName).single();
-  const { data: sal } = await supabaseClient.from('salaries').select('net').eq('month_label', monthLabel).eq('employee_id', emp.id).single();
-  const { error } = await supabaseClient.from('salaries').update({ paid: true }).eq('month_label', monthLabel).eq('employee_id', emp.id);
+api.paySalary = async function (session, monthLabel, employeeName, treasuryAccountId) {
+  const { error } = await supabaseClient.rpc('rpc_pay_salary', { p_month_label: monthLabel, p_employee_name: employeeName, p_treasury_account_id: treasuryAccountId || null });
   if (error) throw error;
-  await supabaseClient.rpc('fn_append_cash_flow', { p_direction: 'خارج', p_source: 'راتب ' + employeeName, p_amount: sal.net, p_is_cash: true });
   return { success: true };
 };
 
