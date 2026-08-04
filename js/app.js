@@ -2060,12 +2060,17 @@ async function renderHrPage() {
         '<div class="card-heading" style="margin-top:26px;">💵 سلفة جديدة</div>' +
         '<div class="form-grid"><div class="field"><label>الموظف</label><select id="advEmployeeSelect"></select></div>' +
         '<div class="field"><label>المبلغ</label><input type="number" id="advAmount"></div></div>' +
+        '<div class="field"><label>هتتخصم من حساب</label><select id="advTreasuryAccount"></select></div>' +
         '<button class="btn success block" style="margin-top:14px;" onclick="submitAdvance_()">تسجيل السلفة</button></div>' +
       '<div class="card"><div class="card-heading">👥 الموظفون</div><div id="employeesList" style="margin-top:10px;"></div>' +
         '<div class="card-heading" style="margin-top:26px;">💰 مرتبات الشهر الحالي</div>' +
         '<button class="btn secondary" style="margin-top:8px;" onclick="runSalaries_()">تشغيل المرتبات</button><div id="salariesList" style="margin-top:14px;"></div></div></div>'
   );
   loadEmployees_();
+  getTreasuryAccountsCached_().then(function (accounts) {
+    document.getElementById('advTreasuryAccount').innerHTML = treasuryAccountOptionsHtml_(accounts);
+    refreshSelect_('advTreasuryAccount');
+  }).catch(function () { /* صامت */ });
 }
 
 async function submitEmployee_() {
@@ -2094,8 +2099,9 @@ async function submitAttendance_() {
 
 async function submitAdvance_() {
   const amount = Number(document.getElementById('advAmount').value);
+  const treasuryAccountId = document.getElementById('advTreasuryAccount').value || null;
   if (!amount) { showToast_('المبلغ مطلوب', 'error'); return; }
-  try { await api.addEmployeeAdvance({ username: state.user.username }, document.getElementById('advEmployeeSelect').value, amount); showToast_('تم تسجيل السلفة ✅', 'success'); }
+  try { await api.addEmployeeAdvance({ username: state.user.username }, document.getElementById('advEmployeeSelect').value, amount, treasuryAccountId); showToast_('تم تسجيل السلفة ✅', 'success'); }
   catch (err) { showErrorToast_(err); }
 }
 
@@ -2117,8 +2123,17 @@ async function loadSalaries_(monthLabel) {
 }
 
 async function paySalaryUI_(monthLabel, employeeName) {
-  try { await api.paySalary({ username: state.user.username }, monthLabel, employeeName); showToast_('تم صرف الراتب ✅', 'success'); loadSalaries_(monthLabel); }
-  catch (err) { showErrorToast_(err); }
+  const accounts = await getTreasuryAccountsCached_().catch(function () { return []; });
+  openModal('صرف مرتب ' + employeeName, monthLabel, '<div class="field"><label>هيتخصم من حساب</label><select id="modalSalaryTreasuryAccount">' + treasuryAccountOptionsHtml_(accounts) + '</select></div>',
+    '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn success" onclick="confirmPaySalary_(\'' + monthLabel + '\', \'' + employeeName.replace(/'/g, '') + '\')">✅ تأكيد الصرف</button>');
+}
+
+async function confirmPaySalary_(monthLabel, employeeName) {
+  const treasuryAccountId = document.getElementById('modalSalaryTreasuryAccount').value || null;
+  try {
+    await api.paySalary({ username: state.user.username }, monthLabel, employeeName, treasuryAccountId);
+    closeModal(); showToast_('تم صرف الراتب ✅', 'success'); loadSalaries_(monthLabel);
+  } catch (err) { showErrorToast_(err); }
 }
 
 // ============================================================
