@@ -247,9 +247,10 @@ api.posSale = async function (session, cart, discount, paymentMethod, treasuryAc
   return api.recordSale(session, { source: 'محل', items: cart, discount: discount, paymentMethod: paymentMethod, treasuryAccountId: treasuryAccountId });
 };
 
-api.recordReturn = async function (session, saleId, items, isFull) {
+api.recordReturn = async function (session, saleId, items, isFull, treasuryAccountId) {
   const { error } = await supabaseClient.rpc('rpc_record_return', {
-    p_sale_id: saleId, p_items: items.map(function (i) { return { variant_code: i.variantCode, qty: i.qty, price: i.price }; }), p_is_full: isFull
+    p_sale_id: saleId, p_items: items.map(function (i) { return { variant_code: i.variantCode, qty: i.qty, price: i.price }; }), p_is_full: isFull,
+    p_treasury_account_id: treasuryAccountId || null
   });
   if (error) throw error;
   return { success: true };
@@ -279,9 +280,9 @@ api.posSearchSaleForReturn = async function (query) {
   });
 };
 
-api.posReturn = async function (session, saleNumber, items) {
+api.posReturn = async function (session, saleNumber, items, treasuryAccountId) {
   const { data: sale } = await supabaseClient.from('sales').select('id').eq('sale_number', saleNumber).single();
-  return api.recordReturn(session, sale.id, items, true);
+  return api.recordReturn(session, sale.id, items, true, treasuryAccountId);
 };
 
 api.getPosTodaySummary = async function () {
