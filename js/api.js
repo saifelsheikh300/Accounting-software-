@@ -236,14 +236,15 @@ api.recordSale = async function (session, payload) {
     p_source: payload.source, p_items: payload.items.map(function (i) { return { variant_code: i.variantCode, qty: i.qty, price: i.price }; }),
     p_discount: payload.discount || 0, p_payment_method: payload.paymentMethod || null,
     p_customer_name: payload.customerName || '', p_customer_phone: payload.customerPhone || '',
-    p_sale_date: payload.date ? new Date(payload.date).toISOString() : new Date().toISOString()
+    p_sale_date: payload.date ? new Date(payload.date).toISOString() : new Date().toISOString(),
+    p_treasury_account_id: payload.treasuryAccountId || null
   });
   if (error) throw error;
   return { success: true, saleId: data[0].sale_id, saleNumber: data[0].sale_number, total: data[0].total };
 };
 
-api.posSale = async function (session, cart, discount, paymentMethod) {
-  return api.recordSale(session, { source: 'محل', items: cart, discount: discount, paymentMethod: paymentMethod });
+api.posSale = async function (session, cart, discount, paymentMethod, treasuryAccountId) {
+  return api.recordSale(session, { source: 'محل', items: cart, discount: discount, paymentMethod: paymentMethod, treasuryAccountId: treasuryAccountId });
 };
 
 api.recordReturn = async function (session, saleId, items, isFull) {
@@ -311,19 +312,16 @@ api.listExpenseCategories = async function () {
 };
 
 api.addExpense = async function (session, payload) {
-  const { error } = await supabaseClient.from('expenses').insert({
-    expense_date: payload.date ? new Date(payload.date).toISOString() : new Date().toISOString(),
-    main_category: payload.mainCategory, sub_category: payload.subCategory || '', description: payload.description || '',
-    amount: payload.amount, is_recurring: !!payload.isRecurring, recurrence_days: payload.recurrenceDays || null,
-    is_fixed_asset: !!payload.isFixedAsset, payment_method: payload.paymentMethod || 'كاش',
-    employee_id: payload.employeeId || null, bonus: payload.bonus || null
+  const { data, error } = await supabaseClient.rpc('rpc_add_expense', {
+    p_main_category: payload.mainCategory, p_amount: payload.amount, p_sub_category: payload.subCategory || '', p_description: payload.description || '',
+    p_is_recurring: !!payload.isRecurring, p_recurrence_days: payload.recurrenceDays || null,
+    p_is_fixed_asset: !!payload.isFixedAsset, p_payment_method: payload.paymentMethod || 'كاش',
+    p_employee_id: payload.employeeId || null, p_bonus: payload.bonus || null,
+    p_expense_date: payload.date ? new Date(payload.date).toISOString() : new Date().toISOString(),
+    p_treasury_account_id: payload.treasuryAccountId || null
   });
   if (error) throw error;
-
-  if (payload.paymentMethod !== 'آجل') {
-    await supabaseClient.rpc('fn_append_cash_flow', { p_direction: 'خارج', p_source: payload.description || 'مصروف', p_amount: payload.amount, p_is_cash: payload.paymentMethod === 'كاش' });
-  }
-  return { success: true };
+  return { success: true, expenseId: data };
 };
 
 // ------------------------------------------------------------
@@ -344,7 +342,7 @@ api.addSupplier = async function (session, payload) {
 api.createPurchaseOrder = async function (session, payload) {
   const { data, error } = await supabaseClient.rpc('rpc_create_purchase_order', {
     p_supplier_name: payload.supplierName, p_items: payload.items.map(function (i) { return { variant_code: i.variantCode, qty: i.qty, price: i.price }; }),
-    p_payment_status: payload.paymentStatus, p_amount_paid: payload.amountPaid || 0
+    p_payment_status: payload.paymentStatus, p_amount_paid: payload.amountPaid || 0, p_treasury_account_id: payload.treasuryAccountId || null
   });
   if (error) throw error;
   return { success: true, orderId: data[0].order_id, total: data[0].total };
@@ -358,8 +356,8 @@ api.listPurchaseOrders = async function () {
   });
 };
 
-api.paySupplierInstallment = async function (session, orderId, amount) {
-  const { error } = await supabaseClient.rpc('rpc_pay_supplier_installment', { p_order_id: orderId, p_amount: amount });
+api.paySupplierInstallment = async function (session, orderId, amount, treasuryAccountId) {
+  const { error } = await supabaseClient.rpc('rpc_pay_supplier_installment', { p_order_id: orderId, p_amount: amount, p_treasury_account_id: treasuryAccountId || null });
   if (error) throw error;
   return { success: true };
 };
@@ -458,8 +456,8 @@ api.listInvoices = async function (filters) {
   return (data || []).map(function (i) { return { invoiceId: i.id, invoiceNumber: i.invoice_number, customerName: i.customer_name, total: i.total, paid: i.paid, remaining: i.remaining, status: i.status }; });
 };
 
-api.payInvoiceInstallment = async function (session, invoiceId, amount) {
-  const { error } = await supabaseClient.rpc('rpc_pay_invoice_installment', { p_invoice_id: invoiceId, p_amount: amount });
+api.payInvoiceInstallment = async function (session, invoiceId, amount, treasuryAccountId) {
+  const { error } = await supabaseClient.rpc('rpc_pay_invoice_installment', { p_invoice_id: invoiceId, p_amount: amount, p_treasury_account_id: treasuryAccountId || null });
   if (error) throw error;
   return { success: true };
 };
@@ -510,8 +508,8 @@ api.getPettyCashHistory = async function (limit) {
   return (data || []).map(function (h) { return { date: h.movement_date, type: h.type, amount: h.amount, description: h.description, balance: h.balance_after }; });
 };
 
-api.addPettyCashMovement = async function (session, type, amount, description) {
-  const { error } = await supabaseClient.rpc('rpc_add_petty_cash', { p_type: type, p_amount: amount, p_description: description || '' });
+api.addPettyCashMovement = async function (session, type, amount, description, treasuryAccountId) {
+  const { error } = await supabaseClient.rpc('rpc_add_petty_cash', { p_type: type, p_amount: amount, p_description: description || '', p_treasury_account_id: treasuryAccountId || null });
   if (error) throw error;
   return { success: true };
 };
@@ -863,8 +861,8 @@ api.addCheck = async function (session, payload) {
   return { success: true };
 };
 
-api.updateCheckStatus = async function (session, checkId, status) {
-  const { error } = await supabaseClient.rpc('rpc_update_check_status', { p_check_id: checkId, p_status: status });
+api.updateCheckStatus = async function (session, checkId, status, treasuryAccountId) {
+  const { error } = await supabaseClient.rpc('rpc_update_check_status', { p_check_id: checkId, p_status: status, p_treasury_account_id: treasuryAccountId || null });
   if (error) throw error;
   return { success: true };
 };
