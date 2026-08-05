@@ -620,7 +620,7 @@ api.getAccounts = async function () {
   const { data, error } = await supabaseClient.from('accounts').select('*').eq('active', true).order('code');
   if (error) throw error;
   return (data || []).map(function (a) {
-    return { code: a.code, name: a.name, type: a.type, isGroup: a.is_group, parentId: a.parent_id };
+    return { id: a.id, code: a.code, name: a.name, type: a.type, isGroup: a.is_group, parentId: a.parent_id };
   });
 };
 
@@ -695,6 +695,133 @@ api.transferBetweenTreasuries = async function (session, fromId, toId, amount, n
   const { error } = await supabaseClient.rpc('rpc_transfer_between_treasuries', { p_from_id: fromId, p_to_id: toId, p_amount: amount, p_notes: notes || '' });
   if (error) throw error;
   return { success: true };
+};
+
+// ------------------------------------------------------------
+// نسب إدارة الشركاء (المستحقات)
+// ------------------------------------------------------------
+api.getAdminRights = async function () {
+  const { data, error } = await supabaseClient.from('admin_rights').select('*, partners(name)').order('month_label', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(function (r) {
+    return { partnerName: r.partners ? r.partners.name : '', monthLabel: r.month_label, earned: r.earned, withdrawn: r.withdrawn, available: r.available };
+  });
+};
+
+api.runMonthlyAdminFee = async function (session) {
+  const { error } = await supabaseClient.rpc('rpc_run_monthly_admin_fee');
+  if (error) throw error;
+  return { success: true };
+};
+
+api.withdrawAdminRight = async function (session, partnerName, amount, treasuryAccountId) {
+  const { error } = await supabaseClient.rpc('rpc_withdraw_admin_right', { p_partner_name: partnerName, p_amount: amount, p_treasury_account_id: treasuryAccountId || null });
+  if (error) throw error;
+  return { success: true };
+};
+
+// ------------------------------------------------------------
+// الإيرادات الأخرى
+// ------------------------------------------------------------
+api.listOtherRevenue = async function (limit) {
+  const { data, error } = await supabaseClient.from('other_revenue').select('*').order('revenue_date', { ascending: false }).limit(limit || 20);
+  if (error) throw error;
+  return (data || []).map(function (r) { return { id: r.id, source: r.source, description: r.description, amount: r.amount, date: r.revenue_date }; });
+};
+
+api.addOtherRevenue = async function (session, payload) {
+  const { error } = await supabaseClient.rpc('rpc_add_other_revenue', {
+    p_source: payload.source, p_amount: payload.amount, p_description: payload.description || '', p_treasury_account_id: payload.treasuryAccountId || null
+  });
+  if (error) throw error;
+  return { success: true };
+};
+
+// ------------------------------------------------------------
+// التقارير المحاسبية: ميزان المراجعة + الميزانية العمومية
+// ------------------------------------------------------------
+api.getTrialBalance = async function (endDate) {
+  const { data, error } = await supabaseClient.rpc('rpc_trial_balance', { p_end_date: endDate });
+  if (error) throw error;
+  return (data || []).map(function (r) {
+    return { accountCode: r.accountCode, accountName: r.accountName, accountType: r.accountType, debit: r.debit, credit: r.credit, balance: r.balance };
+  });
+};
+
+api.getBalanceSheet = async function (asOfDate) {
+  const { data, error } = await supabaseClient.rpc('rpc_balance_sheet', { p_as_of: asOfDate });
+  if (error) throw error;
+  return data;
+};
+
+// ------------------------------------------------------------
+// الفترات المحاسبية (قفل/فتح)
+// ------------------------------------------------------------
+api.listAccountingPeriods = async function () {
+  const { data, error } = await supabaseClient.from('accounting_periods').select('*').order('period_label', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(function (p) { return { periodLabel: p.period_label, closed: p.closed, closedAt: p.closed_at }; });
+};
+
+api.closeAccountingPeriod = async function (session, periodLabel) {
+  const { error } = await supabaseClient.rpc('rpc_close_period', { p_period_label: periodLabel });
+  if (error) throw error;
+  return { success: true };
+};
+
+api.reopenAccountingPeriod = async function (session, periodLabel) {
+  const { error } = await supabaseClient.rpc('rpc_reopen_period', { p_period_label: periodLabel });
+  if (error) throw error;
+  return { success: true };
+};
+
+// ------------------------------------------------------------
+// الأصول الثابتة والإهلاك
+// ------------------------------------------------------------
+api.listFixedAssets = async function () {
+  const { data, error } = await supabaseClient.from('fixed_assets').select('*').order('acquired_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(function (a) {
+    return { id: a.id, description: a.description, amount: a.amount, acquiredAt: a.acquired_at, usefulLifeMonths: a.useful_life_months, accumulatedDepreciation: a.accumulated_depreciation };
+  });
+};
+
+api.runMonthlyDepreciation = async function (session) {
+  const { error } = await supabaseClient.rpc('rpc_run_monthly_depreciation');
+  if (error) throw error;
+  return { success: true };
+};
+
+// ------------------------------------------------------------
+// أرصدة أول مدة — الترحيل الفعلي لدفتر اليومية
+// ------------------------------------------------------------
+api.listOpeningBalances = async function () {
+  const { data, error } = await supabaseClient.from('opening_balances').select('*, accounts(name)').order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(function (o) { return { id: o.id, accountName: o.accounts ? o.accounts.name : '', amount: o.amount, description: o.description, locked: o.locked, asOfDate: o.as_of_date }; });
+};
+
+api.addOpeningBalance = async function (session, payload) {
+  const { error } = await supabaseClient.from('opening_balances').insert({
+    as_of_date: payload.asOfDate, account_id: payload.accountId, amount: payload.amount, description: payload.description || ''
+  });
+  if (error) throw error;
+  return { success: true };
+};
+
+api.postOpeningBalances = async function (session) {
+  const { error } = await supabaseClient.rpc('rpc_post_opening_balances');
+  if (error) throw error;
+  return { success: true };
+};
+
+// ------------------------------------------------------------
+// تقرير مراكز التكلفة
+// ------------------------------------------------------------
+api.getCostCenterReport = async function (start, end) {
+  const { data, error } = await supabaseClient.rpc('rpc_cost_center_report', { p_start: start, p_end: end });
+  if (error) throw error;
+  return data;
 };
 
 // ------------------------------------------------------------

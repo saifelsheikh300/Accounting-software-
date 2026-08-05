@@ -34,7 +34,12 @@ const NAV_GROUPS = [
     { key: 'costcenters', label: 'مراكز التكلفة', icon: '🎯', module: 'Expenses' },
     { key: 'checks', label: 'الشيكات', icon: '📑', module: 'Reports' },
     { key: 'currencies', label: 'العملات وأسعار الصرف', icon: '💱', module: 'Settings' },
-    { key: 'reports', label: 'التقارير', icon: '📈', module: 'Reports' }
+    { key: 'reports', label: 'التقارير', icon: '📈', module: 'Reports' },
+    { key: 'trialbalance', label: 'ميزان المراجعة', icon: '⚖️', module: 'Reports' },
+    { key: 'balancesheet', label: 'الميزانية العمومية', icon: '🏛️', module: 'Reports' },
+    { key: 'periods', label: 'قفل الفترات المحاسبية', icon: '🔒', module: 'Reports' },
+    { key: 'fixedassets', label: 'الأصول الثابتة', icon: '🏗️', module: 'Reports' },
+    { key: 'openingbalances', label: 'أرصدة أول مدة', icon: '📂', module: 'Reports' }
   ]},
   { label: 'الإدارة', items: [
     { key: 'hr', label: 'الموارد البشرية', icon: '👥', module: 'HR' },
@@ -66,7 +71,12 @@ const PAGE_META = {
   costcenters: ['مراكز التكلفة', 'ربط المصروفات والمبيعات بمركز تكلفة'],
   checks: ['الشيكات', 'متابعة الشيكات الواردة والصادرة وحالتها'],
   currencies: ['العملات وأسعار الصرف', 'إدارة العملات الإضافية وسعر الصرف اليومي'],
-  recyclebin: ['سلة المحذوفات', 'استرجاع أي عنصر اتحذف بالغلط']
+  recyclebin: ['سلة المحذوفات', 'استرجاع أي عنصر اتحذف بالغلط'],
+  trialbalance: ['ميزان المراجعة', 'كل الحسابات ومجاميعها المدينة والدائنة من دفتر اليومية'],
+  balancesheet: ['الميزانية العمومية', 'الأصول والخصوم وحقوق الملكية حتى تاريخ معيّن'],
+  periods: ['قفل الفترات المحاسبية', 'منع التعديل على شهر اتقفل خلاص بعد مراجعته'],
+  fixedassets: ['الأصول الثابتة', 'متابعة الأصول والإهلاك الشهري المتراكم'],
+  openingbalances: ['أرصدة أول مدة', 'رصيد بداية التشغيل لكل حساب، وترحيله لدفتر اليومية']
 };
 
 // ------------------------------------------------------------
@@ -220,7 +230,10 @@ function navigate(pageKey) {
     users: renderUsersPage, settings: renderSettingsPage,
     treasury: renderTreasuryPage, accounts: renderAccountsPage,
     costcenters: renderCostCentersPage, recyclebin: renderRecycleBinPage,
-    checks: renderChecksPage, currencies: renderCurrenciesPage
+    checks: renderChecksPage, currencies: renderCurrenciesPage,
+    trialbalance: renderTrialBalancePage, balancesheet: renderBalanceSheetPage,
+    periods: renderPeriodsPage, fixedassets: renderFixedAssetsPage,
+    openingbalances: renderOpeningBalancesPage
   };
   (renderers[pageKey] || renderComingSoon_)();
 }
@@ -1926,8 +1939,40 @@ async function renderCapitalPage() {
           ' · إدارة: ' + (p.adminRate !== null ? p.adminRate + (p.adminRateType === 'نسبة %' ? '%' : ' ' + cur) : '—') + '</div></div>';
       }).join('');
     html += '</div></div></div>';
+
+    const adminRights = await api.getAdminRights().catch(function () { return []; });
+    const availableByPartner = {};
+    adminRights.forEach(function (r) { availableByPartner[r.partnerName] = (availableByPartner[r.partnerName] || 0) + Number(r.available); });
+
+    html += '<div class="section-title">💼 مستحقات نسبة الإدارة</div>';
+    html += '<div class="grid grid-2">';
+    html += '<div class="card"><div class="card-heading">سحب مستحق</div>' +
+      '<div class="field"><label>الشريك</label><select id="adminWithdrawPartner">' + summary.partners.map(function (p) { return '<option>' + p.name + '</option>'; }).join('') + '</select></div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>المبلغ</label><input type="number" id="adminWithdrawAmount"></div>' +
+      '<div class="field"><label>يتخصم من حساب</label><select id="adminWithdrawTreasury">' + treasuryAccountOptionsHtml_(treasuryAccounts) + '</select></div></div>' +
+      '<button class="btn success block" style="margin-top:14px;" onclick="submitWithdrawAdminRight_()">✅ سحب المستحق</button>' +
+      '<button class="btn secondary block" style="margin-top:10px;" onclick="submitRunAdminFee_()">▶️ تشغيل نسبة إدارة الشهر الحالي يدويًا</button></div>';
+    html += '<div class="card"><div class="card-heading">المتاح لكل شريك</div><div style="margin-top:10px;">' +
+      (Object.keys(availableByPartner).length === 0 ? emptyRow_('💼', 'لا يوجد مستحقات إدارة بعد') :
+        Object.keys(availableByPartner).map(function (name) { return '<div class="list-item"><span>' + name + '</span><b>' + formatMoney_(availableByPartner[name], cur) + '</b></div>'; }).join('')) +
+      '</div></div></div>';
+
     setContent_(html);
   } catch (err) { showErrorToast_(err); }
+}
+
+async function submitWithdrawAdminRight_() {
+  const partnerName = document.getElementById('adminWithdrawPartner').value;
+  const amount = Number(document.getElementById('adminWithdrawAmount').value);
+  const treasuryAccountId = document.getElementById('adminWithdrawTreasury').value || null;
+  if (!amount) { showToast_('المبلغ مطلوب', 'error'); return; }
+  try { await api.withdrawAdminRight({ username: state.user.username }, partnerName, amount, treasuryAccountId); showToast_('تم السحب ✅', 'success'); renderCapitalPage(); }
+  catch (err) { showErrorToast_(err); }
+}
+
+async function submitRunAdminFee_() {
+  try { await api.runMonthlyAdminFee({ username: state.user.username }); showToast_('تم تشغيل نسبة الإدارة الشهرية ✅', 'success'); renderCapitalPage(); }
+  catch (err) { showErrorToast_(err); }
 }
 
 async function submitCapitalMovement_() {
@@ -2013,6 +2058,14 @@ function renderReportsPage() {
       '<button class="btn info-btn" onclick="loadSalesForecast_()">📈 توقع المبيعات</button>' +
       '<button class="btn" onclick="loadAiInsights_()">✨ تحليل ذكي (Gemini)</button></div>' +
       '<div id="aiResult" style="margin-top:14px;"></div></div>' +
+    '<div class="section-title">💵 الإيرادات الأخرى</div>' +
+    '<div class="card"><div class="form-grid">' +
+      '<div class="field"><label>المصدر</label><input type="text" id="orSource" placeholder="مثال: بيع كرتونة فاضية"></div>' +
+      '<div class="field"><label>المبلغ</label><input type="number" id="orAmount"></div></div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>الوصف</label><input type="text" id="orDesc"></div>' +
+      '<div class="field"><label>هتضاف لحساب</label><select id="orTreasuryAccount"></select></div></div>' +
+      '<button class="btn success block" style="margin-top:14px;" onclick="submitOtherRevenue_()">➕ تسجيل الإيراد</button>' +
+      '<div id="otherRevenueList" style="margin-top:14px;"></div></div>' +
     '<div class="section-title">المواسم</div>' +
     '<div class="card"><div class="form-grid">' +
       '<div class="field"><label>اسم الموسم</label><input type="text" id="seasonName"></div>' +
@@ -2021,6 +2074,30 @@ function renderReportsPage() {
       '<button class="btn" style="margin-top:14px;" onclick="submitSeason_()">➕ إضافة موسم</button><div id="seasonsList" style="margin-top:14px;"></div></div>'
   );
   loadSeasons_();
+  loadOtherRevenue_();
+  getTreasuryAccountsCached_().then(function (accounts) {
+    document.getElementById('orTreasuryAccount').innerHTML = treasuryAccountOptionsHtml_(accounts);
+    refreshSelect_('orTreasuryAccount');
+  }).catch(function () { /* صامت */ });
+}
+
+async function submitOtherRevenue_() {
+  const payload = {
+    source: document.getElementById('orSource').value.trim(), amount: Number(document.getElementById('orAmount').value),
+    description: document.getElementById('orDesc').value, treasuryAccountId: document.getElementById('orTreasuryAccount').value || null
+  };
+  if (!payload.source || !payload.amount) { showToast_('المصدر والمبلغ مطلوبين', 'error'); return; }
+  try { await api.addOtherRevenue({ username: state.user.username }, payload); showToast_('تم تسجيل الإيراد ✅', 'success'); renderReportsPage(); }
+  catch (err) { showErrorToast_(err); }
+}
+
+async function loadOtherRevenue_() {
+  try {
+    const list = await api.listOtherRevenue(15);
+    const cur = state.settings.currency || 'جنيه';
+    document.getElementById('otherRevenueList').innerHTML = list.length === 0 ? emptyRow_('💵', 'لا يوجد إيرادات أخرى مسجلة بعد') :
+      list.map(function (r) { return '<div class="list-item"><span>' + r.source + (r.description ? ' — ' + r.description : '') + '<br><span style="color:var(--text-faint); font-size:11px;">' + formatDate_(r.date) + '</span></span><b>' + formatMoney_(r.amount, cur) + '</b></div>'; }).join('');
+  } catch (err) { /* صامت */ }
 }
 
 async function loadIncomeStatement_() {
@@ -2487,7 +2564,29 @@ async function renderCostCentersPage() {
     html += centers.length === 0 ? emptyRow_('🎯', 'لسه مفيش مراكز تكلفة مضافة') :
       centers.map(function (c) { return '<div class="list-item"><span>' + c.name + (c.description ? '<br><span style="color:var(--text-faint); font-size:11px;">' + c.description + '</span>' : '') + '</span></div>'; }).join('');
     html += '</div>';
+
+    const firstOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+    const today = new Date().toISOString().slice(0, 10);
+    html += '<div class="section-title">📊 تقرير الأداء حسب المركز</div><div class="card">' +
+      '<div class="form-grid"><div class="field"><label>من تاريخ</label><input type="date" id="ccRepStart" value="' + firstOfMonth + '"></div>' +
+      '<div class="field"><label>إلى تاريخ</label><input type="date" id="ccRepEnd" value="' + today + '"></div></div>' +
+      '<button class="btn info-btn" style="margin-top:14px;" onclick="loadCostCenterReport_()">📊 عرض</button>' +
+      '<div id="costCenterReportResult" style="margin-top:14px;"></div></div>';
+
     setContent_(html);
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function loadCostCenterReport_() {
+  const start = document.getElementById('ccRepStart').value, end = document.getElementById('ccRepEnd').value;
+  const cur = state.settings.currency || 'جنيه';
+  try {
+    const rows = await api.getCostCenterReport(start, end);
+    document.getElementById('costCenterReportResult').innerHTML = (rows || []).length === 0 ? emptyRow_('📊', 'لا يوجد بيانات في الفترة دي') :
+      rows.map(function (r) {
+        return '<div class="list-item" style="display:block; padding:12px 4px;"><b>' + r.costCenter + '</b>' +
+          '<div style="margin-top:6px; font-size:12px; color:var(--text-dim);">مبيعات: ' + formatMoney_(r.sales, cur) + ' · مصروفات: ' + formatMoney_(r.expenses, cur) + ' · الصافي: ' + formatMoney_(r.net, cur) + '</div></div>';
+      }).join('');
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -2755,6 +2854,205 @@ async function updateCheck_(id, status, treasuryAccountId) {
     showToast_('تم تحديث حالة الشيك ✅', 'success');
     renderChecksPage();
   } catch (err) { showErrorToast_(err); }
+}
+
+// ============================================================
+// ميزان المراجعة
+// ============================================================
+async function renderTrialBalancePage() {
+  const today = new Date().toISOString().slice(0, 10);
+  setContent_(
+    '<div class="card"><div class="card-heading">⚖️ ميزان المراجعة</div><div class="card-desc">كل الحسابات ومجاميعها المدينة والدائنة من دفتر اليومية حتى تاريخ معيّن</div>' +
+      '<div class="field"><label>حتى تاريخ</label><input type="date" id="tbEndDate" value="' + today + '"></div>' +
+      '<button class="btn info-btn" style="margin-top:14px;" onclick="loadTrialBalance_()">📊 عرض</button></div>' +
+    '<div id="trialBalanceResult" style="margin-top:18px;"></div>'
+  );
+  loadTrialBalance_();
+}
+
+async function loadTrialBalance_() {
+  const endDate = document.getElementById('tbEndDate').value;
+  const cur = state.settings.currency || 'جنيه';
+  try {
+    const rows = await api.getTrialBalance(endDate);
+    let totalDebit = 0, totalCredit = 0;
+    let html = '<div class="card">';
+    if (rows.length === 0) {
+      html += emptyRow_('⚖️', 'لا يوجد قيود محاسبية لغاية التاريخ ده');
+    } else {
+      rows.forEach(function (r) {
+        totalDebit += Number(r.debit); totalCredit += Number(r.credit);
+        html += '<div class="list-item"><span><b>' + r.accountCode + '</b> — ' + r.accountName + ' <span class="pill">' + r.accountType + '</span></span>' +
+          '<span>مدين: ' + formatMoney_(r.debit, cur) + ' &nbsp; دائن: ' + formatMoney_(r.credit, cur) + '</span></div>';
+      });
+      html += '<div class="list-item" style="font-weight:900; border-top:2px solid var(--border); margin-top:6px; padding-top:12px;"><span>الإجمالي</span>' +
+        '<span>مدين: ' + formatMoney_(totalDebit, cur) + ' &nbsp; دائن: ' + formatMoney_(totalCredit, cur) + '</span></div>';
+      if (Math.abs(totalDebit - totalCredit) > 0.01) {
+        html += '<div class="hint" style="color:var(--danger); margin-top:10px;">⚠️ الميزان مش متزن! فرق ' + formatMoney_(Math.abs(totalDebit - totalCredit), cur) + '</div>';
+      } else {
+        html += '<div class="hint" style="color:var(--success); margin-top:10px;">✅ الميزان متزن</div>';
+      }
+    }
+    html += '</div>';
+    document.getElementById('trialBalanceResult').innerHTML = html;
+  } catch (err) { showErrorToast_(err); }
+}
+
+// ============================================================
+// الميزانية العمومية
+// ============================================================
+async function renderBalanceSheetPage() {
+  const today = new Date().toISOString().slice(0, 10);
+  setContent_(
+    '<div class="card"><div class="card-heading">🏛️ الميزانية العمومية</div><div class="card-desc">الأصول والخصوم وحقوق الملكية حتى تاريخ معيّن</div>' +
+      '<div class="field"><label>حتى تاريخ</label><input type="date" id="bsAsOf" value="' + today + '"></div>' +
+      '<button class="btn info-btn" style="margin-top:14px;" onclick="loadBalanceSheet_()">📊 عرض</button></div>' +
+    '<div id="balanceSheetResult" style="margin-top:18px;"></div>'
+  );
+  loadBalanceSheet_();
+}
+
+function bsSection_(title, items, cur) {
+  const total = (items || []).reduce(function (s, i) { return s + Number(i.balance); }, 0);
+  let html = '<div class="card"><div class="card-heading">' + title + '</div>';
+  html += (items || []).length === 0 ? emptyRow_('📄', 'لا يوجد أرصدة') :
+    items.map(function (i) { return '<div class="list-item"><span>' + i.name + '</span><b>' + formatMoney_(i.balance, cur) + '</b></div>'; }).join('');
+  html += '<div class="list-item" style="font-weight:900; border-top:2px solid var(--border); margin-top:6px; padding-top:10px;"><span>الإجمالي</span><b>' + formatMoney_(total, cur) + '</b></div></div>';
+  return { html: html, total: total };
+}
+
+async function loadBalanceSheet_() {
+  const asOf = document.getElementById('bsAsOf').value;
+  const cur = state.settings.currency || 'جنيه';
+  try {
+    const data = await api.getBalanceSheet(asOf);
+    const assets = bsSection_('💰 الأصول', data.assets, cur);
+    const liabilities = bsSection_('📉 الخصوم', data.liabilities, cur);
+    const equity = bsSection_('🏦 حقوق الملكية', data.equity, cur);
+    const totalEquityWithEarnings = equity.total + Number(data.retainedEarnings || 0);
+    let html = '<div class="grid grid-2">' + assets.html + '<div>' + liabilities.html +
+      '<div style="margin-top:16px;">' + equity.html + '</div></div></div>';
+    html += '<div class="card" style="margin-top:16px;"><div class="list-item"><span>الأرباح المحتجزة (صافي الربح التراكمي)</span><b>' + formatMoney_(data.retainedEarnings, cur) + '</b></div>' +
+      '<div class="list-item" style="font-weight:900;"><span>إجمالي الخصوم + حقوق الملكية</span><b>' + formatMoney_(liabilities.total + totalEquityWithEarnings, cur) + '</b></div>' +
+      (Math.abs(assets.total - (liabilities.total + totalEquityWithEarnings)) > 0.5
+        ? '<div class="hint" style="color:var(--danger); margin-top:8px;">⚠️ الميزانية مش متوازنة — فرق ' + formatMoney_(Math.abs(assets.total - (liabilities.total + totalEquityWithEarnings)), cur) + '</div>'
+        : '<div class="hint" style="color:var(--success); margin-top:8px;">✅ متوازنة</div>') + '</div>';
+    document.getElementById('balanceSheetResult').innerHTML = html;
+  } catch (err) { showErrorToast_(err); }
+}
+
+// ============================================================
+// قفل الفترات المحاسبية
+// ============================================================
+async function renderPeriodsPage() {
+  const now = new Date();
+  const currentLabel = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  try {
+    const periods = await api.listAccountingPeriods();
+    let html = '<div class="card"><div class="card-heading">🔒 قفل / فتح فترة</div><div class="card-desc">بعد قفل شهر، محدش يقدر يضيف بيعة أو مصروف بتاريخ فيه</div>' +
+      '<div class="field"><label>الفترة (YYYY-MM)</label><input type="text" id="periodLabel" value="' + currentLabel + '" placeholder="2026-08"></div>' +
+      '<div class="card-row" style="gap:10px; margin-top:14px;">' +
+      '<button class="btn danger" onclick="submitClosePeriod_()">🔒 قفل الفترة</button>' +
+      '<button class="btn secondary" onclick="submitReopenPeriod_()">🔓 فتح الفترة تاني</button></div></div>';
+
+    html += '<div class="section-title">الفترات المسجّلة</div><div class="card">';
+    html += periods.length === 0 ? emptyRow_('🔒', 'لسه مفيش أي فترة اتقفلت') :
+      periods.map(function (p) {
+        return '<div class="list-item"><span>' + p.periodLabel + '</span><span class="pill ' + (p.closed ? 'danger' : 'success') + '">' + (p.closed ? 'مقفولة' : 'مفتوحة') + '</span></div>';
+      }).join('');
+    html += '</div>';
+    setContent_(html);
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function submitClosePeriod_() {
+  const label = document.getElementById('periodLabel').value.trim();
+  if (!label) { showToast_('اكتب الفترة', 'error'); return; }
+  openConfirmModal('تأكيد قفل الفترة', 'هتقفلي فترة ' + label + ' — محدش هيقدر يضيف بيانات بتاريخ فيها بعد كده', async function () {
+    try { await api.closeAccountingPeriod({ username: state.user.username }, label); showToast_('تم قفل الفترة ✅', 'success'); renderPeriodsPage(); }
+    catch (err) { showErrorToast_(err); }
+  });
+}
+
+async function submitReopenPeriod_() {
+  const label = document.getElementById('periodLabel').value.trim();
+  if (!label) { showToast_('اكتب الفترة', 'error'); return; }
+  try { await api.reopenAccountingPeriod({ username: state.user.username }, label); showToast_('تم فتح الفترة ✅', 'success'); renderPeriodsPage(); }
+  catch (err) { showErrorToast_(err); }
+}
+
+// ============================================================
+// الأصول الثابتة والإهلاك
+// ============================================================
+async function renderFixedAssetsPage() {
+  try {
+    const assets = await api.listFixedAssets();
+    const cur = state.settings.currency || 'جنيه';
+    let html = '<div class="card"><div class="card-heading">🏗️ الأصول الثابتة</div><div class="card-desc">الإهلاك بيتحسب تلقائيًا خطي على مدة العمر الافتراضي (بالشهور)</div>' +
+      '<button class="btn" style="margin-top:6px;" onclick="submitRunDepreciation_()">📉 تشغيل إهلاك الشهر الحالي</button></div>';
+
+    html += '<div class="section-title">الأصول المسجّلة</div><div class="card">';
+    html += assets.length === 0 ? emptyRow_('🏗️', 'لا يوجد أصول ثابتة مسجّلة (تُضاف تلقائيًا عند تسجيل مصروف كـ"أصل ثابت")') :
+      assets.map(function (a) {
+        const net = Number(a.amount) - Number(a.accumulatedDepreciation);
+        return '<div class="list-item" style="display:block; padding:14px 4px;"><b>' + (a.description || 'أصل') + '</b>' +
+          '<div style="margin-top:6px; font-size:12px; color:var(--text-dim);">التكلفة: ' + formatMoney_(a.amount, cur) +
+          ' · مجمع الإهلاك: ' + formatMoney_(a.accumulatedDepreciation, cur) + ' · صافي القيمة: ' + formatMoney_(net, cur) +
+          ' · العمر الافتراضي: ' + a.usefulLifeMonths + ' شهر</div></div>';
+      }).join('');
+    html += '</div>';
+    setContent_(html);
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function submitRunDepreciation_() {
+  try { await api.runMonthlyDepreciation({ username: state.user.username }); showToast_('تم تشغيل الإهلاك الشهري ✅', 'success'); renderFixedAssetsPage(); }
+  catch (err) { showErrorToast_(err); }
+}
+
+// ============================================================
+// أرصدة أول مدة
+// ============================================================
+async function renderOpeningBalancesPage() {
+  try {
+    const [balances, accounts] = await Promise.all([api.listOpeningBalances(), api.getAccounts()]);
+    const cur = state.settings.currency || 'جنيه';
+    const today = new Date().toISOString().slice(0, 10);
+    let html = '<div class="card"><div class="card-heading">📂 رصيد افتتاحي جديد</div>' +
+      '<div class="field"><label>الحساب</label><select id="obAccount">' + accounts.map(function (a) { return '<option value="' + a.id + '">' + a.code + ' — ' + a.name + '</option>'; }).join('') + '</select></div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>المبلغ</label><input type="number" id="obAmount"></div>' +
+      '<div class="field"><label>كتاريخ</label><input type="date" id="obDate" value="' + today + '"></div></div>' +
+      '<div class="field" style="margin-top:10px;"><label>وصف</label><input type="text" id="obDesc"></div>' +
+      '<button class="btn success block" style="margin-top:14px;" onclick="submitOpeningBalance_()">➕ إضافة</button>' +
+      '<button class="btn block" style="margin-top:10px;" onclick="submitPostOpeningBalances_()">📮 ترحيل كل الأرصدة المفتوحة لدفتر اليومية</button>' +
+      '<div class="hint" style="margin-top:8px;">الترحيل بيقفل الرصيد بحيث محدش يقدر يعدله تاني، وبيسجله كقيد رسمي في دفتر اليومية</div></div>';
+
+    html += '<div class="section-title">الأرصدة المسجّلة</div><div class="card">';
+    html += balances.length === 0 ? emptyRow_('📂', 'لسه مفيش أرصدة أول مدة مضافة') :
+      balances.map(function (b) {
+        return '<div class="list-item"><span>' + b.accountName + (b.description ? ' — ' + b.description : '') + '</span>' +
+          '<span>' + formatMoney_(b.amount, cur) + ' <span class="pill ' + (b.locked ? 'success' : 'warning') + '">' + (b.locked ? 'مُرحّل' : 'لسه') + '</span></span></div>';
+      }).join('');
+    html += '</div>';
+    setContent_(html);
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function submitOpeningBalance_() {
+  const payload = {
+    accountId: document.getElementById('obAccount').value, amount: Number(document.getElementById('obAmount').value),
+    asOfDate: document.getElementById('obDate').value, description: document.getElementById('obDesc').value
+  };
+  if (!payload.accountId || !payload.amount) { showToast_('الحساب والمبلغ مطلوبين', 'error'); return; }
+  try { await api.addOpeningBalance({ username: state.user.username }, payload); showToast_('تم الإضافة ✅', 'success'); renderOpeningBalancesPage(); }
+  catch (err) { showErrorToast_(err); }
+}
+
+async function submitPostOpeningBalances_() {
+  openConfirmModal('تأكيد الترحيل', 'هيترحّل كل الأرصدة المفتوحة لدفتر اليومية ويتقفلوا نهائيًا', async function () {
+    try { await api.postOpeningBalances({ username: state.user.username }); showToast_('تم الترحيل ✅', 'success'); renderOpeningBalancesPage(); }
+    catch (err) { showErrorToast_(err); }
+  });
 }
 
 // ============================================================
