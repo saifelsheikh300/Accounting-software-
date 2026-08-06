@@ -1386,17 +1386,18 @@ async function renderSupplierTabContent_() {
   const el = document.getElementById('supplierTabContent');
 
   if (supplierPageTab === 'neworder') {
-    const suppliers = await getSuppliersCached_().catch(function () { return []; });
-    if (suppliers.length === 0) {
-      el.innerHTML = '<div class="card">' + emptyRow_('🏭', 'لسه مفيش موردين — لازم تضيفي مورد الأول') +
-        '<button class="btn success block" style="margin-top:12px;" onclick="switchSupplierPageTab_(\'suppliers\')">➕ إضافة مورد</button></div>';
-      return;
-    }
+    let suppliers = [];
+    try { suppliers = await getSuppliersCached_(); }
+    catch (err) { showErrorToast_(err); }
+
+    const supplierStepHtml = suppliers.length === 0
+      ? '<div class="hint" style="color:var(--danger);">لسه مفيش موردين مسجلين</div>' +
+        '<button class="btn success block" style="margin-top:8px;" onclick="openQuickAddSupplierModal_()">➕ إضافة مورد الأول</button>'
+      : '<div class="field" style="margin-top:8px;"><select id="poSupplierSelect">' + suppliers.map(function (s) { return '<option>' + s.name + '</option>'; }).join('') + '</select></div>' +
+        '<div class="hint" style="cursor:pointer; color:var(--accent); margin-top:6px;" onclick="openQuickAddSupplierModal_()">➕ المورد مش موجود؟ ضيفيه بسرعة</div>';
+
     el.innerHTML =
-      '<div class="card"><div class="card-heading">1️⃣ اختاري المورد</div>' +
-        '<div class="field" style="margin-top:8px;"><select id="poSupplierSelect">' + suppliers.map(function (s) { return '<option>' + s.name + '</option>'; }).join('') + '</select></div>' +
-        '<div class="hint" style="cursor:pointer; color:var(--accent); margin-top:6px;" onclick="openQuickAddSupplierModal_()">➕ المورد مش موجود؟ ضيفيه بسرعة</div>' +
-      '</div>' +
+      '<div class="card"><div class="card-heading">1️⃣ اختاري المورد</div>' + supplierStepHtml + '</div>' +
       '<div class="card" style="margin-top:14px;"><div class="card-heading">2️⃣ ضيفي الأصناف</div>' +
         '<div class="field" style="margin-top:8px;"><input type="text" id="poSearchInput" oninput="poSearch_(this.value)" placeholder="🔍 دوري باسم المنتج، أو اسيبيها فاضية تشوفي كل المنتجات..."></div>' +
         '<div id="poSearchResults"></div></div>' +
@@ -1415,7 +1416,7 @@ async function renderSupplierTabContent_() {
     getTreasuryAccountsCached_().then(function (accounts) {
       document.getElementById('poTreasuryAccount').innerHTML = treasuryAccountOptionsHtml_(accounts);
       refreshSelect_('poTreasuryAccount');
-    }).catch(function () { /* صامت */ });
+    }).catch(function (err) { showErrorToast_(err); });
 
   } else if (supplierPageTab === 'suppliers') {
     el.innerHTML =
@@ -1683,8 +1684,10 @@ function removeFromPoCart_(idx) { poCart.splice(idx, 1); renderPoCart_(); }
 
 async function submitPurchaseOrder_() {
   if (poCart.length === 0) { showToast_('لازم تضيف صنف واحد على الأقل', 'error'); return; }
+  const supplierEl = document.getElementById('poSupplierSelect');
+  if (!supplierEl || !supplierEl.value) { showToast_('لازم تضيفي مورد وتختاريه الأول', 'error'); return; }
   const payload = {
-    supplierName: document.getElementById('poSupplierSelect').value,
+    supplierName: supplierEl.value,
     items: poCart.map(function (i) { return { variantCode: i.variantCode, qty: i.qty, price: i.price }; }),
     paymentStatus: document.getElementById('poPaymentStatus').value, amountPaid: Number(document.getElementById('poAmountPaid').value) || 0,
     treasuryAccountId: document.getElementById('poTreasuryAccount').value || null
