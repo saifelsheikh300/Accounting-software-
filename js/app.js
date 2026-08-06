@@ -743,8 +743,8 @@ function buildInventoryRows_(products) {
       (p.variants.length === 0 ? '<span class="hint">منتج بدون متغيرات (يُباع مباشرة)</span>' :
         p.variants.map(function (v) {
           const low = v.quantity <= v.lowStockThreshold;
-          return '<span class="variant-chip">' + v.code + ' — ' + (v.color || '—') + '/' + (v.size || '—') +
-            ' <span class="qty-tag" style="' + (low ? 'color:var(--danger);' : '') + '">' + v.quantity + '</span></span>';
+          return '<span class="variant-chip" style="cursor:pointer;" onclick="event.stopPropagation(); openEditVariantModal_(\'' + v.code.replace(/'/g, "\\'") + '\')">' + v.code + ' — ' + (v.color || '—') + '/' + (v.size || '—') +
+            ' <span class="qty-tag" style="' + (low ? 'color:var(--danger);' : '') + '">' + v.quantity + '</span> ✏️</span>';
         }).join('')) +
       '</td></tr>';
     return mainRow + variantsRow;
@@ -975,6 +975,47 @@ async function submitEditProduct_(code) {
   try {
     await api.updateProduct({ username: state.user.username }, payload);
     showToast_('تم تعديل المنتج ✅', 'success');
+    closeModal();
+    await loadInventoryBaseData_();
+    setContent_(buildInventoryMainHtml_());
+  } catch (err) { showErrorToast_(err); }
+}
+
+// ------------------------------------------------------------
+// مودال: تعديل متغير (سعر الشراء/سعر البيع/الكمية/حد التنبيه)
+// ------------------------------------------------------------
+function openEditVariantModal_(variantCode) {
+  let v = null, productName = '';
+  Object.values(invProductsCache || {}).forEach(function (p) {
+    const found = p.variants.find(function (x) { return x.code === variantCode; });
+    if (found) { v = found; productName = p.name; }
+  });
+  if (!v) return;
+
+  const body =
+    '<div class="hint" style="margin-bottom:10px;">' + productName + ' — ' + (v.color || '—') + '/' + (v.size || '—') + '</div>' +
+    '<div class="form-grid">' +
+      '<div class="field"><label>سعر الشراء (التكلفة)</label><input type="number" id="editVarCost" value="' + v.cost + '"></div>' +
+      '<div class="field"><label>سعر البيع</label><input type="number" id="editVarSalePrice" value="' + (v.specialPrice || '') + '"></div>' +
+    '</div>' +
+    '<div class="form-grid" style="margin-top:10px;">' +
+      '<div class="field"><label>الكمية بالمخزون</label><input type="number" id="editVarQty" value="' + v.quantity + '"></div>' +
+      '<div class="field"><label>حد التنبيه (منخفض)</label><input type="number" id="editVarLowStock" value="' + v.lowStockThreshold + '"></div>' +
+    '</div>';
+  openModal('✏️ تعديل ' + v.code, '', body,
+    '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn success" onclick="submitEditVariant_(\'' + variantCode.replace(/'/g, "\\'") + '\')">✅ حفظ</button>');
+}
+
+async function submitEditVariant_(variantCode) {
+  const payload = {
+    cost: Number(document.getElementById('editVarCost').value) || 0,
+    specialPrice: Number(document.getElementById('editVarSalePrice').value) || null,
+    quantity: Number(document.getElementById('editVarQty').value) || 0,
+    lowStockThreshold: Number(document.getElementById('editVarLowStock').value) || 0
+  };
+  try {
+    await api.updateVariant({ username: state.user.username }, variantCode, payload);
+    showToast_('تم تعديل المتغير ✅', 'success');
     closeModal();
     await loadInventoryBaseData_();
     setContent_(buildInventoryMainHtml_());
@@ -1544,9 +1585,11 @@ async function poSearch_(query) {
     let html = results.map(function (p) {
       return p.variants.map(function (v) {
         const label = (p.name + ' — ' + v.color + ' ' + v.size).replace(/'/g, '');
-        return '<div class="product-tile" onclick="addToPoCart_(\'' + v.code + '\', \'' + label + '\', ' + v.cost + ')">' +
+        const salePrice = v.specialPrice != null ? v.specialPrice : p.basePrice;
+        return '<div class="product-tile" onclick="addToPoCart_(\'' + v.code + '\', \'' + label + '\', ' + v.cost + ', ' + salePrice + ')">' +
           '<div class="product-thumb">👕</div><div class="product-tile-info"><div class="product-tile-name">' + p.name + '</div>' +
-          '<div class="product-tile-meta">' + v.color + ' · ' + v.size + '</div></div><b>آخر تكلفة: ' + v.cost + '</b></div>';
+          '<div class="product-tile-meta">' + v.color + ' · ' + v.size + '</div></div>' +
+          '<b style="text-align:left; line-height:1.6;">شراء: ' + v.cost + '<br>بيع: ' + salePrice + '</b></div>';
       }).join('');
     }).join('');
 
@@ -1594,12 +1637,13 @@ function renderPoQuickAddForm_(prefillName) {
       '<button class="inline-add-btn" onclick="openPoQuickAddCategoryPrompt_(true)">+ فئة فرعية</button></div>' +
       '<div class="form-grid" style="margin-top:12px;">' +
         '<div class="field"><label>اسم المنتج</label><input type="text" id="poQuickName" value="' + (prefillName || '').replace(/"/g, '') + '"></div>' +
-        '<div class="field"><label>سعر التكلفة</label><input type="number" id="poQuickPrice" placeholder="0"></div>' +
+        '<div class="field"><label>سعر الشراء (التكلفة)</label><input type="number" id="poQuickPrice" placeholder="0"></div>' +
       '</div>' +
       '<div class="form-grid">' +
+        '<div class="field"><label>سعر البيع</label><input type="number" id="poQuickSalePrice" placeholder="0"></div>' +
         '<div class="field"><label>الكمية المشتراة</label><input type="number" id="poQuickQty" value="1"></div>' +
-        '<div class="field"><label>الكود (اختياري)</label><input type="text" id="poQuickCode" placeholder="تلقائي"></div>' +
       '</div>' +
+      '<div class="field"><label>الكود (اختياري)</label><input type="text" id="poQuickCode" placeholder="تلقائي"></div>' +
       '<button class="btn success block" style="margin-top:10px;" onclick="submitPoQuickAdd_()">✅ إضافة المنتج للمخزون وللأوردر</button>' +
     '</div>';
   enhanceSelects_(document.getElementById('poQuickAddInline'));
@@ -1644,27 +1688,29 @@ async function submitPoQuickAddCategory_(isSub, parentCode) {
 async function submitPoQuickAdd_() {
   const name = document.getElementById('poQuickName').value.trim();
   const price = Number(document.getElementById('poQuickPrice').value);
+  const salePrice = Number(document.getElementById('poQuickSalePrice').value) || price;
   const qty = Number(document.getElementById('poQuickQty').value) || 1;
   const manualCode = document.getElementById('poQuickCode').value.trim();
   const subCategory = document.getElementById('poQuickSubCat').value;
   if (!subCategory) { showToast_('اختاري فئة فرعية', 'error'); return; }
-  if (!name || !price) { showToast_('الاسم والسعر مطلوبين', 'error'); return; }
+  if (!name || !price) { showToast_('الاسم وسعر الشراء مطلوبين', 'error'); return; }
 
   try {
     const res = await api.addProductWithVariants({ username: state.user.username }, {
-      name: name, subCategory: subCategory, basePrice: price,
-      variants: [{ color: '', size: '', quantity: 0, cost: price }], manualCode: manualCode || null
+      name: name, subCategory: subCategory, basePrice: salePrice,
+      variants: [{ color: '', size: '', quantity: 0, cost: price, specialPrice: salePrice }], manualCode: manualCode || null
     });
     showToast_('تمت إضافة "' + name + '" للمخزون ✅', 'success');
-    addToPoCart_(res.variantCodes[0], name, price, qty);
+    addToPoCart_(res.variantCodes[0], name, price, salePrice, qty);
     document.getElementById('poSearchInput').value = '';
     poSearch_('');
   } catch (err) { showErrorToast_(err); }
 }
 
-function addToPoCart_(variantCode, label, cost, qty) {
+function addToPoCart_(variantCode, label, cost, salePrice, qty) {
   const existing = poCart.find(function (i) { return i.variantCode === variantCode; });
-  if (existing) existing.qty += (qty || 1); else poCart.push({ variantCode: variantCode, label: label, price: cost, qty: qty || 1 });
+  if (existing) existing.qty += (qty || 1);
+  else poCart.push({ variantCode: variantCode, label: label, price: cost, salePrice: salePrice || 0, qty: qty || 1 });
   renderPoCart_();
 }
 
@@ -1674,12 +1720,17 @@ function renderPoCart_() {
   let total = 0;
   el.innerHTML = poCart.map(function (i, idx) {
     total += i.price * i.qty;
-    return '<div class="list-item"><span>' + i.label + '</span><span>سعر <input type="number" value="' + i.price + '" style="width:65px; padding:5px;" onchange="updatePoItemPrice_(' + idx + ', this.value)"> ' +
-      'كمية <input type="number" value="' + i.qty + '" style="width:50px; padding:5px;" onchange="updatePoItemQty_(' + idx + ', this.value)"> ' +
-      '<span class="del-x" onclick="removeFromPoCart_(' + idx + ')" style="cursor:pointer;">✕</span></span></div>';
-  }).join('') + '<div class="list-item"><b>الإجمالي</b><b>' + total + '</b></div>';
+    return '<div class="list-item" style="display:block; padding:12px 4px;"><div class="card-row"><b>' + i.label + '</b>' +
+      '<span class="del-x" onclick="removeFromPoCart_(' + idx + ')" style="cursor:pointer;">✕</span></div>' +
+      '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; font-size:12.5px;">' +
+      '<span>شراء <input type="number" value="' + i.price + '" style="width:65px; padding:5px;" onchange="updatePoItemPrice_(' + idx + ', this.value)"></span>' +
+      '<span>بيع <input type="number" value="' + i.salePrice + '" style="width:65px; padding:5px;" onchange="updatePoItemSalePrice_(' + idx + ', this.value)"></span>' +
+      '<span>كمية <input type="number" value="' + i.qty + '" style="width:50px; padding:5px;" onchange="updatePoItemQty_(' + idx + ', this.value)"></span>' +
+      '</div></div>';
+  }).join('') + '<div class="list-item" style="font-weight:900;"><b>الإجمالي (شراء)</b><b>' + total + '</b></div>';
 }
 function updatePoItemPrice_(idx, val) { poCart[idx].price = Number(val); renderPoCart_(); }
+function updatePoItemSalePrice_(idx, val) { poCart[idx].salePrice = Number(val); renderPoCart_(); }
 function updatePoItemQty_(idx, val) { poCart[idx].qty = Number(val); renderPoCart_(); }
 function removeFromPoCart_(idx) { poCart.splice(idx, 1); renderPoCart_(); }
 
@@ -1695,6 +1746,9 @@ async function submitPurchaseOrder_() {
   };
   try {
     const res = await api.createPurchaseOrder({ username: state.user.username }, payload);
+    await Promise.all(poCart.map(function (i) {
+      return i.salePrice > 0 ? api.setVariantSalePrice({ username: state.user.username }, i.variantCode, i.salePrice).catch(function () { /* صامت */ }) : null;
+    }));
     showToast_('تم تسجيل أوردر الشراء ✅ الإجمالي: ' + res.total, 'success'); renderSuppliersPage();
   } catch (err) { showErrorToast_(err); }
 }

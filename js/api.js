@@ -336,6 +336,20 @@ api.getSuppliers = async function () {
   return (data || []).map(function (s) { return { name: s.name, contact: s.contact, notes: s.notes }; });
 };
 
+api.setVariantSalePrice = async function (session, variantCode, price) {
+  const { error } = await supabaseClient.from('product_variants').update({ special_price: price }).eq('code', variantCode);
+  if (error) throw error;
+  return { success: true };
+};
+
+api.updateVariant = async function (session, variantCode, payload) {
+  const { error } = await supabaseClient.from('product_variants').update({
+    cost: payload.cost, quantity: payload.quantity, special_price: payload.specialPrice || null, low_stock_threshold: payload.lowStockThreshold
+  }).eq('code', variantCode);
+  if (error) throw error;
+  return { success: true };
+};
+
 api.addSupplier = async function (session, payload) {
   const { error } = await supabaseClient.from('suppliers').insert({ name: payload.name, contact: payload.contact || '' });
   if (error) { if (error.code === '23505') throw new Error('فيه مورد بنفس الاسم ده بالفعل'); throw error; }
