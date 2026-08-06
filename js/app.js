@@ -1432,6 +1432,8 @@ async function renderSupplierTabContent_() {
     el.innerHTML = '<div class="card"><div class="card-heading">🧾 أوردرات الشراء</div><div id="poList" style="margin-top:10px;"></div></div>';
     loadPurchaseOrders_();
   }
+
+  enhanceSelects_(el);
 }
 
 function onPoPaymentStatusChange_() {
