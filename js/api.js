@@ -203,8 +203,10 @@ api.addProductWithVariants = async function (session, payload) {
   return { productCode: data.productCode, variantCodes: data.variantCodes || [] };
 };
 
-api.searchProducts = async function (query) {
-  const { data, error } = await supabaseClient.from('products').select('*, product_variants(*)').ilike('name', '%' + query + '%').eq('status', 'نشط').limit(15);
+api.searchProducts = async function (query, limit) {
+  let req = supabaseClient.from('products').select('*, product_variants(*)').eq('status', 'نشط').order('name').limit(limit || 15);
+  if (query) req = req.ilike('name', '%' + query + '%');
+  const { data, error } = await req;
   if (error) throw error;
   return (data || []).map(function (p) {
     return {

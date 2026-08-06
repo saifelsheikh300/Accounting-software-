@@ -1398,7 +1398,7 @@ async function renderSupplierTabContent_() {
         '<div class="hint" style="cursor:pointer; color:var(--accent); margin-top:6px;" onclick="openQuickAddSupplierModal_()">➕ المورد مش موجود؟ ضيفيه بسرعة</div>' +
       '</div>' +
       '<div class="card" style="margin-top:14px;"><div class="card-heading">2️⃣ ضيفي الأصناف</div>' +
-        '<div class="field" style="margin-top:8px;"><input type="text" id="poSearchInput" oninput="poSearch_(this.value)" placeholder="🔍 اكتبي اسم المنتج..."></div>' +
+        '<div class="field" style="margin-top:8px;"><input type="text" id="poSearchInput" oninput="poSearch_(this.value)" placeholder="🔍 دوري باسم المنتج، أو اسيبيها فاضية تشوفي كل المنتجات..."></div>' +
         '<div id="poSearchResults"></div></div>' +
       '<div class="card" style="margin-top:14px;"><div class="card-heading">3️⃣ السلة</div><div id="poCartList" style="margin-top:8px;"></div></div>' +
       '<div class="card" style="margin-top:14px;"><div class="card-heading">4️⃣ الدفع</div>' +
@@ -1411,6 +1411,7 @@ async function renderSupplierTabContent_() {
       '<button class="btn success block" style="margin-top:16px; font-size:15px; padding:16px;" onclick="submitPurchaseOrder_()">✅ تسجيل أوردر الشراء</button>';
 
     renderPoCart_();
+    poSearch_('');
     getTreasuryAccountsCached_().then(function (accounts) {
       document.getElementById('poTreasuryAccount').innerHTML = treasuryAccountOptionsHtml_(accounts);
       refreshSelect_('poTreasuryAccount');
@@ -1536,9 +1537,8 @@ function switchSupplierTab_(tab) {
 }
 
 async function poSearch_(query) {
-  if (!query || query.length < 2) { document.getElementById('poSearchResults').innerHTML = ''; return; }
   try {
-    const results = await api.searchProducts(query);
+    const results = await api.searchProducts(query, query ? 30 : 60);
     let html = results.map(function (p) {
       return p.variants.map(function (v) {
         const label = (p.name + ' — ' + v.color + ' ' + v.size).replace(/'/g, '');
@@ -1549,11 +1549,15 @@ async function poSearch_(query) {
     }).join('');
 
     if (results.length === 0) {
-      const safeQuery = query.replace(/'/g, "\\'");
-      html = '<div class="callout-notfound" id="poNotFoundPrompt">' +
-        '⚠️ المنتج "' + query + '" غير موجود في المخزون — ' +
-        '<span style="color:var(--accent); font-weight:800; cursor:pointer; text-decoration:underline;" onclick="openPoQuickAddForm_(\'' + safeQuery + '\')">تريدين إضافته؟</span>' +
-        '</div><div id="poQuickAddInline"></div>';
+      if (query) {
+        const safeQuery = query.replace(/'/g, "\\'");
+        html = '<div class="callout-notfound" id="poNotFoundPrompt">' +
+          '⚠️ المنتج "' + query + '" غير موجود في المخزون — ' +
+          '<span style="color:var(--accent); font-weight:800; cursor:pointer; text-decoration:underline;" onclick="openPoQuickAddForm_(\'' + safeQuery + '\')">تريدين إضافته؟</span>' +
+          '</div><div id="poQuickAddInline"></div>';
+      } else {
+        html = emptyRow_('📦', 'لا يوجد منتجات في المخزون بعد — دوري باسم منتج جديد وهقولك تضيفيه ازاي');
+      }
     }
     document.getElementById('poSearchResults').innerHTML = html;
   } catch (err) { showErrorToast_(err); }
@@ -1651,8 +1655,8 @@ async function submitPoQuickAdd_() {
     });
     showToast_('تمت إضافة "' + name + '" للمخزون ✅', 'success');
     addToPoCart_(res.variantCodes[0], name, price, qty);
-    document.getElementById('poSearchResults').innerHTML = '';
     document.getElementById('poSearchInput').value = '';
+    poSearch_('');
   } catch (err) { showErrorToast_(err); }
 }
 
