@@ -1354,34 +1354,109 @@ async function doQuickReturnSale_(saleId) {
 // شاشة الموردين والمشتريات
 // ============================================================
 let poCart = [];
+let supplierPageTab = 'neworder';
+let suppliersCache_ = null;
 
 async function renderSuppliersPage() {
+  supplierPageTab = 'neworder';
+  poCart = [];
+  suppliersCache_ = null;
+  renderSupplierPageShell_();
+}
+
+function renderSupplierPageShell_() {
   setContent_(
-    '<div class="grid grid-2">' +
+    '<div class="subtabs">' +
+      '<div class="subtab' + (supplierPageTab === 'neworder' ? ' active' : '') + '" onclick="switchSupplierPageTab_(\'neworder\')">🛒 أوردر شراء جديد</div>' +
+      '<div class="subtab' + (supplierPageTab === 'suppliers' ? ' active' : '') + '" onclick="switchSupplierPageTab_(\'suppliers\')">🏭 الموردين</div>' +
+      '<div class="subtab' + (supplierPageTab === 'orders' ? ' active' : '') + '" onclick="switchSupplierPageTab_(\'orders\')">🧾 الأوردرات السابقة</div>' +
+    '</div><div id="supplierTabContent"></div>'
+  );
+  renderSupplierTabContent_();
+}
+
+function switchSupplierPageTab_(tab) { supplierPageTab = tab; poCart = []; renderSupplierPageShell_(); }
+
+async function getSuppliersCached_() {
+  if (!suppliersCache_) suppliersCache_ = await api.getSuppliers();
+  return suppliersCache_;
+}
+
+async function renderSupplierTabContent_() {
+  const el = document.getElementById('supplierTabContent');
+
+  if (supplierPageTab === 'neworder') {
+    const suppliers = await getSuppliersCached_().catch(function () { return []; });
+    if (suppliers.length === 0) {
+      el.innerHTML = '<div class="card">' + emptyRow_('🏭', 'لسه مفيش موردين — لازم تضيفي مورد الأول') +
+        '<button class="btn success block" style="margin-top:12px;" onclick="switchSupplierPageTab_(\'suppliers\')">➕ إضافة مورد</button></div>';
+      return;
+    }
+    el.innerHTML =
+      '<div class="card"><div class="card-heading">1️⃣ اختاري المورد</div>' +
+        '<div class="field" style="margin-top:8px;"><select id="poSupplierSelect">' + suppliers.map(function (s) { return '<option>' + s.name + '</option>'; }).join('') + '</select></div>' +
+        '<div class="hint" style="cursor:pointer; color:var(--accent); margin-top:6px;" onclick="openQuickAddSupplierModal_()">➕ المورد مش موجود؟ ضيفيه بسرعة</div>' +
+      '</div>' +
+      '<div class="card" style="margin-top:14px;"><div class="card-heading">2️⃣ ضيفي الأصناف</div>' +
+        '<div class="field" style="margin-top:8px;"><input type="text" id="poSearchInput" oninput="poSearch_(this.value)" placeholder="🔍 اكتبي اسم المنتج..."></div>' +
+        '<div id="poSearchResults"></div></div>' +
+      '<div class="card" style="margin-top:14px;"><div class="card-heading">3️⃣ السلة</div><div id="poCartList" style="margin-top:8px;"></div></div>' +
+      '<div class="card" style="margin-top:14px;"><div class="card-heading">4️⃣ الدفع</div>' +
+        '<div class="form-grid" style="margin-top:8px;">' +
+          '<div class="field"><label>حالة الدفع</label><select id="poPaymentStatus" onchange="onPoPaymentStatusChange_()"><option>مدفوع بالكامل</option><option>مدفوع جزئيًا</option><option>متأخر/غير مدفوع</option></select></div>' +
+          '<div class="field" id="poAmountPaidWrap" style="display:none;"><label>المبلغ المدفوع دلوقتي</label><input type="number" id="poAmountPaid" value="0"></div>' +
+        '</div>' +
+        '<div class="field" id="poTreasuryWrap"><label>هيتخصم من حساب</label><select id="poTreasuryAccount"><option value="">جاري التحميل...</option></select></div>' +
+      '</div>' +
+      '<button class="btn success block" style="margin-top:16px; font-size:15px; padding:16px;" onclick="submitPurchaseOrder_()">✅ تسجيل أوردر الشراء</button>';
+
+    renderPoCart_();
+    getTreasuryAccountsCached_().then(function (accounts) {
+      document.getElementById('poTreasuryAccount').innerHTML = treasuryAccountOptionsHtml_(accounts);
+      refreshSelect_('poTreasuryAccount');
+    }).catch(function () { /* صامت */ });
+
+  } else if (supplierPageTab === 'suppliers') {
+    el.innerHTML =
       '<div class="card"><div class="card-heading">🏭 مورد جديد</div>' +
         '<div class="form-grid" style="margin-top:6px;">' +
           '<div class="field"><label>اسم المورد <span class="req">*</span></label><input type="text" id="supName"></div>' +
           '<div class="field"><label>رقم التواصل</label><input type="text" id="supContact"></div>' +
-        '</div><button class="btn success block" style="margin-top:14px;" onclick="submitSupplier_(event)">➕ إضافة مورد</button>' +
-        '<div class="card-heading" style="margin-top:26px;">📦 أوردر شراء جديد</div>' +
-        '<div class="field" style="margin-top:8px;"><label>المورد <span class="req">*</span></label><select id="poSupplierSelect"></select></div>' +
-        '<div class="field" style="margin-top:12px;"><input type="text" id="poSearchInput" oninput="poSearch_(this.value)" placeholder="ابحث عن منتج لإضافته..."></div>' +
-        '<div id="poSearchResults"></div><div id="poCartList" style="margin:10px 0;"></div>' +
-        '<div class="form-grid">' +
-          '<div class="field"><label>حالة الدفع</label><select id="poPaymentStatus"><option>مدفوع بالكامل</option><option>مدفوع جزئيًا</option><option>متأخر/غير مدفوع</option></select></div>' +
-          '<div class="field"><label>المبلغ المدفوع (لو جزئي)</label><input type="number" id="poAmountPaid" value="0"></div>' +
-        '</div>' +
-        '<div class="field"><label>هيتخصم من حساب (المبلغ المدفوع فقط)</label><select id="poTreasuryAccount"><option value="">جاري التحميل...</option></select></div>' +
-        '<button class="btn success block" style="margin-top:14px;" onclick="submitPurchaseOrder_()">✅ تسجيل أوردر الشراء</button></div>' +
-      '<div class="card"><div class="card-heading">📇 الموردون</div><div id="suppliersList" style="margin-top:10px;"></div>' +
-        '<div class="card-heading" style="margin-top:26px;">🧾 أوردرات الشراء الأخيرة</div><div id="poList" style="margin-top:10px;"></div></div></div>'
-  );
-  poCart = [];
-  loadSuppliers_(); loadPurchaseOrders_();
-  getTreasuryAccountsCached_().then(function (accounts) {
-    document.getElementById('poTreasuryAccount').innerHTML = treasuryAccountOptionsHtml_(accounts);
-    refreshSelect_('poTreasuryAccount');
-  }).catch(function () { /* صامت */ });
+        '</div><button class="btn success block" style="margin-top:14px;" onclick="submitSupplier_(event)">➕ إضافة مورد</button></div>' +
+      '<div class="card" style="margin-top:14px;"><div class="card-heading">📇 الموردون</div><div id="suppliersList" style="margin-top:10px;"></div></div>';
+    loadSuppliersListUI_();
+
+  } else {
+    el.innerHTML = '<div class="card"><div class="card-heading">🧾 أوردرات الشراء</div><div id="poList" style="margin-top:10px;"></div></div>';
+    loadPurchaseOrders_();
+  }
+}
+
+function onPoPaymentStatusChange_() {
+  const status = document.getElementById('poPaymentStatus').value;
+  document.getElementById('poAmountPaidWrap').style.display = status === 'مدفوع جزئيًا' ? '' : 'none';
+  document.getElementById('poTreasuryWrap').style.display = status === 'متأخر/غير مدفوع' ? 'none' : '';
+}
+
+function openQuickAddSupplierModal_() {
+  openModal('➕ مورد جديد بسرعة', '',
+    '<div class="field"><label>اسم المورد</label><input type="text" id="quickSupName"></div>' +
+    '<div class="field" style="margin-top:10px;"><label>رقم التواصل</label><input type="text" id="quickSupContact"></div>',
+    '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn success" onclick="submitQuickAddSupplier_()">إضافة</button>');
+}
+
+async function submitQuickAddSupplier_() {
+  const name = document.getElementById('quickSupName').value.trim();
+  if (!name) { showToast_('اسم المورد مطلوب', 'error'); return; }
+  try {
+    await api.addSupplier({ username: state.user.username }, { name: name, contact: document.getElementById('quickSupContact').value });
+    suppliersCache_ = null;
+    closeModal();
+    showToast_('تم إضافة المورد ✅', 'success');
+    await renderSupplierTabContent_();
+    const select = document.getElementById('poSupplierSelect');
+    if (select) select.value = name;
+  } catch (err) { showErrorToast_(err); }
 }
 
 async function submitSupplier_(evt) {
@@ -1390,14 +1465,15 @@ async function submitSupplier_(evt) {
   const btn = evt.target; btn.disabled = true;
   try {
     await api.addSupplier({ username: state.user.username }, { name: name, contact: document.getElementById('supContact').value });
-    showToast_('تم إضافة المورد ✅', 'success'); renderSuppliersPage();
+    suppliersCache_ = null;
+    showToast_('تم إضافة المورد ✅', 'success');
+    renderSupplierTabContent_();
   } catch (err) { btn.disabled = false; showErrorToast_(err); }
 }
 
-async function loadSuppliers_() {
+async function loadSuppliersListUI_() {
   try {
-    const suppliers = await api.getSuppliers();
-    document.getElementById('poSupplierSelect').innerHTML = suppliers.map(function (s) { return '<option>' + s.name + '</option>'; }).join('') || '<option value="">أضف مورد الأول</option>';
+    const suppliers = await getSuppliersCached_();
     document.getElementById('suppliersList').innerHTML = suppliers.length === 0 ? emptyRow_('🏭', 'لا يوجد موردين بعد') :
       suppliers.map(function (s) {
         return '<div class="list-item" style="cursor:pointer;" onclick="openSupplierDetailModal_(\'' + s.name.replace(/'/g, "\\'") + '\')"><span><b>' + s.name + '</b></span><span style="color:var(--text-dim);">' + (s.contact || '—') + ' ›</span></div>';
