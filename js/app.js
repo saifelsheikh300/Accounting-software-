@@ -723,33 +723,17 @@ function buildInventoryCards_(products) {
   return products.map(function (p) {
     const totalQty = p.variants.reduce(function (s, v) { return s + Number(v.quantity); }, 0);
     const anyLow = p.variants.some(function (v) { return v.quantity <= v.lowStockThreshold; });
-    return '<div class="card" style="margin-bottom:10px; cursor:pointer; padding:14px;" onclick="toggleProductRow_(\'' + p.code + '\')">' +
-      '<div class="card-row"><b style="font-size:14.5px;">' + p.name + '</b>' +
-      '<span style="font-size:11px; color:var(--accent);" onclick="event.stopPropagation(); openEditProductModal_(\'' + p.code + '\')">✏️ تعديل</span></div>' +
-      '<div style="margin-top:6px; font-size:12px; color:var(--text-dim);">' + (p.subCategoryName || 'بدون فئة') + ' · كود: ' + p.code + '</div>' +
+    const variantsNote = p.variants.length > 1 ? p.variants.length + ' متغير (ألوان/مقاسات)' : 'كود: ' + p.code;
+    return '<div class="card" style="margin-bottom:10px; padding:14px;">' +
+      '<div class="card-row"><b style="font-size:15.5px;">' + p.name + '</b>' +
+      '<span style="font-size:12px; color:var(--accent); cursor:pointer; white-space:nowrap;" onclick="openEditProductModal_(\'' + p.code + '\')">✏️ تعديل</span></div>' +
+      '<div style="margin-top:4px; font-size:11.5px; color:var(--text-faint);">' + variantsNote + '</div>' +
       '<div class="card-row" style="margin-top:10px; flex-wrap:wrap; gap:8px;">' +
         '<span class="pill info">سعر البيع: ' + p.basePrice + '</span>' +
         '<span class="pill ' + (anyLow ? 'danger' : 'success') + '">الكمية: ' + totalQty + '</span>' +
         '<span class="pill ' + (p.status === 'نشط' ? 'success' : 'danger') + '">' + p.status + '</span>' +
-      '</div>' +
-      '<div id="variants-row-' + p.code + '" style="display:none; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);" onclick="event.stopPropagation();">' +
-        (p.variants.length === 0 || (p.variants.length === 1 && !p.variants[0].color && !p.variants[0].size)
-          ? (p.variants.length === 1
-              ? '<div class="hint" style="cursor:pointer;" onclick="openEditVariantModal_(\'' + p.variants[0].code + '\')">منتج بسيط (بدون ألوان/مقاسات) — دوسي هنا لتعديل السعر أو الكمية ✏️</div>'
-              : '<div class="hint">منتج من غير متغيرات</div>') :
-          '<div style="display:flex; flex-wrap:wrap; gap:8px;">' + p.variants.map(function (v) {
-            const low = v.quantity <= v.lowStockThreshold;
-            return '<span class="variant-chip" style="cursor:pointer;" onclick="openEditVariantModal_(\'' + v.code.replace(/'/g, "\\'") + '\')">' + (v.color || '—') + '/' + (v.size || '—') +
-              ' <span class="qty-tag" style="' + (low ? 'color:var(--danger);' : '') + '">' + v.quantity + '</span> ✏️</span>';
-          }).join('') + '</div>') +
-        '<button class="btn secondary" style="margin-top:10px; padding:9px;" onclick="openAddVariantModal_(\'' + p.code + '\')">🎨 إضافة لون/مقاس تاني لنفس المنتج</button>' +
       '</div></div>';
   }).join('');
-}
-
-function toggleProductRow_(code) {
-  const row = document.getElementById('variants-row-' + code);
-  if (row) row.style.display = row.style.display === 'none' ? 'block' : 'none';
 }
 
 function invSearch_(query) {
@@ -970,125 +954,143 @@ async function submitProduct_() {
 }
 
 // ------------------------------------------------------------
-// مودال: تعديل منتج موجود (الاسم/السعر/الفئة الفرعية)
+// مودال: تعديل منتج موجود — كل حاجة مع بعض (الاسم، الفئة الرئيسية
+// والفرعية، سعر البيع، سعر الشراء، الكمية، وكل الألوان/المقاسات)
 // ------------------------------------------------------------
 function mainNameForSub_(parentCode) {
   const m = invTreeCache.mainCategories.find(function (c) { return c.code === parentCode; });
   return m ? m.name : '';
 }
 
+function subCategoryOptionsForParentWithSelected_(parentCode, selectedCode) {
+  const subs = invTreeCache.subCategories.filter(function (s) { return s.parent === parentCode; });
+  if (subs.length === 0) return '<option value="">لا يوجد فئات فرعية — أضف واحدة فوق</option>';
+  return subs.map(function (s) { return '<option value="' + s.code + '"' + (s.code === selectedCode ? ' selected' : '') + '>' + s.name + '</option>'; }).join('');
+}
+
+let editProductNewRowCount = 0;
+
 function openEditProductModal_(code) {
   const p = invProductsCache[code];
   if (!p) return;
-  const body = '<div class="field"><label>الفئة الفرعية <span class="req">*</span></label><select id="editProdSubCat">' +
-    invTreeCache.subCategories.map(function (s) {
-      return '<option value="' + s.code + '"' + (s.code === p.subCategoryCode ? ' selected' : '') + '>' + s.name + ' (' + mainNameForSub_(s.parent) + ')</option>';
-    }).join('') + '</select></div>' +
-    '<div class="form-grid" style="margin-top:14px;">' +
-      '<div class="field"><label>اسم المنتج</label><input type="text" id="editProdName" value="' + p.name + '"></div>' +
-      '<div class="field"><label>سعر البيع</label><input type="number" id="editProdPrice" value="' + p.basePrice + '"></div>' +
+  editProductNewRowCount = 0;
+  const subCatObj = invTreeCache.subCategories.find(function (s) { return s.code === p.subCategoryCode; });
+  const mainCode = subCatObj ? subCatObj.parent : (invTreeCache.mainCategories[0] ? invTreeCache.mainCategories[0].code : '');
+
+  let body = '<div class="field"><label>اسم المنتج</label><input type="text" id="editProdName" value="' + p.name + '"></div>' +
+    '<div class="inline-add-row"><div class="field"><label>الفئة الرئيسية</label>' +
+    '<select id="editProdMainCat" onchange="onEditProdMainCatChange_()">' + mainCategoryOptions_(mainCode) + '</select></div>' +
+    '<button class="inline-add-btn" onclick="closeModal(); openCategoriesModal_();">+ فئة</button></div>' +
+    '<div class="field" style="margin-top:10px;"><label>الفئة الفرعية</label><select id="editProdSubCat">' +
+    subCategoryOptionsForParentWithSelected_(mainCode, p.subCategoryCode) + '</select></div>' +
+    '<div class="field" style="margin-top:10px;"><label>سعر البيع</label><input type="number" id="editProdPrice" value="' + p.basePrice + '"></div>';
+
+  const isSimple = p.variants.length <= 1;
+  if (isSimple) {
+    const v = p.variants[0];
+    body += '<div class="form-grid" style="margin-top:10px;">' +
+      '<div class="field"><label>سعر الشراء (التكلفة)</label><input type="number" id="editSimpleCost" value="' + (v ? v.cost : 0) + '"></div>' +
+      '<div class="field"><label>الكمية بالمخزون</label><input type="number" id="editSimpleQty" value="' + (v ? v.quantity : 0) + '"></div>' +
     '</div>';
+  } else {
+    body += '<div class="section-title" style="margin-top:16px;">الألوان/المقاسات</div>' +
+      '<div id="editVariantsRows">' + p.variants.map(editVariantRowHtml_).join('') + '</div>' +
+      '<button class="btn secondary block" style="margin-top:8px;" onclick="addEditVariantRow_()">+ إضافة لون/مقاس جديد</button>';
+  }
+
   openModal('✏️ تعديل المنتج', 'الكود: ' + code, body,
-    '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn success" onclick="submitEditProduct_(\'' + code + '\')">✅ حفظ</button>');
+    '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn success" onclick="submitEditProductFull_(\'' + code + '\')">✅ حفظ كل التعديلات</button>');
 }
 
-async function submitEditProduct_(code) {
-  const payload = {
-    code: code, subCategory: document.getElementById('editProdSubCat').value,
-    name: document.getElementById('editProdName').value.trim(), basePrice: Number(document.getElementById('editProdPrice').value)
-  };
-  if (!payload.name || !payload.basePrice) { showToast_('اسم المنتج والسعر مطلوبين', 'error'); return; }
-  try {
-    await api.updateProduct({ username: state.user.username }, payload);
-    showToast_('تم تعديل المنتج ✅', 'success');
-    closeModal();
-    await loadInventoryBaseData_();
-    setContent_(buildInventoryMainHtml_());
-  } catch (err) { showErrorToast_(err); }
+function onEditProdMainCatChange_() {
+  document.getElementById('editProdSubCat').innerHTML = subCategoryOptionsForParent_(document.getElementById('editProdMainCat').value);
+  refreshSelect_('editProdSubCat');
 }
 
-// ------------------------------------------------------------
-// مودال: تعديل متغير (سعر الشراء/سعر البيع/الكمية/حد التنبيه)
-// ------------------------------------------------------------
-function openEditVariantModal_(variantCode) {
-  let v = null, productName = '';
-  Object.values(invProductsCache || {}).forEach(function (p) {
-    const found = p.variants.find(function (x) { return x.code === variantCode; });
-    if (found) { v = found; productName = p.name; }
-  });
-  if (!v) return;
-
-  const body =
-    '<div class="hint" style="margin-bottom:10px;">' + productName + ' — ' + (v.color || '—') + '/' + (v.size || '—') + '</div>' +
+function editVariantRowHtml_(v) {
+  return '<div class="card" data-existing-code="' + v.code + '" style="background:var(--surface-2); padding:10px; margin-bottom:8px;">' +
+    '<div class="hint" style="margin-bottom:6px;">' + (v.color || '—') + ' / ' + (v.size || '—') + ' — كود: ' + v.code + '</div>' +
     '<div class="form-grid">' +
-      '<div class="field"><label>سعر الشراء (التكلفة)</label><input type="number" id="editVarCost" value="' + v.cost + '"></div>' +
-      '<div class="field"><label>سعر البيع</label><input type="number" id="editVarSalePrice" value="' + (v.specialPrice || '') + '"></div>' +
+      '<div class="field" style="margin-bottom:0;"><label>سعر الشراء</label><input type="number" class="ev-cost" value="' + v.cost + '"></div>' +
+      '<div class="field" style="margin-bottom:0;"><label>الكمية</label><input type="number" class="ev-qty" value="' + v.quantity + '"></div>' +
     '</div>' +
-    '<div class="form-grid" style="margin-top:10px;">' +
-      '<div class="field"><label>الكمية بالمخزون</label><input type="number" id="editVarQty" value="' + v.quantity + '"></div>' +
-      '<div class="field"><label>حد التنبيه (منخفض)</label><input type="number" id="editVarLowStock" value="' + v.lowStockThreshold + '"></div>' +
+    '<div class="field" style="margin-top:8px; margin-bottom:0;"><label>سعر بيع خاص لهذا اللون/المقاس (اختياري)</label><input type="number" class="ev-price" value="' + (v.specialPrice || '') + '"></div>' +
+  '</div>';
+}
+
+function addEditVariantRow_() {
+  const wrap = document.getElementById('editVariantsRows');
+  const idx = editProductNewRowCount++;
+  const div = document.createElement('div');
+  div.id = 'editNewVarRow_' + idx;
+  div.setAttribute('data-new-row', 'true');
+  div.className = 'card';
+  div.style.cssText = 'background:var(--surface-2); padding:10px; margin-bottom:8px;';
+  div.innerHTML = '<div class="card-row"><b style="font-size:12px;">لون/مقاس جديد</b><span class="del-x" style="cursor:pointer;" onclick="removeEditVariantRow_(' + idx + ')">✕</span></div>' +
+    '<div class="form-grid" style="margin-top:8px;">' +
+      '<div class="field" style="margin-bottom:0;"><label>اللون</label><input type="text" class="ev-new-color" placeholder="أسود"></div>' +
+      '<div class="field" style="margin-bottom:0;"><label>المقاس</label><input type="text" class="ev-new-size" placeholder="M"></div>' +
+    '</div>' +
+    '<div class="form-grid" style="margin-top:8px;">' +
+      '<div class="field" style="margin-bottom:0;"><label>الكمية</label><input type="number" class="ev-new-qty" value="0"></div>' +
+      '<div class="field" style="margin-bottom:0;"><label>سعر الشراء</label><input type="number" class="ev-new-cost" value="0"></div>' +
     '</div>';
-  openModal('✏️ تعديل ' + v.code, '', body,
-    '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn success" onclick="submitEditVariant_(\'' + variantCode.replace(/'/g, "\\'") + '\')">✅ حفظ</button>');
+  wrap.appendChild(div);
 }
 
-async function submitEditVariant_(variantCode) {
-  const payload = {
-    cost: Number(document.getElementById('editVarCost').value) || 0,
-    specialPrice: Number(document.getElementById('editVarSalePrice').value) || null,
-    quantity: Number(document.getElementById('editVarQty').value) || 0,
-    lowStockThreshold: Number(document.getElementById('editVarLowStock').value) || 0
-  };
+function removeEditVariantRow_(idx) {
+  const row = document.getElementById('editNewVarRow_' + idx);
+  if (row) row.remove();
+}
+
+async function submitEditProductFull_(code) {
+  const p = invProductsCache[code];
+  const name = document.getElementById('editProdName').value.trim();
+  const basePrice = Number(document.getElementById('editProdPrice').value);
+  const subCategory = document.getElementById('editProdSubCat').value;
+  if (!name || !basePrice) { showToast_('اسم المنتج وسعر البيع مطلوبين', 'error'); return; }
+  if (!subCategory) { showToast_('اختاري فئة فرعية', 'error'); return; }
+
   try {
-    await api.updateVariant({ username: state.user.username }, variantCode, payload);
-    showToast_('تم تعديل المتغير ✅', 'success');
+    await api.updateProduct({ username: state.user.username }, { code: code, subCategory: subCategory, name: name, basePrice: basePrice });
+
+    const simpleCostEl = document.getElementById('editSimpleCost');
+    if (simpleCostEl) {
+      const v = p.variants[0];
+      const payload = { cost: Number(simpleCostEl.value) || 0, quantity: Number(document.getElementById('editSimpleQty').value) || 0, specialPrice: null, lowStockThreshold: v ? v.lowStockThreshold : 5 };
+      if (v) await api.updateVariant({ username: state.user.username }, v.code, payload);
+      else await api.addVariant({ username: state.user.username }, { productCode: code, color: '', size: '', quantity: payload.quantity, cost: payload.cost });
+    } else {
+      const existingRows = Array.from(document.querySelectorAll('#editVariantsRows > [data-existing-code]'));
+      for (const row of existingRows) {
+        const vCode = row.getAttribute('data-existing-code');
+        const orig = p.variants.find(function (x) { return x.code === vCode; });
+        const cost = Number(row.querySelector('.ev-cost').value) || 0;
+        const qty = Number(row.querySelector('.ev-qty').value) || 0;
+        const salePriceRaw = row.querySelector('.ev-price').value;
+        await api.updateVariant({ username: state.user.username }, vCode, {
+          cost: cost, quantity: qty, specialPrice: salePriceRaw ? Number(salePriceRaw) : null, lowStockThreshold: orig ? orig.lowStockThreshold : 5
+        });
+      }
+      const newRows = Array.from(document.querySelectorAll('#editVariantsRows > [data-new-row]'));
+      for (const row of newRows) {
+        const color = row.querySelector('.ev-new-color').value.trim();
+        const size = row.querySelector('.ev-new-size').value.trim();
+        const qty = Number(row.querySelector('.ev-new-qty').value) || 0;
+        const cost = Number(row.querySelector('.ev-new-cost').value) || 0;
+        if (color || size || qty || cost) {
+          await api.addVariant({ username: state.user.username }, { productCode: code, color: color, size: size, quantity: qty, cost: cost });
+        }
+      }
+    }
+
+    showToast_('تم حفظ كل التعديلات ✅', 'success');
     closeModal();
     await loadInventoryBaseData_();
     setContent_(buildInventoryMainHtml_());
   } catch (err) { showErrorToast_(err); }
 }
 
-// ------------------------------------------------------------
-// مودال: إضافة متغير (لون/مقاس)
-// ------------------------------------------------------------
-function openAddVariantModal_(presetProductCode) {
-  const products = Object.values(invProductsCache || {});
-  if (products.length === 0) { showToast_('لازم تضيفي منتج الأول', 'error'); return; }
-  const showWarehouse = invWarehousesCache && invWarehousesCache.length > 1;
-
-  const body = '<div class="field"><label>المنتج <span class="req">*</span></label><select id="varProductSelect">' +
-    products.map(function (p) { return '<option value="' + p.code + '"' + (p.code === presetProductCode ? ' selected' : '') + '>' + p.name + ' (' + p.code + ')</option>'; }).join('') + '</select></div>' +
-    '<div class="form-grid" style="margin-top:14px;">' +
-      '<div class="field"><label>اللون</label><input type="text" id="varColor" placeholder="مثال: أسود"></div>' +
-      '<div class="field"><label>المقاس</label><input type="text" id="varSize" placeholder="مثال: M"></div>' +
-      '<div class="field"><label>الكمية <span class="req">*</span></label><input type="number" id="varQty" placeholder="0"></div>' +
-      '<div class="field"><label>سعر التكلفة <span class="req">*</span></label><input type="number" id="varCost" placeholder="0"></div>' +
-    '</div>' +
-    (showWarehouse ? '<div class="field" style="margin-top:14px;"><label>المخزن</label><select id="varWarehouse">' + invWarehousesCache.map(function (w) { return '<option value="' + w.id + '">' + w.name + '</option>'; }).join('') + '</select></div>' : '');
-
-  openModal('🎨 إضافة متغير', 'لون/مقاس جديد لمنتج موجود', body, '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn success" onclick="submitVariant_()">✅ إضافة</button>');
-}
-
-async function submitVariant_() {
-  const payload = {
-    productCode: document.getElementById('varProductSelect').value, color: document.getElementById('varColor').value,
-    size: document.getElementById('varSize').value, quantity: Number(document.getElementById('varQty').value),
-    cost: Number(document.getElementById('varCost').value)
-  };
-  const warehouseEl = document.getElementById('varWarehouse');
-  if (warehouseEl) payload.warehouseId = warehouseEl.value;
-  if (!payload.productCode || payload.quantity === '' || payload.cost === '') { showToast_('الكمية والتكلفة مطلوبين', 'error'); return; }
-
-  try {
-    await api.addVariant({ username: state.user.username }, payload);
-    showToast_('تمت إضافة المتغير ✅', 'success');
-    closeModal();
-    await loadInventoryBaseData_();
-    setContent_(buildInventoryMainHtml_());
-  } catch (err) { showErrorToast_(err); }
-}
-
-// ============================================================
 // ============================================================
 // شاشة المصروفات
 // ============================================================
