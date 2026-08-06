@@ -229,7 +229,7 @@
 
   .pill {
     display: inline-flex; align-items: center; gap: 4px; padding: 4px 11px; border-radius: 20px; font-size: 10.8px; font-weight: 800;
-    white-space: nowrap;
+    white-space: nowrap; background: rgba(255,255,255,.06); color: var(--text-dim);
   }
   .pill.warning { background: rgba(241,196,15,.14); color: var(--warning); }
   .pill.danger { background: rgba(255,84,112,.14); color: var(--danger); }

@@ -723,12 +723,12 @@ function buildInventoryCards_(products) {
   return products.map(function (p) {
     const totalQty = p.variants.reduce(function (s, v) { return s + Number(v.quantity); }, 0);
     const anyLow = p.variants.some(function (v) { return v.quantity <= v.lowStockThreshold; });
-    const variantsNote = p.variants.length > 1 ? p.variants.length + ' متغير (ألوان/مقاسات)' : 'كود: ' + p.code;
     return '<div class="card" style="margin-bottom:10px; padding:14px;">' +
       '<div class="card-row"><b style="font-size:15.5px;">' + p.name + '</b>' +
       '<span style="font-size:12px; color:var(--accent); cursor:pointer; white-space:nowrap;" onclick="openEditProductModal_(\'' + p.code + '\')">✏️ تعديل</span></div>' +
-      '<div style="margin-top:4px; font-size:11.5px; color:var(--text-faint);">' + variantsNote + '</div>' +
       '<div class="card-row" style="margin-top:10px; flex-wrap:wrap; gap:8px;">' +
+        '<span class="pill">' + p.code + '</span>' +
+        (p.variants.length > 1 ? '<span class="pill">🎨 ' + p.variants.length + ' متغير</span>' : '') +
         '<span class="pill info">سعر البيع: ' + p.basePrice + '</span>' +
         '<span class="pill ' + (anyLow ? 'danger' : 'success') + '">الكمية: ' + totalQty + '</span>' +
         '<span class="pill ' + (p.status === 'نشط' ? 'success' : 'danger') + '">' + p.status + '</span>' +
