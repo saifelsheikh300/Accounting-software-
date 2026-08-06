@@ -1393,8 +1393,7 @@ async function renderSupplierTabContent_() {
     const supplierStepHtml = suppliers.length === 0
       ? '<div class="hint" style="color:var(--danger);">لسه مفيش موردين مسجلين</div>' +
         '<button class="btn success block" style="margin-top:8px;" onclick="openQuickAddSupplierModal_()">➕ إضافة مورد الأول</button>'
-      : '<div class="field" style="margin-top:8px;"><select id="poSupplierSelect">' + suppliers.map(function (s) { return '<option>' + s.name + '</option>'; }).join('') + '</select></div>' +
-        '<div class="hint" style="cursor:pointer; color:var(--accent); margin-top:6px;" onclick="openQuickAddSupplierModal_()">➕ المورد مش موجود؟ ضيفيه بسرعة</div>';
+      : '<div class="field" style="margin-top:8px;"><select id="poSupplierSelect">' + suppliers.map(function (s) { return '<option>' + s.name + '</option>'; }).join('') + '</select></div>';
 
     el.innerHTML =
       '<div class="card"><div class="card-heading">1️⃣ اختاري المورد</div>' + supplierStepHtml + '</div>' +
