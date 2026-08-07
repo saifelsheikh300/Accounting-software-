@@ -159,7 +159,7 @@ api.addVariant = async function (session, payload) {
 };
 
 api.getInventoryIndex = async function () {
-  const { data: products, error } = await supabaseClient.from('products').select('*, product_variants(*), sub_category:sub_category_id(code, name)').is('deleted_at', null);
+  const { data: products, error } = await supabaseClient.from('products').select('*, product_variants(*), sub_category:sub_category_id(code, name), main_category:main_category_id(code, name)').is('deleted_at', null);
   if (error) throw error;
   const result = { products: {} };
   products.forEach(function (p) {
@@ -167,6 +167,7 @@ api.getInventoryIndex = async function () {
       code: p.code, name: p.name, basePrice: p.base_price, image: p.image_url, hasVariants: p.has_variants, status: p.status,
       subCategoryCode: p.sub_category ? p.sub_category.code : '',
       subCategoryName: p.sub_category ? p.sub_category.name : '',
+      mainCategoryName: p.main_category ? p.main_category.name : '',
       variants: (p.product_variants || []).filter(function (v) { return !v.deleted_at; }).map(function (v) {
         return { code: v.code, productCode: p.code, color: v.color, size: v.size, quantity: v.quantity, cost: v.cost, specialPrice: v.special_price, warehouseId: v.warehouse_id, lowStockThreshold: v.low_stock_threshold, status: v.status };
       })

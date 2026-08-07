@@ -723,9 +723,11 @@ function buildInventoryCards_(products) {
   return products.map(function (p) {
     const totalQty = p.variants.reduce(function (s, v) { return s + Number(v.quantity); }, 0);
     const anyLow = p.variants.some(function (v) { return v.quantity <= v.lowStockThreshold; });
+    const catLine = (p.mainCategoryName ? p.mainCategoryName + ' ← ' : '') + (p.subCategoryName || 'بدون فئة');
     return '<div class="card" style="margin-bottom:10px; padding:14px;">' +
       '<div class="card-row"><b style="font-size:15.5px;">' + p.name + '</b>' +
       '<span style="font-size:12px; color:var(--accent); cursor:pointer; white-space:nowrap;" onclick="openEditProductModal_(\'' + p.code + '\')">✏️ تعديل</span></div>' +
+      '<div style="font-size:11px; color:var(--text-faint); margin-top:3px;">' + catLine + '</div>' +
       '<div class="card-row" style="margin-top:10px; flex-wrap:wrap; gap:8px;">' +
         '<span class="pill">' + p.code + '</span>' +
         (p.variants.length > 1 ? '<span class="pill">🎨 ' + p.variants.length + ' متغير</span>' : '') +
@@ -858,17 +860,17 @@ async function openAddProductModal_() {
   prodVariantRowCount = 0;
   const body =
     '<div class="field"><label>اسم المنتج <span class="req">*</span></label><input type="text" id="prodName" placeholder="مثال: تيشرت أساسي"></div>' +
-    '<div class="form-grid" style="margin-top:12px;">' +
+    '<div class="form-grid" style="margin-bottom:14px;">' +
       '<div class="field"><label>سعر البيع <span class="req">*</span></label><input type="number" id="prodPrice" placeholder="0"></div>' +
       '<div class="field"><label>سعر الشراء (التكلفة)</label><input type="number" id="prodCost" placeholder="0"></div>' +
     '</div>' +
     '<div class="field"><label>الكمية الحالية بالمخزون</label><input type="number" id="prodQty" value="0"></div>' +
-    '<div class="inline-add-row"><div class="field"><label>الفئة</label>' +
+    '<div class="inline-add-row" style="margin-bottom:10px;"><div class="field"><label>الفئة</label>' +
     '<select id="prodMainCat" onchange="onProductMainCatChange_()">' + mainCategoryOptions_() + '</select></div>' +
     '<button class="inline-add-btn" onclick="closeModal(); openCategoriesModal_();">+ فئة</button></div>' +
-    '<div class="field" style="margin-top:10px;"><select id="prodSubCat">' + subCategoryOptionsForParent_(invTreeCache.mainCategories[0].code) + '</select></div>' +
-    '<div class="hint" style="cursor:pointer; color:var(--accent); margin-top:12px;" onclick="toggleMultiVariant_()">🎨 المنتج ده بيه أكتر من لون أو مقاس؟ دوسي هنا</div>' +
-    '<div id="multiVariantSection" style="display:none; margin-top:10px;">' +
+    '<div class="field"><select id="prodSubCat">' + subCategoryOptionsForParent_(invTreeCache.mainCategories[0].code) + '</select></div>' +
+    '<div class="hint" style="cursor:pointer; color:var(--accent); margin-top:6px;" onclick="toggleMultiVariant_()">🎨 المنتج ده بيه أكتر من لون أو مقاس؟ دوسي هنا</div>' +
+    '<div id="multiVariantSection" style="display:none; margin-top:12px;">' +
       '<div class="hint">ضيفي كل لون/مقاس بكميته وتكلفته — هيتحفظوا بدل الكمية والتكلفة العامة اللي فوق</div>' +
       '<div id="prodVariantsRows" style="margin-top:10px;"></div>' +
       '<button class="btn secondary block" style="margin-top:8px;" onclick="addProductVariantRow_()">+ إضافة لون/مقاس</button>' +
