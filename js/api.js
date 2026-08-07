@@ -288,6 +288,12 @@ api.posReturn = async function (session, saleNumber, items, treasuryAccountId) {
   return api.recordReturn(session, sale.id, items, true, treasuryAccountId);
 };
 
+api.recordPartialReturn = async function (session, saleNumber, items, isFull, treasuryAccountId) {
+  const { data: sale, error: e1 } = await supabaseClient.from('sales').select('id').eq('sale_number', saleNumber).single();
+  if (e1) throw e1;
+  return api.recordReturn(session, sale.id, items, isFull, treasuryAccountId);
+};
+
 api.getPosTodaySummary = async function () {
   const today = new Date().toISOString().slice(0, 10);
   const { data, error } = await supabaseClient.from('sales').select('total,payment_method').eq('source', 'محل').gte('sale_date', today).neq('status', 'مرتجع كلي');

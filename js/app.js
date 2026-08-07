@@ -521,22 +521,58 @@ async function posReturnSearch_(query) {
 }
 
 async function confirmPosReturn_(saleId) {
-  const accounts = await getTreasuryAccountsCached_().catch(function () { return []; });
-  openModal('تأكيد المرتجع', 'متأكد إنك عايز ترجّع البيعة "' + saleId + '"؟',
-    '<div class="hint">لو البيعة كانت كاش، هتتخصم من حساب الخزنة اللي تحدديه. لو كانت آجل، مش هتلمس أي خزنة.</div>' +
-    '<div class="field" style="margin-top:10px;"><label>هتتخصم من حساب (لو كانت كاش)</label><select id="posReturnTreasuryAccount">' + treasuryAccountOptionsHtml_(accounts) + '</select></div>',
-    '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" onclick="doConfirmPosReturn_(\'' + saleId + '\')">تأكيد</button>');
-}
-
-async function doConfirmPosReturn_(saleId) {
-  const treasuryAccountId = document.getElementById('posReturnTreasuryAccount').value || null;
-  closeModal();
   try {
     const results = await api.posSearchSaleForReturn(saleId);
     const sale = results.find(function (r) { return r.saleId === saleId; });
     if (!sale) { showToast_('البيعة مش موجودة', 'error'); return; }
-    await api.posReturn({ username: state.user.username }, saleId, sale.items, treasuryAccountId);
-    showToast_('تم المرتجع ✅', 'success'); loadPosSummary_();
+    closeModal();
+    openReturnModal_(saleId, sale.items, loadPosSummary_);
+  } catch (err) { showErrorToast_(err); }
+}
+
+// ------------------------------------------------------------
+// مودال مرتجع جزئي مشترك — تحديد الكمية المرتجعة من كل صنف
+// (يُستخدم من شاشة الكاشير وشاشة المبيعات معًا)
+// ------------------------------------------------------------
+let pendingReturnItems = [];
+let pendingReturnSaleId = '';
+let pendingReturnRefreshFn = null;
+
+async function openReturnModal_(saleId, items, refreshFn) {
+  pendingReturnItems = items;
+  pendingReturnSaleId = saleId;
+  pendingReturnRefreshFn = refreshFn;
+  const accounts = await getTreasuryAccountsCached_().catch(function () { return []; });
+
+  const body = '<div class="hint" style="margin-bottom:10px;">حددي الكمية اللي فعلاً رجعتلك من كل صنف — سيبي 0 لأي صنف مترجعش</div>' +
+    '<div>' + items.map(function (it, idx) {
+      return '<div class="card" style="background:var(--surface-2); padding:10px; margin-bottom:8px;">' +
+        '<div class="card-row"><b>' + it.variantCode + '</b><span class="hint">الكمية الأصلية بالبيعة: ' + it.qty + '</span></div>' +
+        '<div class="field" style="margin-top:8px; margin-bottom:0;"><label>الكمية المرتجعة</label>' +
+        '<input type="number" id="retQty_' + idx + '" value="0" min="0" max="' + it.qty + '"></div></div>';
+    }).join('') + '</div>' +
+    '<div class="field"><label>هتتخصم من حساب (لو كانت البيعة كاش)</label><select id="returnTreasuryAccount">' + treasuryAccountOptionsHtml_(accounts) + '</select></div>';
+
+  openModal('↩️ مرتجع بيعة ' + saleId, '', body,
+    '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn danger" onclick="submitPartialReturn_()">✅ تسجيل المرتجع</button>');
+}
+
+async function submitPartialReturn_() {
+  const treasuryAccountId = document.getElementById('returnTreasuryAccount').value || null;
+  const returnItems = [];
+  let isFull = true;
+  pendingReturnItems.forEach(function (it, idx) {
+    const input = document.getElementById('retQty_' + idx);
+    const qty = Math.min(Math.max(Number(input.value) || 0, 0), it.qty);
+    if (qty < it.qty) isFull = false;
+    if (qty > 0) returnItems.push({ variantCode: it.variantCode, qty: qty, price: it.price });
+  });
+  if (returnItems.length === 0) { showToast_('حددي كمية مرتجعة لصنف واحد على الأقل', 'error'); return; }
+  closeModal();
+  try {
+    await api.recordPartialReturn({ username: state.user.username }, pendingReturnSaleId, returnItems, isFull, treasuryAccountId);
+    showToast_('تم تسجيل المرتجع ✅', 'success');
+    if (pendingReturnRefreshFn) pendingReturnRefreshFn();
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -1402,22 +1438,11 @@ async function loadSalesHistory_() {
 }
 
 async function quickReturnSale_(saleId) {
-  const accounts = await getTreasuryAccountsCached_().catch(function () { return []; });
-  openModal('تأكيد المرتجع', 'متأكد إنك عايز ترجّع البيعة "' + saleId + '" بالكامل؟',
-    '<div class="hint">لو البيعة كانت كاش، هتتخصم من حساب الخزنة اللي تحدديه. لو كانت آجل، مش هتلمس أي خزنة.</div>' +
-    '<div class="field" style="margin-top:10px;"><label>هتتخصم من حساب (لو كانت كاش)</label><select id="salesReturnTreasuryAccount">' + treasuryAccountOptionsHtml_(accounts) + '</select></div>',
-    '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" onclick="doQuickReturnSale_(\'' + saleId + '\')">تأكيد</button>');
-}
-
-async function doQuickReturnSale_(saleId) {
-  const treasuryAccountId = document.getElementById('salesReturnTreasuryAccount').value || null;
-  closeModal();
   try {
     const sales = await api.listSales({ limit: 200 });
     const sale = sales.find(function (s) { return s.saleId === saleId; });
     if (!sale) { showToast_('البيعة مش موجودة', 'error'); return; }
-    await api.posReturn({ username: state.user.username }, saleId, sale.items, treasuryAccountId);
-    showToast_('تم المرتجع ✅', 'success'); loadSalesHistory_();
+    openReturnModal_(saleId, sale.items, loadSalesHistory_);
   } catch (err) { showErrorToast_(err); }
 }
 
