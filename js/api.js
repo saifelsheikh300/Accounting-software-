@@ -294,10 +294,11 @@ api.recordPartialReturn = async function (session, saleNumber, items, isFull, tr
   return api.recordReturn(session, sale.id, items, isFull, treasuryAccountId);
 };
 
-api.recordStandaloneReturn = async function (session, items, paymentMethod, treasuryAccountId, notes) {
+api.recordStandaloneReturn = async function (session, items, paymentMethod, treasuryAccountId, notes, saleReference) {
   const { error } = await supabaseClient.rpc('rpc_record_standalone_return', {
     p_items: items.map(function (i) { return { variant_code: i.variantCode, qty: i.qty, price: i.price }; }),
-    p_payment_method: paymentMethod || 'كاش', p_treasury_account_id: treasuryAccountId || null, p_notes: notes || ''
+    p_payment_method: paymentMethod || 'كاش', p_treasury_account_id: treasuryAccountId || null,
+    p_notes: notes || '', p_sale_reference: saleReference || null
   });
   if (error) throw error;
   return { success: true };

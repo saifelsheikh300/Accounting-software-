@@ -505,10 +505,15 @@ function posSearch_(query) {
 // حاجة برقم فاتورة قديمة. بيزوّد المخزون ويقلل الإيراد فورًا
 // ------------------------------------------------------------
 let returnCart = [];
+let returnLinkedSale = null;
 
 async function openStandaloneReturnModal_() {
   returnCart = [];
-  const body = '<div class="field"><input type="text" id="returnSearchInput" oninput="returnProductSearch_(this.value)" placeholder="🔍 دوري عن المنتج..."></div>' +
+  returnLinkedSale = null;
+  const body = '<div class="field"><label>ربط المرتجع بفاتورة؟ (اختياري)</label><input type="text" id="returnInvoiceSearch" oninput="returnInvoiceSearch_(this.value)" placeholder="دوري برقم الفاتورة أو اسم العميل..."></div>' +
+    '<div id="returnInvoiceResults"></div>' +
+    '<div id="returnLinkedSaleBadge" style="display:none; margin-bottom:14px;"></div>' +
+    '<div class="field"><input type="text" id="returnSearchInput" oninput="returnProductSearch_(this.value)" placeholder="🔍 دوري عن المنتج..."></div>' +
     '<div id="returnSearchResults" style="margin-top:12px; max-height:220px; overflow-y:auto;"></div>' +
     '<div class="section-title" style="margin-top:14px;">الأصناف المرتجعة</div>' +
     '<div id="returnCartList"></div>' +
@@ -525,6 +530,36 @@ async function openStandaloneReturnModal_() {
     document.getElementById('returnTreasuryAccount').innerHTML = treasuryAccountOptionsHtml_(accounts);
     refreshSelect_('returnTreasuryAccount');
   }).catch(function () { /* صامت */ });
+}
+
+async function returnInvoiceSearch_(query) {
+  const el = document.getElementById('returnInvoiceResults');
+  if (!query || query.length < 2) { el.innerHTML = ''; return; }
+  try {
+    const results = await api.posSearchSaleForReturn(query);
+    const cur = state.settings.currency || 'جنيه';
+    el.innerHTML = results.length === 0 ? emptyRow_('🔎', 'لا يوجد نتائج') :
+      results.map(function (r) {
+        return '<div class="list-item" style="cursor:pointer;" onclick="linkReturnToSale_(\'' + r.saleId.replace(/'/g, "\\'") + '\', \'' + (r.customerName || '').replace(/'/g, "\\'") + '\')">' +
+          '<span>' + r.saleId + ' — ' + (r.customerName || 'بدون اسم') + '</span><span>' + formatMoney_(r.total, cur) + '</span></div>';
+      }).join('');
+  } catch (err) { showErrorToast_(err); }
+}
+
+function linkReturnToSale_(saleId, customerName) {
+  returnLinkedSale = saleId;
+  document.getElementById('returnInvoiceSearch').value = '';
+  document.getElementById('returnInvoiceResults').innerHTML = '';
+  const badge = document.getElementById('returnLinkedSaleBadge');
+  badge.style.display = 'block';
+  badge.innerHTML = '<div class="list-item"><span class="pill success">🔗 مرتبط بفاتورة ' + saleId + (customerName ? ' — ' + customerName : '') + '</span>' +
+    '<span style="cursor:pointer; color:var(--danger);" onclick="unlinkReturnSale_()">✕ إلغاء الربط</span></div>';
+}
+
+function unlinkReturnSale_() {
+  returnLinkedSale = null;
+  document.getElementById('returnLinkedSaleBadge').style.display = 'none';
+  document.getElementById('returnLinkedSaleBadge').innerHTML = '';
 }
 
 function renderReturnProductGrid_(list) {
@@ -576,9 +611,10 @@ async function submitStandaloneReturn_() {
   const paymentMethod = document.getElementById('returnPaymentMethod').value;
   const treasuryAccountId = document.getElementById('returnTreasuryAccount').value || null;
   const items = returnCart.map(function (i) { return { variantCode: i.variantCode, qty: i.qty, price: i.price }; });
+  const saleReference = returnLinkedSale;
   closeModal();
   try {
-    await api.recordStandaloneReturn({ username: state.user.username }, items, paymentMethod, treasuryAccountId);
+    await api.recordStandaloneReturn({ username: state.user.username }, items, paymentMethod, treasuryAccountId, '', saleReference);
     showToast_('تم تسجيل المرتجع ✅ اتزود في المخزون واتقل من الإيراد', 'success');
     loadPosSummary_(); loadPosProductGrid_();
   } catch (err) { showErrorToast_(err); }
