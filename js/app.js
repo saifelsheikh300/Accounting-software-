@@ -455,7 +455,7 @@ function renderPosPage() {
         '<div class="field" id="posTreasuryFieldWrap"><label>هتضاف لحساب</label><select id="posTreasuryAccount"><option value="">جاري التحميل...</option></select></div>' +
         '<div id="posInvoiceSection" style="display:none;"></div>' +
         '<button class="btn success block" style="margin-top:16px;" onclick="submitPosSale_()">✅ إتمام البيع</button>' +
-        '<button class="btn danger block" style="margin-top:10px;" onclick="openPosReturnModal_()">↩️ مرتجع بيعة سابقة</button>' +
+        '<button class="btn danger block" style="margin-top:10px;" onclick="openStandaloneReturnModal_()">↩️ مرتجع منتج</button>' +
       '</div>' +
     '</div>' +
     '<div class="section-title">ملخص اليوم</div><div id="posTodaySummary" class="grid grid-3"></div>'
@@ -500,39 +500,93 @@ function posSearch_(query) {
   renderPosProductGrid_(filtered);
 }
 
-function openPosReturnModal_() {
-  openModal('مرتجع بيعة سابقة', 'ابحث برقم الفاتورة أو اسم العميل',
-    '<div class="field"><input type="text" id="posReturnSearchInput" oninput="posReturnSearch_(this.value)" placeholder="ابحث..."></div>' +
-    '<div id="posReturnResults" style="margin-top:12px; max-height:280px; overflow-y:auto;"></div>',
-    '<button class="btn secondary" onclick="closeModal()">إغلاق</button>');
+// ------------------------------------------------------------
+// مرتجع منتج مباشر — بحث عن المنتج زي البيع بالظبط، من غير أي
+// حاجة برقم فاتورة قديمة. بيزوّد المخزون ويقلل الإيراد فورًا
+// ------------------------------------------------------------
+let returnCart = [];
+
+async function openStandaloneReturnModal_() {
+  returnCart = [];
+  const body = '<div class="field"><input type="text" id="returnSearchInput" oninput="returnProductSearch_(this.value)" placeholder="🔍 دوري عن المنتج..."></div>' +
+    '<div id="returnSearchResults" style="margin-top:12px; max-height:220px; overflow-y:auto;"></div>' +
+    '<div class="section-title" style="margin-top:14px;">الأصناف المرتجعة</div>' +
+    '<div id="returnCartList"></div>' +
+    '<div class="field" style="margin-top:12px;"><label>طريقة الدفع الأصلية</label><select id="returnPaymentMethod" onchange="onReturnPaymentMethodChange_()"><option>كاش</option><option>فودافون كاش</option><option>بطاقة</option><option>انستاباي</option><option value="آجل">آجل</option></select></div>' +
+    '<div class="field" id="returnTreasuryFieldWrap"><label>هيتخصم من حساب</label><select id="returnTreasuryAccount"><option value="">جاري التحميل...</option></select></div>';
+
+  openModal('↩️ مرتجع منتج', 'دوري عن المنتج، حددي الكمية، وسجّلي المرتجع', body,
+    '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn danger" onclick="submitStandaloneReturn_()">✅ تسجيل المرتجع</button>');
+
+  renderReturnCart_();
+  if (!posAllProducts || posAllProducts.length === 0) { await loadPosProductGrid_(); }
+  renderReturnProductGrid_(posAllProducts || []);
+  getTreasuryAccountsCached_().then(function (accounts) {
+    document.getElementById('returnTreasuryAccount').innerHTML = treasuryAccountOptionsHtml_(accounts);
+    refreshSelect_('returnTreasuryAccount');
+  }).catch(function () { /* صامت */ });
 }
 
-async function posReturnSearch_(query) {
-  if (!query || query.length < 2) { document.getElementById('posReturnResults').innerHTML = ''; return; }
-  try {
-    const results = await api.posSearchSaleForReturn(query);
-    const cur = state.settings.currency || 'جنيه';
-    document.getElementById('posReturnResults').innerHTML = results.length === 0 ? emptyRow_('🔎', 'لا يوجد نتائج') :
-      results.map(function (r) {
-        return '<div class="list-item"><span>' + r.saleId + ' — ' + (r.customerName || 'بدون اسم') + '</span>' +
-          '<span>' + formatMoney_(r.total, cur) + ' <button class="btn sm" onclick="confirmPosReturn_(\'' + r.saleId + '\')">↩️ مرتجع</button></span></div>';
-      }).join('');
-  } catch (err) { showErrorToast_(err); }
+function renderReturnProductGrid_(list) {
+  const el = document.getElementById('returnSearchResults');
+  if (!el) return;
+  el.innerHTML = list.length === 0 ? emptyRow_('📦', 'لا يوجد منتجات') : buildProductResultsHtml_(list, 'addToReturnCart_');
 }
 
-async function confirmPosReturn_(saleId) {
+function returnProductSearch_(query) {
+  const q = (query || '').trim().toLowerCase();
+  const source = posAllProducts || [];
+  if (!q) { renderReturnProductGrid_(source); return; }
+  const filtered = source.filter(function (p) {
+    if (p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)) return true;
+    return p.variants.some(function (v) { return v.code.toLowerCase().includes(q) || (v.color || '').toLowerCase().includes(q) || (v.size || '').toLowerCase().includes(q); });
+  });
+  renderReturnProductGrid_(filtered);
+}
+
+function addToReturnCart_(variantCode, label, price) {
+  const existing = returnCart.find(function (i) { return i.variantCode === variantCode; });
+  if (existing) existing.qty += 1; else returnCart.push({ variantCode: variantCode, label: label, price: price, qty: 1 });
+  renderReturnCart_();
+}
+
+function renderReturnCart_() {
+  const el = document.getElementById('returnCartList');
+  if (!el) return;
+  if (returnCart.length === 0) { el.innerHTML = emptyRow_('↩️', 'لسه محددتش أي صنف'); return; }
+  let total = 0;
+  el.innerHTML = returnCart.map(function (i, idx) {
+    total += i.price * i.qty;
+    return '<div class="list-item"><span>' + i.label + '</span><span>سعر <input type="number" value="' + i.price + '" style="width:65px; padding:5px;" onchange="updateReturnItemPrice_(' + idx + ', this.value)"> ' +
+      'كمية <input type="number" value="' + i.qty + '" style="width:50px; padding:5px;" onchange="updateReturnItemQty_(' + idx + ', this.value)"> ' +
+      '<span class="del-x" onclick="removeFromReturnCart_(' + idx + ')" style="cursor:pointer;">✕</span></span></div>';
+  }).join('') + '<div class="list-item"><b>الإجمالي</b><b>' + total + '</b></div>';
+}
+function updateReturnItemPrice_(idx, val) { returnCart[idx].price = Number(val); renderReturnCart_(); }
+function updateReturnItemQty_(idx, val) { returnCart[idx].qty = Number(val); renderReturnCart_(); }
+function removeFromReturnCart_(idx) { returnCart.splice(idx, 1); renderReturnCart_(); }
+
+function onReturnPaymentMethodChange_() {
+  const val = document.getElementById('returnPaymentMethod').value;
+  document.getElementById('returnTreasuryFieldWrap').style.display = val === 'آجل' ? 'none' : 'block';
+}
+
+async function submitStandaloneReturn_() {
+  if (returnCart.length === 0) { showToast_('حددي صنف واحد على الأقل', 'error'); return; }
+  const paymentMethod = document.getElementById('returnPaymentMethod').value;
+  const treasuryAccountId = document.getElementById('returnTreasuryAccount').value || null;
+  const items = returnCart.map(function (i) { return { variantCode: i.variantCode, qty: i.qty, price: i.price }; });
+  closeModal();
   try {
-    const results = await api.posSearchSaleForReturn(saleId);
-    const sale = results.find(function (r) { return r.saleId === saleId; });
-    if (!sale) { showToast_('البيعة مش موجودة', 'error'); return; }
-    closeModal();
-    openReturnModal_(saleId, sale.items, loadPosSummary_);
+    await api.recordStandaloneReturn({ username: state.user.username }, items, paymentMethod, treasuryAccountId);
+    showToast_('تم تسجيل المرتجع ✅ اتزود في المخزون واتقل من الإيراد', 'success');
+    loadPosSummary_(); loadPosProductGrid_();
   } catch (err) { showErrorToast_(err); }
 }
 
 // ------------------------------------------------------------
 // مودال مرتجع جزئي مشترك — تحديد الكمية المرتجعة من كل صنف
-// (يُستخدم من شاشة الكاشير وشاشة المبيعات معًا)
+// (يُستخدم من شاشة المبيعات عند الإرجاع مقابل فاتورة محددة)
 // ------------------------------------------------------------
 let pendingReturnItems = [];
 let pendingReturnSaleId = '';

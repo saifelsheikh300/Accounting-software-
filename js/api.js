@@ -294,6 +294,15 @@ api.recordPartialReturn = async function (session, saleNumber, items, isFull, tr
   return api.recordReturn(session, sale.id, items, isFull, treasuryAccountId);
 };
 
+api.recordStandaloneReturn = async function (session, items, paymentMethod, treasuryAccountId, notes) {
+  const { error } = await supabaseClient.rpc('rpc_record_standalone_return', {
+    p_items: items.map(function (i) { return { variant_code: i.variantCode, qty: i.qty, price: i.price }; }),
+    p_payment_method: paymentMethod || 'كاش', p_treasury_account_id: treasuryAccountId || null, p_notes: notes || ''
+  });
+  if (error) throw error;
+  return { success: true };
+};
+
 api.getPosTodaySummary = async function () {
   const today = new Date().toISOString().slice(0, 10);
   const { data, error } = await supabaseClient.from('sales').select('total,payment_method').eq('source', 'محل').gte('sale_date', today).neq('status', 'مرتجع كلي');
