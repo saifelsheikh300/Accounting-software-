@@ -59,11 +59,31 @@ end $$;
 **قبل ما نعمل `create or replace` بالنسخة الجديدة.**
 
 ## سجل ملفات SQL (بالترتيب — شغّليهم بالترتيب ده لو بتبنيها من الصفر)
-انظري مجلد `sql/` — كل ملف فيه رقمه في اسمه. الملفات الأساسية (1-20: الـSchema الكامل + كل الإصلاحات المحاسبية الأولى) اتبعتت كنصوص في المحادثات الأولى قبل ما نبدأ نحفظها كملفات فعلية في الريبو — لو محتاجة نسخة منها، قوليلي وهعيد إنشاءها من سجل المحادثة. من رقم 21 وطالع، كل حاجة محفوظة هنا فعليًا.
+كل ملفات الـSQL من 1 لـ25 محفوظة فعليًا في مجلد `sql/`. الملفين 22 و23 مش موجودين — لم يكن فيه شغل SQL تحت الرقمين دول (شوفي `sql/22-23_NOTE.md`).
 
 | # | الملف | الوصف المختصر |
 |---|---|---|
-| 21 | `21_fix_overloaded_functions.sql` | إصلاح تضارب 8 دوال كانت متكررة (rpc_record_sale, rpc_create_purchase_order, rpc_add_expense, rpc_add_petty_cash, rpc_pay_invoice_installment, rpc_pay_supplier_installment, rpc_update_check_status, rpc_add_capital_movement) |
+| 1 | `01_schema_users_settings.sql` | المستخدمون، الصلاحيات، الإعدادات، المخازن، المنتجات والمتغيرات |
+| 2 | `02_schema_sales_purchases.sql` | المبيعات، المصروفات، الموردين، الأوردرات، الفواتير |
+| 3 | `03_schema_capital_hr_journal.sql` | رأس المال، الشركاء، العهدة، الموارد البشرية، دفتر اليومية |
+| 4 | `04_rpc_helpers_categories_sales.sql` | هيلبرز عامة، الفئات، تسجيل بيعة، مرتجع |
+| 5 | `05_rpc_purchases_capital_pettycash.sql` | المشتريات، رأس المال، العهدة، الفواتير |
+| 6 | `06_rpc_dashboard_reports_cron.sql` | الداشبورد المجمّع، قائمة الدخل، كشف حساب مورد |
+| 7 | `07_accounts_opening_balances_treasury.sql` | شجرة الحسابات، أرصدة أول مدة، خزنة وبنوك متعددة، سلة محذوفات، مراكز تكلفة |
+| 8 | `08_stock_transfers_purchase_requests.sql` | نقل مخزون بين المخازن، طلبات شراء واعتماد |
+| 9 | `09_profitability_currencies_checks.sql` | تقييم مخزون بمتوسط مرجح، ربحية بالصنف/العميل، عملات متعددة، شيكات |
+| 10 | `10_notifications_search_attachments.sql` | إشعارات داخلية، بحث موحّد، مرفقات |
+| 11 | `11_stagnant_stock_sales_forecast.sql` | أصناف راكدة، توقع مبيعات إحصائي |
+| 12 | `12_secure_easyorders_settings.sql` | تحصين مفاتيح EasyOrders من القراءة العامة |
+| 13 | `13_update_category_product_add_with_variants.sql` | تعديل الفئات والمنتجات، إضافة منتج مع متغيراته دفعة واحدة |
+| 14 | `14_open_invoice_add_items.sql` | فواتير حساب مفتوح مع أصناف حقيقية من المخزون |
+| 15 | `15_fix_capital_movement_where_clause.sql` | إصلاح خطأ UPDATE بدون WHERE في حركة رأس المال |
+| 16 | `16_capital_treasury_link_stock_guard.sql` | ربط رأس المال بالخزنة فعليًا، منع البيع بكمية أكبر من المتاح |
+| 17 | `17_treasury_unification_cogs_expense_rpc.sql` | توحيد الخزنة الحقيقية، قيود COGS، مصروفات كـRPC آمن |
+| 18 | `18_fix_cash_flow_balance_after.sql` | إصلاح باج balance_after في cash_flow + تصحيح تاريخي |
+| 19 | `19_transfer_fix_return_cash_vs_credit.sql` | إصلاح التحويل بين الخزن، مرتجع يفرّق بين كاش وآجل |
+| 20 | `20_comprehensive_accounting_audit_fix.sql` | فحص محاسبي شامل: شجرة حسابات فعّالة، ميزان مراجعة، ميزانية عمومية، إهلاك، قفل فترات، وأكتر |
+| 21 | `21_fix_overloaded_functions.sql` | إصلاح تضارب 8 دوال كانت متكررة (Overloading) |
 | 24 | `24_standalone_return.sql` | مرتجع منتج مباشر (بحث عن منتج بدل البحث عن فاتورة) |
 | 25 | `25_return_invoice_link.sql` | إضافة ربط اختياري للمرتجع المباشر برقم فاتورة |
 
