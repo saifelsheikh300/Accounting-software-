@@ -112,7 +112,7 @@ async function handleLogin() {
 
   if (!username || !password) { errorEl.textContent = 'اكتب اليوزرنيم وكلمة المرور'; return; }
 
-  btn.innerHTML = '<span class="spinner"></span> جاري الدخول...';
+  btn.innerHTML = '<span class="dots-loader"><span></span><span></span><span></span><span></span></span>';
   btn.disabled = true;
   errorEl.textContent = '';
 
@@ -128,6 +128,51 @@ async function handleLogin() {
 }
 
 async function handleLogout() { await api.logout(); location.reload(); }
+
+// ------------------------------------------------------------
+// براند شاشة تسجيل الدخول + التاب (اسم/لوجو/لون) — بيتطبق من غير
+// تسجيل دخول عشان يبان صح من أول ما الصفحة تفتح
+// ------------------------------------------------------------
+async function applyPublicBranding() {
+  const s = await api.getPublicBranding();
+  if (s.accentColor) document.documentElement.style.setProperty('--accent', s.accentColor);
+  if (s.brandName) {
+    const el = document.getElementById('loginBrandName');
+    if (el) el.textContent = s.brandName;
+  }
+  if (s.logoUrl) {
+    const loginLogo = document.getElementById('loginLogo');
+    if (loginLogo) { loginLogo.classList.add('has-img'); loginLogo.innerHTML = '<img src="' + s.logoUrl + '" alt="logo">'; }
+    setCircularFavicon_(s.logoUrl);
+  }
+}
+
+function setCircularFavicon_(url) {
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = function () {
+    try {
+      const size = 64;
+      const canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(img, 0, 0, size, size);
+      ctx.restore();
+      const link = document.getElementById('faviconLink');
+      if (link) link.href = canvas.toDataURL('image/png');
+    } catch (e) {
+      const link = document.getElementById('faviconLink');
+      if (link) link.href = url; // لو المصدر مانع CORS، نستخدم الرابط زي ما هو من غير قص دائري
+    }
+  };
+  img.onerror = function () {};
+  img.src = url;
+}
 
 // ------------------------------------------------------------
 // بداية تشغيل التطبيق
@@ -2723,6 +2768,7 @@ function showErrorToast_(err) { showToast_('حصل خطأ: ' + (err.message || e
 // بداية التشغيل
 // ------------------------------------------------------------
 window.addEventListener('DOMContentLoaded', async function () {
+  applyPublicBranding();
   const { data: { session } } = await supabaseClient.auth.getSession();
   if (session) await bootApp();
   else document.getElementById('loginScreen').style.display = 'flex';

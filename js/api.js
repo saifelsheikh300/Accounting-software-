@@ -32,6 +32,19 @@ api.login = async function (username, password) {
 
 api.logout = async function () { await supabaseClient.auth.signOut(); return { success: true }; };
 
+// إعدادات البراند العامة (اسم، لوجو، ألوان) — بتتقرا من غير تسجيل دخول
+// عشان تتطبق على شاشة تسجيل الدخول نفسها والتاب
+api.getPublicBranding = async function () {
+  try {
+    const { data } = await supabaseClient.from('settings').select('key,value').in('key', ['brandName', 'logoUrl', 'accentColor']);
+    const s = {};
+    (data || []).forEach(function (r) { s[r.key] = r.value; });
+    return s;
+  } catch (e) {
+    return {};
+  }
+};
+
 api.getAppShellData = async function () {
   const { data: { user } } = await supabaseClient.auth.getUser();
   if (!user) throw new Error('الجلسة منتهية');
