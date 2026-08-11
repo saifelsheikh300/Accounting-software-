@@ -2622,9 +2622,13 @@ async function renderUsersPage() {
     let html = '<div class="card"><div class="card-row"><div class="card-heading">🔐 المستخدمون</div><button class="btn" onclick="openAddUserModal_()">➕ إضافة مستخدم جديد</button></div>' +
       '<div class="table-wrap" style="margin-top:16px;"><table><thead><tr><th>اليوزرنيم</th><th>الاسم</th><th>الدور</th><th>الحالة</th><th></th></tr></thead><tbody>';
     users.forEach(function (u) {
+      const isSelf = u.username === state.user.username;
       html += '<tr><td>' + u.username + '</td><td>' + u.fullName + '</td><td><span class="pill info">' + u.role + '</span></td>' +
         '<td><span class="pill ' + (u.active === 'نعم' ? 'success' : 'danger') + '">' + u.active + '</span></td>' +
-        '<td>' + (u.role !== 'أدمن' ? '<button class="btn sm secondary" onclick=\'openEditPermissionsModal_(' + JSON.stringify(u.username) + ', ' + JSON.stringify(u.permissions) + ')\'>الصلاحيات</button>' : '—') + '</td></tr>';
+        '<td style="display:flex; gap:6px;">' +
+        (u.role !== 'أدمن' ? '<button class="btn sm secondary" onclick=\'openEditPermissionsModal_(' + JSON.stringify(u.username) + ', ' + JSON.stringify(u.permissions) + ')\'>الصلاحيات</button>' : '') +
+        (!isSelf ? '<button class="btn sm danger" onclick=\'confirmDeleteUser_(' + JSON.stringify(u.id) + ', ' + JSON.stringify(u.username) + ')\'>حذف</button>' : '') +
+        '</td></tr>';
     });
     html += '</tbody></table></div></div>';
     setContent_(html);
@@ -2644,6 +2648,16 @@ async function submitNewUser_() {
   const payload = { username: document.getElementById('newUserUsername').value.trim(), fullName: document.getElementById('newUserFullName').value, password: document.getElementById('newUserPassword').value, role: document.getElementById('newUserRole').value, permissions: {} };
   if (!payload.username || !payload.password) { showToast_('اليوزرنيم وكلمة المرور مطلوبين', 'error'); return; }
   try { await api.createUser(state.user.username, payload); closeModal(); showToast_('تم إضافة المستخدم ✅', 'success'); renderUsersPage(); }
+  catch (err) { showErrorToast_(err); }
+}
+
+function confirmDeleteUser_(userId, username) {
+  openModal('حذف المستخدم', 'متأكدة إنك عايزة تمسحي "' + username + '"؟ الحساب هيتمسح نهائيًا ومش هيقدر يدخل تاني.', '',
+    '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn danger" onclick="submitDeleteUser_(\'' + userId + '\')">حذف نهائي</button>');
+}
+
+async function submitDeleteUser_(userId) {
+  try { await api.deleteUser(userId); closeModal(); showToast_('تم حذف المستخدم ✅', 'success'); renderUsersPage(); }
   catch (err) { showErrorToast_(err); }
 }
 

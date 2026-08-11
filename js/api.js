@@ -617,15 +617,30 @@ api.paySalary = async function (session, monthLabel, employeeName, treasuryAccou
 api.listUsers = async function () {
   const { data, error } = await supabaseClient.from('profiles').select('*');
   if (error) throw error;
-  return (data || []).map(function (u) { return { username: u.username, fullName: u.full_name, role: u.role, active: u.active ? 'نعم' : 'لا', permissions: u.permissions || {} }; });
+  return (data || []).map(function (u) { return { id: u.id, username: u.username, fullName: u.full_name, role: u.role, active: u.active ? 'نعم' : 'لا', permissions: u.permissions || {} }; });
 };
 
 api.createUser = async function (adminUsername, payload) {
-  const fakeEmail = payload.username.includes('@') ? payload.username : payload.username + '@internal.local';
-  const { data, error } = await supabaseClient.auth.admin.createUser({ email: fakeEmail, password: payload.password, email_confirm: true });
-  if (error) throw new Error('محتاجة صلاحية Admin API — راجعي ملاحظة الإعداد في دليل التشغيل');
-  const { error: profileErr } = await supabaseClient.from('profiles').insert({ id: data.user.id, username: payload.username, full_name: payload.fullName || payload.username, role: payload.role || 'بائع', permissions: payload.permissions || {} });
-  if (profileErr) throw profileErr;
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  const res = await fetch(SUPABASE_URL + '/functions/v1/create-employee', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (session ? session.access_token : SUPABASE_ANON_KEY) },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return { success: true };
+};
+
+api.deleteUser = async function (employeeId) {
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  const res = await fetch(SUPABASE_URL + '/functions/v1/delete-employee', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (session ? session.access_token : SUPABASE_ANON_KEY) },
+    body: JSON.stringify({ employee_id: employeeId })
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
   return { success: true };
 };
 
