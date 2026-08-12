@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>دليل نظام الحسابات الشامل</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Tajawal:wght@300;400;500;700&family=JetBrains+Mono:wght@500;700&display=swap');
+
+  :root{
+    --bg:#07060a; --bg2:#120a14; --panel:#120e17; --panel2:#1a1420;
+    --ink:#f6f1ea; --ink-dim:#a79fb3; --ink-faint:#6b6478;
+    --accent:#ff2d55; --accent-b:#ff6a8a; --gold:#ffb020; --mint:#00e5a0;
+    --line: rgba(246,241,234,.08);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:
+      repeating-linear-gradient(180deg, transparent 0 41px, var(--line) 41px 42px),
+      radial-gradient(1200px 700px at 85% -10%, rgba(255,45,85,.18), transparent 60%),
+      radial-gradient(900px 600px at -10% 20%, rgba(0,229,160,.10), transparent 55%),
+      var(--bg);
+    color:var(--ink); font-family:'Tajawal',sans-serif; line-height:1.9; font-size:15.5px;
+    padding-right: 260px;
+  }
+  h1,h2,h3,.disp{font-family:'Cairo',sans-serif;}
+  .num{font-family:'JetBrains Mono',monospace;}
+  a{color:inherit;}
+  ::selection{background:var(--accent); color:#fff;}
+
+  /* -------- الشريط الجانبي -------- */
+  nav.rail{
+    position:fixed; top:0; right:0; width:260px; height:100vh; overflow-y:auto;
+    background:linear-gradient(180deg, #0c0810, #050407); border-left:1px solid var(--line);
+    padding:26px 20px; z-index:50;
+  }
+  nav.rail .brand{display:flex; align-items:center; gap:10px; margin-bottom:26px;}
+  nav.rail .brand .dot{width:34px; height:34px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--gold)); flex-shrink:0; box-shadow:0 0 22px rgba(255,45,85,.6);}
+  nav.rail .brand b{font-family:'Cairo'; font-weight:800; font-size:14.5px;}
+  nav.rail .grp{font-size:10.5px; color:var(--accent-b); text-transform:uppercase; letter-spacing:1px; font-weight:700; margin:18px 0 8px;}
+  nav.rail a.link{display:block; font-size:12.8px; color:var(--ink-dim); padding:6px 0; text-decoration:none; border-right:2px solid transparent; padding-right:10px; transition:.15s;}
+  nav.rail a.link:hover, nav.rail a.link.active{color:#fff; border-color:var(--accent); background:rgba(255,45,85,.08);}
+
+  @media (max-width: 900px){
+    body{padding-right:0;}
+    nav.rail{position:static; width:100%; height:auto; display:none;}
+  }
+
+  main{max-width:900px; margin:0 auto; padding:0 30px 100px;}
+
+  /* -------- الهيرو -------- */
+  .hero{min-height:92vh; display:flex; flex-direction:column; justify-content:center; position:relative; padding-top:40px;}
+  .hero .eyebrow{display:inline-flex; align-items:center; gap:8px; font-size:12px; color:var(--gold); background:rgba(255,176,32,.1); border:1px solid rgba(255,176,32,.3); padding:6px 16px; border-radius:30px; width:fit-content; margin-bottom:26px; font-weight:700;}
+  .hero h1{font-size:clamp(38px,6vw,64px); font-weight:900; line-height:1.25; margin-bottom:20px;}
+  .hero h1 span{color:var(--accent); text-shadow:0 0 40px rgba(255,45,85,.5);}
+  .hero p.lead{font-size:18px; color:var(--ink-dim); max-width:600px; margin-bottom:36px;}
+
+  .ledger-demo{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:22px 24px; max-width:520px; box-shadow:0 30px 80px -20px rgba(0,0,0,.6);}
+  .ledger-demo .t{font-size:11px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:1px; margin-bottom:14px; font-weight:700;}
+  .ledger-row{display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px dashed var(--line); font-size:13.5px;}
+  .ledger-row:last-child{border:none;}
+  .ledger-row b{font-family:'Cairo'; font-weight:800;}
+  .tag{font-size:10.5px; padding:3px 10px; border-radius:20px; font-weight:800;}
+  .tag.debit{background:rgba(255,45,85,.15); color:var(--accent-b);}
+  .tag.credit{background:rgba(0,229,160,.15); color:var(--mint);}
+  .balance-check{display:flex; align-items:center; gap:8px; margin-top:14px; font-size:12.5px; color:var(--mint); font-weight:700;}
+
+  .scroll-hint{position:absolute; bottom:24px; font-size:12px; color:var(--ink-faint);}
+
+  /* -------- شارة الأقسام -------- */
+  .cat-head{padding:70px 0 26px; border-top:1px solid var(--line); margin-top:50px;}
+  .cat-head:first-of-type{border:none; margin-top:0;}
+  .cat-head .k{font-size:12px; color:var(--gold); font-weight:800; letter-spacing:2px;}
+  .cat-head h2{font-size:30px; font-weight:900; margin-top:6px;}
+
+  section.card{background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:32px 30px; margin-bottom:22px; scroll-margin-top:30px; position:relative; overflow:hidden;}
+  section.card::before{content:""; position:absolute; top:0; right:0; width:5px; height:100%; background:linear-gradient(180deg,var(--accent),var(--gold));}
+  .card-head{display:flex; align-items:center; gap:14px; margin-bottom:6px;}
+  .card-head .ic{font-size:26px; width:52px; height:52px; border-radius:14px; background:rgba(255,45,85,.1); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .card-head h3{font-size:21px; font-weight:800;}
+  .card-num{font-size:11px; color:var(--ink-faint);}
+
+  .lead-txt{color:var(--ink-dim); margin:16px 0; font-size:14.5px;}
+  h4.sub{font-size:14px; font-weight:800; color:#fff; margin:22px 0 8px; display:flex; align-items:center; gap:8px;}
+  h4.sub::before{content:""; width:14px; height:2px; background:var(--accent);}
+
+  ul.list{padding-right:20px; margin-bottom:6px;}
+  ul.list li{margin-bottom:8px; font-size:14px; color:var(--ink-dim);}
+  ul.list li b{color:#fff;}
+
+  ol.steps{counter-reset:s; padding:0; margin:12px 0;}
+  ol.steps li{list-style:none; counter-increment:s; position:relative; padding-right:38px; margin-bottom:12px; font-size:14px; color:var(--ink-dim);}
+  ol.steps li::before{content:counter(s); position:absolute; right:0; top:0; width:24px; height:24px; background:var(--accent); color:#fff; border-radius:8px; font-size:12px; font-weight:800; display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono';}
+
+  .box{border-radius:12px; padding:16px 18px; margin:16px 0; font-size:13.5px;}
+  .box.who{background:rgba(255,176,32,.08); border:1px solid rgba(255,176,32,.25);}
+  .box.who .t{color:var(--gold); font-weight:800; margin-bottom:6px;}
+  .box.tip{background:rgba(0,229,160,.08); border:1px solid rgba(0,229,160,.25);}
+  .box.tip .t{color:var(--mint); font-weight:800; margin-bottom:6px;}
+  .box.warn{background:rgba(255,45,85,.08); border:1px solid rgba(255,45,85,.25);}
+  .box.warn .t{color:var(--accent-b); font-weight:800; margin-bottom:6px;}
+  .box.term{background:var(--panel2); border:1px dashed var(--ink-faint);}
+  .box.term .t{color:#fff; font-weight:800; margin-bottom:6px;}
+
+  table.tbl{width:100%; border-collapse:collapse; margin:14px 0; font-size:13px;}
+  table.tbl th{background:var(--panel2); padding:9px 12px; text-align:right; font-weight:700; color:#fff; font-size:12px;}
+  table.tbl td{padding:8px 12px; border-bottom:1px solid var(--line); color:var(--ink-dim);}
+
+  .roles-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:14px 0;}
+  .role{border-radius:12px; padding:14px 16px; font-size:13px;}
+  .role .name{font-family:'Cairo'; font-weight:800; font-size:14px; margin-bottom:5px;}
+  .role.r1{background:rgba(155,90,255,.1); border-right:3px solid #9b5aff;}
+  .role.r2{background:rgba(0,229,160,.1); border-right:3px solid var(--mint);}
+  .role.r3{background:rgba(60,150,255,.1); border-right:3px solid #3c96ff;}
+  .role.r4{background:rgba(255,45,85,.1); border-right:3px solid var(--accent);}
+  @media(max-width:640px){.roles-grid{grid-template-columns:1fr;}}
+
+  footer{text-align:center; padding:60px 0 30px; color:var(--ink-faint); font-size:12.5px; border-top:1px solid var(--line); margin-top:60px;}
+</style>
+</head>
+<body>
+
+<nav class="rail" id="rail">
+  <div class="brand"><div class="dot"></div><b>دليل نظام الحسابات</b></div>
+
+  <div class="grp">البداية</div>
+  <a class="link" href="#intro">مقدمة عن النظام</a>
+  <a class="link" href="#glossary">قاموس المصطلحات</a>
+  <a class="link" href="#roles">تسجيل الدخول والصلاحيات</a>
+  <a class="link" href="#dashboard">الداشبورد</a>
+
+  <div class="grp">العمليات اليومية</div>
+  <a class="link" href="#pos">شاشة الكاشير</a>
+  <a class="link" href="#sales">المبيعات</a>
+  <a class="link" href="#inventory">المخزون</a>
+  <a class="link" href="#warehouses">المخازن</a>
+  <a class="link" href="#suppliers">الموردون والمشتريات</a>
+  <a class="link" href="#po">طلبات الشراء</a>
+  <a class="link" href="#orders">الأوردرات والعملاء</a>
+  <a class="link" href="#invoices">الفواتير الآجلة</a>
+  <a class="link" href="#expenses">المصروفات</a>
+
+  <div class="grp">الحسابات والمالية</div>
+  <a class="link" href="#capital">رأس المال والشركاء</a>
+  <a class="link" href="#pettycash">العهدة</a>
+  <a class="link" href="#treasury">الخزنة والبنوك</a>
+  <a class="link" href="#accounts">شجرة الحسابات</a>
+  <a class="link" href="#costcenters">مراكز التكلفة</a>
+  <a class="link" href="#checks">الشيكات</a>
+  <a class="link" href="#currency">العملات</a>
+
+  <div class="grp">التقارير والإدارة</div>
+  <a class="link" href="#reports">التقارير الذكية</a>
+  <a class="link" href="#financials">الميزانية والمراجعة</a>
+  <a class="link" href="#users">المستخدمون بالتفصيل</a>
+  <a class="link" href="#settings">الإعدادات</a>
+  <a class="link" href="#routine">روتين المحاسب الشهري</a>
+</nav>
+
+<main>
+
+  <!-- ============ الهيرو ============ -->
+  <section class="hero" id="intro">
+    <div class="eyebrow">📖 الدليل الشامل — من الألف للياء</div>
+    <h1>نظام حسابات <span>يفهمه</span><br>أي حد، مش بس المحاسب</h1>
+    <p class="lead">كل شاشة، كل زرار، كل رقم في البرنامج — متشرح هنا ببساطة، حتى لو أول مرة تسمعي فيها كلمة "قيد محاسبي".</p>
+
+    <div class="ledger-demo">
+      <div class="t">مثال حي — بيعة بـ200 جنيه كاش</div>
+      <div class="ledger-row"><span>الخزنة (اللي دخل)</span><b class="num">+200</b><span class="tag debit">مدين</span></div>
+      <div class="ledger-row"><span>المبيعات (الإيراد)</span><b class="num">200</b><span class="tag credit">دائن</span></div>
+      <div class="balance-check">✅ متوازن — كل عملية بتتسجل مرتين تلقائيًا، من غير ما تعملي حاجة</div>
+    </div>
+    <div class="scroll-hint">↓ انزلي تحت وابدئي من الأول</div>
+  </section>
+
+  <!-- ============ قاموس المصطلحات ============ -->
+  <section class="card" id="glossary">
+    <div class="card-head"><div class="ic">📘</div><h3>قاموس المصطلحات — لو مش محاسبة، ابدئي من هنا</h3></div>
+    <p class="lead-txt">قبل أي حاجة، خمس كلمات هتقابليها في كل مكان بالبرنامج — لما تفهميهم، هتفهمي كل تقرير بعد كده.</p>
+    <div class="box term"><div class="t">قيد محاسبي (Journal Entry)</div>كل عملية مالية بتتسجل في سطرين: مصدر الفلوس ووجهتها. مثلاً بيعة كاش = "الخزنة زادت" + "المبيعات زادت". السطرين دول لازم يكونوا بنفس القيمة دايمًا — ده اسمه "توازن القيد".</div>
+    <div class="box term"><div class="t">مدين ودائن (Debit / Credit)</div>مجرد تسميات لجانبي القيد، مش معناها "كسبان" أو "خسران". فكري فيهم كـ"من" و"إلى" — كل عملية بتاخد من حساب وتدي لحساب.</div>
+    <div class="box term"><div class="t">ميزان المراجعة (Trial Balance)</div>كشف بيجمع كل الحسابات وأرصدتها في لحظة معينة، عشان تتأكدي إن كل القيود فعلاً متوازنة مع بعض.</div>
+    <div class="box term"><div class="t">تكلفة البضاعة المباعة (COGS)</div>لما تبيعي منتج، الفرق بين سعر البيع وتكلفة الشراء الأصلية هو ربحك الحقيقي — والنظام بيحسبها تلقائي بمتوسط تكلفة كل صنف.</div>
+    <div class="box term"><div class="t">الفترة المحاسبية</div>مدة زمنية (شهر مثلاً) بتقفليها بعد ما تتأكدي إن كل حاجة فيها صح، عشان محدش يقدر يعدل فيها بأثر رجعي بعد كده.</div>
+  </section>
+
+  <!-- ============ البداية ============ -->
+  <div class="cat-head"><div class="k">القسم الأول</div><h2>البداية</h2></div>
+
+  <section class="card" id="roles-intro">
+    <div class="card-head"><div class="ic">🔑</div><h3>تسجيل الدخول: مين يشوف إيه</h3></div>
+    <p class="lead-txt">كل شخص بيستخدم البرنامج بيه حساب خاص (يوزرنيم + كلمة سر). "الدور" اللي بتحدديه له بيحدد إيه اللي بيشوفه من أول لحظة يدخل.</p>
+    <div class="roles-grid" id="roles">
+      <div class="role r1"><div class="name">🟣 أدمن</div>يشوف ويعدل في كل حاجة تلقائيًا. ده ليكي إنتي، أو لحد بتثقي فيه ثقة كاملة.</div>
+      <div class="role r2"><div class="name">🟢 شريك</div>يشوف كل حاجة (بس عرض) تلقائيًا، وإنتي بس بتفتحيله "تعديل" فين ما محتاج.</div>
+      <div class="role r3"><div class="name">🔵 كاشير</div>كل حاجة مخفية إلا اللي تفتحيها، وبيدخل مباشرة على شاشة البيع.</div>
+      <div class="role r4"><div class="name">🔴 أي دور تاني (محاسب...)</div>كل حاجة مخفية افتراضيًا، وإنتي بتحددي له كل قسم بالاسم.</div>
+    </div>
+    <div class="box who"><div class="t">📌 مثال: لو معاكي محاسب</div>افتحيله "تعديل" على: التقارير، المصروفات، الفواتير، رأس المال، العهدة. وافتحيله "عرض بس" على: المبيعات، المخزون، الموردون. وسيبي "المستخدمون والإعدادات" مخفيين — دول ليكي إنتي بس.</div>
+  </section>
+
+  <section class="card" id="dashboard">
+    <div class="card-head"><div class="ic">📊</div><h3>الداشبورد — أول ما تدخلي</h3></div>
+    <p class="lead-txt">صورة سريعة عن اليوم من غير ما تدخلي كل قسم لوحده.</p>
+    <ul class="list">
+      <li><b>إجمالي المبيعات والكاش</b> بشكل لحظي</li>
+      <li><b>رصيد الخزنة والبنوك</b> مجمّع في رقم واحد</li>
+      <li><b>تنبيهات المخزون المنخفض</b> والأصناف الراكدة</li>
+    </ul>
+  </section>
+
+  <!-- ============ العمليات اليومية ============ -->
+  <div class="cat-head"><div class="k">القسم الثاني</div><h2>العمليات اليومية</h2></div>
+
+  <section class="card" id="pos">
+    <div class="card-head"><div class="ic">🛒</div><h3>شاشة الكاشير — البيع السريع</h3></div>
+    <p class="lead-txt">الشاشة المخصصة للبيع في المحل — مصممة عشان أي حد يستخدمها من غير خبرة محاسبية خالص.</p>
+    <h4 class="sub">إزاي تتم بيعة؟</h4>
+    <ol class="steps">
+      <li>دوسي على المنتج من شبكة المنتجات — بيتضاف للسلة على طول</li>
+      <li>اختاري طريقة الدفع (كاش / فيزا / آجل)</li>
+      <li>لو فيه خصم، اكتبيه في خانة الخصم</li>
+      <li>دوسي "إتمام البيع ✅" — خلاص، اتسجلت البيعة والقيد المحاسبي معاها تلقائي</li>
+    </ol>
+    <h4 class="sub">مرتجع منتج</h4>
+    <p class="lead-txt">زرار "مرتجع منتج 🔁" بيسجل رجوع منتج (مرتبط بفاتورة أو من غيرها)، وبيرجع المخزون والقيود لوضعها الصح تلقائي.</p>
+    <div class="box tip"><div class="t">💡 نصيحة</div>ملخص اليوم تحت الشاشة أسرع طريقة تتأكدي بيها إن كاشير معين قفل يومه صح قبل ما يسلّم الوردية.</div>
+  </section>
+
+  <section class="card" id="sales">
+    <div class="card-head"><div class="ic">💰</div><h3>المبيعات والمرتجعات</h3></div>
+    <p class="lead-txt">سجل كامل لكل بيعة حصلت في النظام، من أي مكان (كاشير، أونلاين، يدوي).</p>
+    <ul class="list">
+      <li>فلترة حسب التاريخ أو طريقة الدفع أو الحالة</li>
+      <li>تفاصيل كل بيعة + القيد المحاسبي المرتبط بيها</li>
+      <li>تقارير ربحية بالصنف وبالعميل</li>
+    </ul>
+  </section>
+
+  <section class="card" id="inventory">
+    <div class="card-head"><div class="ic">📦</div><h3>المخزون والمنتجات</h3></div>
+    <p class="lead-txt">كل منتج ومتغيراته (مقاس، لون...) وكميته وتكلفته الحالية.</p>
+    <ul class="list">
+      <li><b>إضافة/تعديل منتج</b> بمتغيرات مختلفة</li>
+      <li><b>تصحيح كمية أو تكلفة يدوي</b> — لجرد فعلي مثلاً</li>
+      <li><b>تنبيه تلقائي</b> لما صنف يوصل الحد الأدنى</li>
+      <li><b>أصناف راكدة</b> — أي حاجة من غير بيع 60 يوم بتظهر لوحدها</li>
+    </ul>
+    <div class="box warn"><div class="t">⚠️ تنبيه</div>التعديل اليدوي هو المكان الوحيد اللي بيغيّر المخزون من غير قيد تلقائي — استخدميه بس وقت الجرد الفعلي.</div>
+  </section>
+
+  <section class="card" id="warehouses">
+    <div class="card-head"><div class="ic">🏬</div><h3>المخازن ونقل البضاعة</h3></div>
+    <p class="lead-txt">لو عندك أكتر من فرع، تقدري تشوفي كمية كل صنف في كل مخزن وتنقلي بضاعة بينهم بسجل واضح.</p>
+  </section>
+
+  <section class="card" id="suppliers">
+    <div class="card-head"><div class="ic">🚚</div><h3>الموردون والمشتريات</h3></div>
+    <p class="lead-txt">سجل الموردين وكل عمليات الشراء، مع تحديث تلقائي للمخزون والتكلفة، ومتابعة المستحق لكل مورد.</p>
+  </section>
+
+  <section class="card" id="po">
+    <div class="card-head"><div class="ic">📝</div><h3>طلبات الشراء والاعتماد</h3></div>
+    <p class="lead-txt">قبل تحويلها لفاتورة فعلية، تقدري تعملي "طلب شراء" يحتاج موافقة من صاحب الصلاحية — مفيد لو فيه أكتر من موظف بيطلب بضاعة.</p>
+  </section>
+
+  <section class="card" id="orders">
+    <div class="card-head"><div class="ic">🧑</div><h3>الأوردرات والعملاء</h3></div>
+    <p class="lead-txt">إدارة طلبات العملاء (خصوصًا لو عندك متجر أونلاين مربوط) وسجل تعاملات كل عميل.</p>
+  </section>
+
+  <section class="card" id="invoices">
+    <div class="card-head"><div class="ic">📄</div><h3>الفواتير — البيع الآجل</h3></div>
+    <p class="lead-txt">للعميل اللي بيشتري "بالحساب المفتوح" بدل كاش فوري. فاتورة بتتفتح، تضاف عليها أصناف، ورصيدها بيقفل جزئي أو كلي مع كل تحصيل.</p>
+  </section>
+
+  <section class="card" id="expenses">
+    <div class="card-head"><div class="ic">🧾</div><h3>المصروفات</h3></div>
+    <p class="lead-txt">تسجيل أي مصروف (إيجار، كهرباء، مرتبات...) مع تصنيفه.</p>
+    <div class="box tip"><div class="t">💡 نصيحة</div>صنّفي المصروفات بانتظام — ده اللي هيخلي تقرير الأرباح يبان بصورة حقيقية، مش رقم إجمالي مالوش معنى.</div>
+  </section>
+
+  <!-- ============ الحسابات والمالية ============ -->
+  <div class="cat-head"><div class="k">القسم الثالث</div><h2>الحسابات والمالية</h2></div>
+
+  <section class="card" id="capital">
+    <div class="card-head"><div class="ic">🤝</div><h3>رأس المال والشركاء</h3></div>
+    <p class="lead-txt">حصة كل شريك، وأي إيداع أو سحب من رأس المال، وتوزيع الأرباح لو محتاجة.</p>
+  </section>
+
+  <section class="card" id="pettycash">
+    <div class="card-head"><div class="ic">👛</div><h3>العهدة (Petty Cash)</h3></div>
+    <p class="lead-txt">مبلغ صغير بتديه لموظف يصرف منه على مصاريف يومية بسيطة (مواصلات، أدوات...) بدل ما يرجعلك في كل مرة.</p>
+  </section>
+
+  <section class="card" id="treasury">
+    <div class="card-head"><div class="ic">🏦</div><h3>الخزنة والبنوك</h3></div>
+    <p class="lead-txt">أكتر من حساب (خزنة كاش، حسابات بنكية) وكل واحد رصيده منفصل، مع تحويل بينهم وسجل حركة كامل.</p>
+    <div class="box warn"><div class="t">⚠️ تنبيه</div>رصيد أي حساب بيتغير بس من خلال عمليات النظام — مفيش تعديل مباشر لرصيد موجود، عشان يفضل كل جنيه له مصدر واضح.</div>
+  </section>
+
+  <section class="card" id="accounts">
+    <div class="card-head"><div class="ic">🗂️</div><h3>شجرة الحسابات</h3></div>
+    <p class="lead-txt">القائمة الكاملة للحسابات اللي بيتبنى منها كل تقرير مالي. باقي أقسام البرنامج بتسجل عليها تلقائي، فمش هتحتاجيها كتير في الاستخدام اليومي.</p>
+  </section>
+
+  <section class="card" id="costcenters">
+    <div class="card-head"><div class="ic">🎯</div><h3>مراكز التكلفة</h3></div>
+    <p class="lead-txt">عايزة تعرفي ربحية كل فرع أو نشاط لوحده مش الإجمالي بس؟ اربطي العمليات بمركز تكلفة وشوفي تقريره منفصل.</p>
+  </section>
+
+  <section class="card" id="checks">
+    <div class="card-head"><div class="ic">🧷</div><h3>الشيكات</h3></div>
+    <p class="lead-txt">تسجيل الشيكات الواردة (من عميل) والصادرة (لمورد)، مع متابعة تاريخ الاستحقاق.</p>
+  </section>
+
+  <section class="card" id="currency">
+    <div class="card-head"><div class="ic">💱</div><h3>العملات وأسعار الصرف</h3></div>
+    <p class="lead-txt">لو بتتعاملي بأكتر من عملة، سجّلي سعر الصرف والنظام بيحوّل تلقائيًا لعملة الدفاتر الأساسية.</p>
+  </section>
+
+  <!-- ============ التقارير والإدارة ============ -->
+  <div class="cat-head"><div class="k">القسم الرابع</div><h2>التقارير والإدارة</h2></div>
+
+  <section class="card" id="reports">
+    <div class="card-head"><div class="ic">📈</div><h3>التقارير الذكية</h3></div>
+    <ul class="list">
+      <li><b>ربحية بالصنف/بالعميل:</b> إيه أكتر حاجة بتكسبي منها فعليًا</li>
+      <li><b>أصناف راكدة:</b> بضاعة محتاجة تتحرك</li>
+      <li><b>توقع مبيعات:</b> اتجاه تقريبي بناءً على أداء آخر فترة</li>
+      <li><b>تحليل نصي ذكي (اختياري):</b> رأي وتوصيات مبنية على أرقامك</li>
+    </ul>
+    <div class="box who"><div class="t">📌 امتى تستخدميها</div>مرة كل أسبوع على الأقل — عشان تكتشفي أي انحراف بدري.</div>
+  </section>
+
+  <section class="card" id="financials">
+    <div class="card-head"><div class="ic">⚖️</div><h3>ميزان المراجعة والميزانية العمومية</h3></div>
+    <h4 class="sub">ميزان المراجعة</h4>
+    <p class="lead-txt">كل حساب ورصيده، مبني من دفتر اليومية مباشرة. لو مش متوازن، فيه خطأ محتاج مراجعة فورية.</p>
+    <h4 class="sub">قائمة الدخل</h4>
+    <p class="lead-txt">الإيرادات ناقص المصروفات وتكلفة البضاعة = صافي الربح، لأي فترة تختاريها.</p>
+    <h4 class="sub">الميزانية العمومية</h4>
+    <p class="lead-txt">الأصول = الخصوم + حقوق الملكية، في لحظة معينة — الصورة الكاملة للمركز المالي.</p>
+  </section>
+
+  <section class="card" id="users">
+    <div class="card-head"><div class="ic">👥</div><h3>المستخدمون والصلاحيات بالتفصيل</h3></div>
+    <table class="tbl">
+      <tr><th>المستوى</th><th>معناه</th></tr>
+      <tr><td>مخفي</td><td>القسم مش موجود خالص في القائمة الجانبية بتاعته</td></tr>
+      <tr><td>عرض</td><td>يشوف البيانات بس، من غير إضافة أو تعديل أو حذف</td></tr>
+      <tr><td>تعديل</td><td>صلاحية كاملة — إضافة وتعديل وحذف</td></tr>
+    </table>
+    <div class="box warn"><div class="t">⚠️ مبدأ أمان</div>افتحي "تعديل" بس للأقسام اللي الموظف محتاجها فعلاً — الأقل صلاحية هو الأفضل دايمًا.</div>
+  </section>
+
+  <section class="card" id="settings">
+    <div class="card-head"><div class="ic">⚙️</div><h3>الإعدادات العامة</h3></div>
+    <ul class="list">
+      <li><b>اسم البراند واللوجو:</b> بيظهروا في كل الشاشة الرئيسية وتسجيل الدخول والتاب</li>
+      <li><b>الألوان:</b> بتلوّن واجهة البرنامج كله</li>
+      <li><b>وضع التشغيل:</b> محل / أونلاين / الاثنين</li>
+      <li><b>الضريبة، وموافقة الشركاء على عمليات معينة</b></li>
+    </ul>
+  </section>
+
+  <section class="card" id="routine">
+    <div class="card-head"><div class="ic">✅</div><h3>روتين المحاسب الشهري المقترح</h3></div>
+    <ol class="steps">
+      <li>راجعي ميزان المراجعة — تأكدي إنه متوازن</li>
+      <li>راجعي الأصناف الراكدة واتخذي قرار</li>
+      <li>صنّفي أي مصروف "غير محدد"</li>
+      <li>راجعي الشيكات المستحقة الشهر الجاي</li>
+      <li>اعملي تسوية بنكية لكل حساب خزنة/بنك</li>
+      <li>اقفلي الفترة المحاسبية عشان تمنعي تعديل بأثر رجعي</li>
+    </ol>
+    <div class="box tip"><div class="t">💡 أهم نصيحة</div>الانتظام أهم من التعقيد — راجعي كل أسبوع بدل ما تسيبيها لآخر الشهر.</div>
+  </section>
+
+  <footer>دليل استخدام نظام الحسابات الشامل — إعداد ومراجعة محاسبية</footer>
+</main>
+
+<script>
+  const links = document.querySelectorAll('nav.rail a.link');
+  const sections = Array.from(links).map(l => document.querySelector(l.getAttribute('href'))).filter(Boolean);
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        const id = '#' + e.target.id;
+        links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === id));
+      }
+    });
+  }, { rootMargin: '-40% 0px -55% 0px' });
+  sections.forEach(s => io.observe(s));
+</script>
+</body>
+</html>
