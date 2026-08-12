@@ -2640,12 +2640,14 @@ function openAddUserModal_() {
     '<div class="field"><label>اليوزرنيم <span class="req">*</span></label><input type="text" id="newUserUsername"></div>' +
     '<div class="field" style="margin-top:12px;"><label>الاسم الكامل</label><input type="text" id="newUserFullName"></div>' +
     '<div class="field" style="margin-top:12px;"><label>كلمة المرور <span class="req">*</span></label><input type="password" id="newUserPassword"></div>' +
-    '<div class="field" style="margin-top:12px;"><label>الدور</label><select id="newUserRole"><option value="بائع">بائع</option><option value="كاشير">كاشير</option><option value="شريك">شريك</option><option value="أدمن">أدمن</option></select></div>',
+    '<div class="field" style="margin-top:12px;"><label>الدور</label><input type="text" id="newUserRole" list="rolesList" placeholder="اختاري من القائمة أو اكتبي أي مسمى تاني" value="بائع"><datalist id="rolesList"><option value="بائع"><option value="كاشير"><option value="محاسب"><option value="شريك"><option value="أدمن"></datalist></div>' +
+    '<div class="hint" style="margin-top:6px; font-size:12px; color:var(--text-dim);">"أدمن" بياخد كل الصلاحيات تلقائي، و"شريك" بيشوف كل حاجة (عرض) افتراضيًا. أي دور تاني (محاسب، بائع، أو أي مسمى تكتبيه) بيبدأ مخفي بالكامل وإنتي اللي بتفتحيله الصلاحيات المطلوبة بعدين.</div>',
     '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" onclick="submitNewUser_()">إضافة</button>');
 }
 
 async function submitNewUser_() {
-  const payload = { username: document.getElementById('newUserUsername').value.trim(), fullName: document.getElementById('newUserFullName').value, password: document.getElementById('newUserPassword').value, role: document.getElementById('newUserRole').value, permissions: {} };
+  const roleValue = document.getElementById('newUserRole').value.trim();
+  const payload = { username: document.getElementById('newUserUsername').value.trim(), fullName: document.getElementById('newUserFullName').value, password: document.getElementById('newUserPassword').value, role: roleValue || 'بائع', permissions: {} };
   if (!payload.username || !payload.password) { showToast_('اليوزرنيم وكلمة المرور مطلوبين', 'error'); return; }
   try { await api.createUser(state.user.username, payload); closeModal(); showToast_('تم إضافة المستخدم ✅', 'success'); renderUsersPage(); }
   catch (err) { showErrorToast_(err); }
