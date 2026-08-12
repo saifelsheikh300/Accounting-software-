@@ -2689,11 +2689,7 @@ async function renderSettingsPage() {
       field_('اسم البراند', 'setBrandName', s.brandName) + field_('رابط اللوجو', 'setLogoUrl', s.logoUrl) +
       field_('اللون الأساسي', 'setPrimaryColor', s.primaryColor, 'color') + field_('لون التمييز', 'setAccentColor', s.accentColor, 'color') +
       field_('العملة', 'setCurrency', s.currency) +
-      selectField_('وضع تشغيل النظام', 'setOperatingMode', s.operatingMode, [['STORE_ONLY', 'محل فقط'], ['ONLINE_ONLY', 'أونلاين فقط'], ['BOTH', 'محل + أونلاين']]) +
       selectField_('نسبة الإدارة مفعّلة؟', 'setAdminFeeEnabled', s.adminFeeEnabled, [['true', 'نعم'], ['false', 'لا']]) +
-      selectField_('الضريبة مفعّلة؟', 'setTaxEnabled', s.taxEnabled, [['true', 'نعم'], ['false', 'لا']]) +
-      field_('نسبة الضريبة %', 'setTaxRate', s.taxRate) +
-      selectField_('موافقة الشركاء مفعّلة؟', 'setPartnerApprovalEnabled', s.partnerApprovalEnabled, [['true', 'نعم'], ['false', 'لا']]) +
       field_('EasyOrders API Key', 'setEasyOrdersApiKey', s.easyOrdersApiKey) + field_('EasyOrders Secret', 'setEasyOrdersSecret', s.easyOrdersSecret) +
       field_('حد التنبيه الافتراضي للمخزون', 'setLowStockThresholdDefault', s.lowStockThresholdDefault) +
       '</div><button class="btn success block" style="margin-top:20px;" onclick="saveSettings_()">💾 حفظ الإعدادات</button></div>');
@@ -2710,9 +2706,8 @@ async function saveSettings_() {
   const payload = {
     brandName: document.getElementById('setBrandName').value, logoUrl: document.getElementById('setLogoUrl').value,
     primaryColor: document.getElementById('setPrimaryColor').value, accentColor: document.getElementById('setAccentColor').value,
-    currency: document.getElementById('setCurrency').value, operatingMode: document.getElementById('setOperatingMode').value,
-    adminFeeEnabled: document.getElementById('setAdminFeeEnabled').value, taxEnabled: document.getElementById('setTaxEnabled').value,
-    taxRate: document.getElementById('setTaxRate').value, partnerApprovalEnabled: document.getElementById('setPartnerApprovalEnabled').value,
+    currency: document.getElementById('setCurrency').value,
+    adminFeeEnabled: document.getElementById('setAdminFeeEnabled').value,
     easyOrdersApiKey: document.getElementById('setEasyOrdersApiKey').value, easyOrdersSecret: document.getElementById('setEasyOrdersSecret').value,
     lowStockThresholdDefault: document.getElementById('setLowStockThresholdDefault').value
   };
