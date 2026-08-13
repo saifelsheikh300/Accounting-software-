@@ -516,7 +516,7 @@ api.getCapitalSummary = async function () {
   const { data, error } = await supabaseClient.from('partners').select('*');
   if (error) throw error;
   const partners = (data || []).map(function (p) {
-    return { name: p.name, balance: p.balance, ownershipPercent: p.ownership_percent, profitSharePercent: p.profit_share_percent, adminRate: p.admin_rate, adminRateType: p.admin_rate_type };
+    return { name: p.name, balance: p.balance, ownershipPercent: p.ownership_percent, profitSharePercent: p.profit_share_percent, adminRate: p.admin_rate, adminRateType: p.admin_rate_type, active: p.active !== false };
   });
   return { partners: partners, totalCapital: partners.reduce(function (s, p) { return s + Number(p.balance); }, 0) };
 };
@@ -540,6 +540,12 @@ api.setPartnerProfitShare = async function (session, partnerName, percent) {
 api.setPartnerAdminRate = async function (session, partnerName, rate, rateType) {
   const { data: partner } = await supabaseClient.from('partners').select('profit_share_percent').eq('name', partnerName).single();
   const { error } = await supabaseClient.rpc('rpc_set_partner_rates', { p_partner_name: partnerName, p_profit_share: partner ? partner.profit_share_percent : null, p_admin_rate: rate, p_admin_rate_type: rateType });
+  if (error) throw error;
+  return { success: true };
+};
+
+api.setPartnerActive = async function (session, partnerName, active) {
+  const { error } = await supabaseClient.rpc('rpc_set_partner_active', { p_partner_name: partnerName, p_active: active });
   if (error) throw error;
   return { success: true };
 };

@@ -2258,15 +2258,21 @@ async function renderCapitalPage() {
       '</div><div class="field" style="margin-top:12px;"><label>نوع نسبة الإدارة</label><select id="rateAdminType"><option value="نسبة %">نسبة %</option><option value="مبلغ ثابت">مبلغ ثابت</option></select></div>' +
       '<button class="btn success block" style="margin-top:14px;" onclick="submitPartnerRates_()">💾 حفظ النسب</button></div>';
 
+    const activePartners = summary.partners.filter(function (p) { return p.active; });
+    const formerPartners = summary.partners.filter(function (p) { return !p.active; });
+    function partnerRow_(p) {
+      return '<div class="list-item" style="display:block; padding:14px 4px;"><div class="card-row"><b>' + p.name + '</b><span class="pill info">' + p.ownershipPercent + '% ملكية</span></div>' +
+        '<div style="margin-top:6px; font-size:12px; color:var(--text-dim);">الرصيد: ' + formatMoney_(p.balance, cur) +
+        ' · توزيع أرباح: ' + (p.profitSharePercent !== null ? p.profitSharePercent + '%' : '—') +
+        ' · إدارة: ' + (p.adminRate !== null ? p.adminRate + (p.adminRateType === 'نسبة %' ? '%' : ' ' + cur) : '—') + '</div>' +
+        '<button class="btn sm secondary" style="margin-top:8px;" onclick=\'togglePartnerActive_(' + JSON.stringify(p.name) + ', ' + (!p.active) + ')\'>' + (p.active ? '🔒 تعطيل (شريك مشى)' : '✅ إعادة تفعيل') + '</button></div>';
+    }
     html += '<div class="card"><div class="card-heading">📊 الشركاء الحاليين</div><div style="margin-top:10px;">';
-    html += summary.partners.length === 0 ? emptyRow_('🤝', 'لا يوجد شركاء مسجلين بعد') :
-      summary.partners.map(function (p) {
-        return '<div class="list-item" style="display:block; padding:14px 4px;"><div class="card-row"><b>' + p.name + '</b><span class="pill info">' + p.ownershipPercent + '% ملكية</span></div>' +
-          '<div style="margin-top:6px; font-size:12px; color:var(--text-dim);">الرصيد: ' + formatMoney_(p.balance, cur) +
-          ' · توزيع أرباح: ' + (p.profitSharePercent !== null ? p.profitSharePercent + '%' : '—') +
-          ' · إدارة: ' + (p.adminRate !== null ? p.adminRate + (p.adminRateType === 'نسبة %' ? '%' : ' ' + cur) : '—') + '</div></div>';
-      }).join('');
+    html += activePartners.length === 0 ? emptyRow_('🤝', 'لا يوجد شركاء نشطين حاليًا') : activePartners.map(partnerRow_).join('');
     html += '</div></div></div>';
+    if (formerPartners.length > 0) {
+      html += '<div class="card" style="margin-top:16px; opacity:.7;"><div class="card-heading">📁 شركاء سابقون</div><div style="margin-top:10px;">' + formerPartners.map(partnerRow_).join('') + '</div></div>';
+    }
 
     const adminRights = await api.getAdminRights().catch(function () { return []; });
     const availableByPartner = {};
@@ -2300,6 +2306,11 @@ async function submitWithdrawAdminRight_() {
 
 async function submitRunAdminFee_() {
   try { await api.runMonthlyAdminFee({ username: state.user.username }); showToast_('تم تشغيل نسبة الإدارة الشهرية ✅', 'success'); renderCapitalPage(); }
+  catch (err) { showErrorToast_(err); }
+}
+
+async function togglePartnerActive_(partnerName, newActive) {
+  try { await api.setPartnerActive({ username: state.user.username }, partnerName, newActive); showToast_(newActive ? 'تم تفعيل الشريك ✅' : 'تم تعطيل الشريك ✅', 'success'); renderCapitalPage(); }
   catch (err) { showErrorToast_(err); }
 }
 
