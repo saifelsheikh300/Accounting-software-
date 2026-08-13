@@ -134,7 +134,18 @@ async function handleLogout() { await api.logout(); location.reload(); }
 // تسجيل دخول عشان يبان صح من أول ما الصفحة تفتح
 // ------------------------------------------------------------
 async function applyPublicBranding() {
+  // تطبيق فوري من آخر نسخة محفوظة محليًا (لو موجودة) — من غير أي تأخير شبكة
+  try {
+    const cached = JSON.parse(localStorage.getItem('cachedBranding') || 'null');
+    if (cached) applyBrandingValues_(cached);
+  } catch (e) {}
+
   const s = await api.getPublicBranding();
+  applyBrandingValues_(s);
+  try { localStorage.setItem('cachedBranding', JSON.stringify(s)); } catch (e) {}
+}
+
+function applyBrandingValues_(s) {
   if (s.accentColor) document.documentElement.style.setProperty('--accent', s.accentColor);
   if (s.brandName) {
     const el = document.getElementById('loginBrandName');
@@ -257,6 +268,7 @@ async function toggleTheme() {
 // التنقل بين الصفحات
 // ------------------------------------------------------------
 function navigate(pageKey) {
+  if (pageKey !== 'inventory') invLowStockOnly = false;
   state.currentPage = pageKey;
   document.querySelectorAll('.nav-item').forEach(function (el) { el.classList.toggle('active', el.dataset.key === pageKey); });
 
@@ -402,7 +414,7 @@ function buildDashboardHtml_(d) {
   html += '<div class="grid grid-4">';
   html += statCard_('💰', 'إجمالي المبيعات (الشهر)', formatMoney_(d.sales.total, cur), 'أونلاين ' + formatMoney_(d.sales.online, cur) + ' · محل ' + formatMoney_(d.sales.store, cur), true);
   html += statCard_('💸', 'المصروفات (الشهر)', formatMoney_(d.expenses.total, cur), '', false);
-  html += statCard_('⚠️', 'منتجات منخفضة', d.lowStockCount, '', false);
+  html += statCard_('⚠️', 'منتجات منخفضة', d.lowStockCount, '', false, 'goToLowStockInventory_()');
   html += statCard_('⚖️', 'مستحقات (عملاء/موردين)', formatMoney_(d.receivables, cur) + ' / ' + formatMoney_(d.payables, cur), 'لينا / علينا', false);
   html += '</div>';
 
@@ -427,7 +439,7 @@ function buildDashboardHtml_(d) {
   html += statCard_('📐', 'NP / Sales', d.profit.npMargin + '%', '', false);
   html += '</div>';
 
-  html += '<div class="section-title">تنبيهات مخزون منخفض <span class="count-chip">' + d.lowStockCount + '</span></div><div class="card">';
+  html += '<div class="section-title">تنبيهات مخزون منخفض <span class="count-chip">' + d.lowStockCount + '</span></div><div class="card" style="cursor:pointer;" onclick="goToLowStockInventory_()">';
   if (!d.lowStockAlerts || d.lowStockAlerts.length === 0) html += emptyRow_('✅', 'لا يوجد تنبيهات حاليًا');
   else d.lowStockAlerts.forEach(function (a) {
     html += '<div class="list-item"><span>' + a.productName + ' — ' + a.color + ' ' + a.size + '</span><span class="pill warning">الكمية: ' + a.quantity + '</span></div>';
@@ -444,8 +456,8 @@ function buildDashboardHtml_(d) {
   return html;
 }
 
-function statCard_(icon, label, value, sub, accent) {
-  return '<div class="card stat-card' + (accent ? ' accent' : '') + '">' +
+function statCard_(icon, label, value, sub, accent, onclick) {
+  return '<div class="card stat-card' + (accent ? ' accent' : '') + '"' + (onclick ? ' style="cursor:pointer;" onclick="' + onclick + '"' : '') + '>' +
     '<div class="stat-icon">' + icon + '</div><div class="card-label">' + label + '</div><div class="card-value">' + value + '</div>' +
     (sub ? '<div class="card-sub">' + sub + '</div>' : '') + '</div>';
 }
@@ -859,6 +871,13 @@ let invTreeCache = null;
 let invProductsCache = null;
 let invWarehousesCache = null;
 
+let invLowStockOnly = false;
+
+async function goToLowStockInventory_() {
+  invLowStockOnly = true;
+  await navigate('inventory');
+}
+
 async function renderInventoryPage() {
   setContent_(renderSkeleton_());
   await loadInventoryBaseData_();
@@ -874,18 +893,29 @@ async function loadInventoryBaseData_() {
   } catch (err) { showErrorToast_(err); }
 }
 
-function buildInventoryMainHtml_() {
-  const products = Object.values(invProductsCache || {});
-  const totalVariants = products.reduce(function (s, p) { return s + p.variants.length; }, 0);
+function isLowStock_(p) { return p.variants.some(function (v) { return v.quantity <= v.lowStockThreshold; }); }
 
-  let html = '<div class="field"><input type="text" id="invSearchInput" oninput="invSearch_(this.value)" placeholder="🔍 دوري باسم المنتج أو الكود..."></div>' +
+function buildInventoryMainHtml_() {
+  const allProducts = Object.values(invProductsCache || {});
+  const totalVariants = allProducts.reduce(function (s, p) { return s + p.variants.length; }, 0);
+  const shownProducts = invLowStockOnly ? allProducts.filter(isLowStock_) : allProducts;
+
+  let html = '';
+  if (invLowStockOnly) {
+    html += '<div class="card" style="background:rgba(231,76,60,.12); border:1px solid var(--danger); margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; padding:12px 14px;">' +
+      '<span style="font-size:13px;">⚠️ عرض المنتجات منخفضة المخزون فقط (' + shownProducts.length + ')</span>' +
+      '<span style="font-size:12px; color:var(--accent); cursor:pointer; white-space:nowrap;" onclick="clearLowStockFilter_()">إلغاء الفلتر ✕</span></div>';
+  }
+  html += '<div class="field"><input type="text" id="invSearchInput" oninput="invSearch_(this.value)" placeholder="🔍 دوري باسم المنتج أو الكود..."></div>' +
     '<button class="btn success block" style="margin-top:10px; padding:15px; font-size:15px;" onclick="openAddProductModal_()">➕ منتج جديد</button>' +
     '<div class="hint" style="cursor:pointer; margin-top:8px; text-align:center;" onclick="openCategoriesModal_()">🗂️ إدارة الفئات (' + invTreeCache.mainCategories.length + ')</div>';
 
-  html += '<div id="invCardsWrap" style="margin-top:16px;">' + buildInventoryCards_(products) + '</div>';
-  html += '<div class="hint" style="margin-top:14px; text-align:center;">📦 ' + products.length + ' منتج · 🎨 ' + totalVariants + ' متغير</div>';
+  html += '<div id="invCardsWrap" style="margin-top:16px;">' + buildInventoryCards_(shownProducts) + '</div>';
+  html += '<div class="hint" style="margin-top:14px; text-align:center;">📦 ' + allProducts.length + ' منتج · 🎨 ' + totalVariants + ' متغير</div>';
   return html;
 }
+
+function clearLowStockFilter_() { invLowStockOnly = false; setContent_(buildInventoryMainHtml_()); }
 
 function buildInventoryCards_(products) {
   if (products.length === 0) {
@@ -910,7 +940,8 @@ function buildInventoryCards_(products) {
 }
 
 function invSearch_(query) {
-  const products = Object.values(invProductsCache || {});
+  const base = Object.values(invProductsCache || {});
+  const products = invLowStockOnly ? base.filter(isLowStock_) : base;
   const q = (query || '').trim().toLowerCase();
   const filtered = !q ? products : products.filter(function (p) {
     if (p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)) return true;

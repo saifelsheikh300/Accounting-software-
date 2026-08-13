@@ -6,6 +6,14 @@
   <title>نظام الحسابات الشامل</title>
   <link rel="icon" id="faviconLink" type="image/svg+xml" href="assets/favicon.svg">
   <link rel="stylesheet" href="css/style.css?v=33">
+  <script>
+    (function () {
+      try {
+        var b = JSON.parse(localStorage.getItem('cachedBranding') || 'null');
+        if (b && b.accentColor) document.documentElement.style.setProperty('--accent', b.accentColor);
+      } catch (e) {}
+    })();
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body data-theme="dark">
@@ -65,8 +73,8 @@
   <div id="modalOverlay" onclick="if(event.target===this) closeModal()"><div class="modal-box" id="modalBox"></div></div>
   <div id="toastContainer"></div>
 
-  <script src="js/supabaseClient.js?v=38"></script>
-  <script src="js/api.js?v=38"></script>
-  <script src="js/app.js?v=38"></script>
+  <script src="js/supabaseClient.js?v=39"></script>
+  <script src="js/api.js?v=39"></script>
+  <script src="js/app.js?v=39"></script>
 </body>
 </html>
