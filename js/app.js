@@ -268,7 +268,7 @@ async function toggleTheme() {
 // التنقل بين الصفحات
 // ------------------------------------------------------------
 function navigate(pageKey) {
-  if (pageKey !== 'inventory') invLowStockOnly = false;
+  if (pageKey !== 'inventory') { invLowStockOnly = false; invCategoryFilter = ''; invStatusFilter = ''; invFiltersOpen = false; }
   state.currentPage = pageKey;
   document.querySelectorAll('.nav-item').forEach(function (el) { el.classList.toggle('active', el.dataset.key === pageKey); });
 
@@ -872,9 +872,13 @@ let invProductsCache = null;
 let invWarehousesCache = null;
 
 let invLowStockOnly = false;
+let invCategoryFilter = '';
+let invStatusFilter = '';
+let invFiltersOpen = false;
 
 async function goToLowStockInventory_() {
   invLowStockOnly = true;
+  invFiltersOpen = true;
   await navigate('inventory');
 }
 
@@ -895,27 +899,73 @@ async function loadInventoryBaseData_() {
 
 function isLowStock_(p) { return p.variants.some(function (v) { return v.quantity <= v.lowStockThreshold; }); }
 
+function applyInvFilters_(products) {
+  let list = products;
+  if (invLowStockOnly) list = list.filter(isLowStock_);
+  if (invCategoryFilter) list = list.filter(function (p) { return p.mainCategoryName === invCategoryFilter; });
+  if (invStatusFilter) list = list.filter(function (p) { return p.status === invStatusFilter; });
+  return list;
+}
+
 function buildInventoryMainHtml_() {
   const allProducts = Object.values(invProductsCache || {});
   const totalVariants = allProducts.reduce(function (s, p) { return s + p.variants.length; }, 0);
-  const shownProducts = invLowStockOnly ? allProducts.filter(isLowStock_) : allProducts;
+  const shownProducts = applyInvFilters_(allProducts);
+  const activeFiltersCount = (invLowStockOnly ? 1 : 0) + (invCategoryFilter ? 1 : 0) + (invStatusFilter ? 1 : 0);
 
   let html = '';
   if (invLowStockOnly) {
     html += '<div class="card" style="background:rgba(231,76,60,.12); border:1px solid var(--danger); margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; padding:12px 14px;">' +
-      '<span style="font-size:13px;">⚠️ عرض المنتجات منخفضة المخزون فقط (' + shownProducts.length + ')</span>' +
-      '<span style="font-size:12px; color:var(--accent); cursor:pointer; white-space:nowrap;" onclick="clearLowStockFilter_()">إلغاء الفلتر ✕</span></div>';
+      '<span style="font-size:13px;">⚠️ عرض المنتجات منخفضة المخزون فقط</span>' +
+      '<span style="font-size:12px; color:var(--accent); cursor:pointer; white-space:nowrap;" onclick="invLowStockOnly=false; setContent_(buildInventoryMainHtml_());">إلغاء ✕</span></div>';
   }
-  html += '<div class="field"><input type="text" id="invSearchInput" oninput="invSearch_(this.value)" placeholder="🔍 دوري باسم المنتج أو الكود..."></div>' +
-    '<button class="btn success block" style="margin-top:10px; padding:15px; font-size:15px;" onclick="openAddProductModal_()">➕ منتج جديد</button>' +
+  html += '<div class="field"><input type="text" id="invSearchInput" oninput="invSearch_(this.value)" placeholder="🔍 دوري باسم المنتج أو الكود..."></div>';
+
+  html += '<div class="card-row" style="margin-top:8px;">' +
+    '<button class="btn secondary" style="flex:1;" onclick="toggleInvFilters_()">🔽 فلاتر' + (activeFiltersCount > 0 ? ' (' + activeFiltersCount + ')' : '') + '</button>' +
+    '</div>';
+  html += '<div id="invFiltersPanel" style="display:' + (invFiltersOpen ? 'block' : 'none') + ';">' + buildInvFiltersPanel_() + '</div>';
+
+  html += '<button class="btn success block" style="margin-top:10px; padding:15px; font-size:15px;" onclick="openAddProductModal_()">➕ منتج جديد</button>' +
     '<div class="hint" style="cursor:pointer; margin-top:8px; text-align:center;" onclick="openCategoriesModal_()">🗂️ إدارة الفئات (' + invTreeCache.mainCategories.length + ')</div>';
 
   html += '<div id="invCardsWrap" style="margin-top:16px;">' + buildInventoryCards_(shownProducts) + '</div>';
-  html += '<div class="hint" style="margin-top:14px; text-align:center;">📦 ' + allProducts.length + ' منتج · 🎨 ' + totalVariants + ' متغير</div>';
+  html += '<div class="hint" style="margin-top:14px; text-align:center;">📦 ' + shownProducts.length + ' من ' + allProducts.length + ' منتج · 🎨 ' + totalVariants + ' متغير</div>';
   return html;
 }
 
-function clearLowStockFilter_() { invLowStockOnly = false; setContent_(buildInventoryMainHtml_()); }
+function buildInvFiltersPanel_() {
+  const catOptions = invTreeCache.mainCategories.map(function (c) {
+    return '<option value="' + c.name + '"' + (invCategoryFilter === c.name ? ' selected' : '') + '>' + c.name + '</option>';
+  }).join('');
+  return '<div class="card" style="margin-top:6px;">' +
+    '<div class="field"><label>الفئة الرئيسية</label><select id="invFilterCategory"><option value="">كل الفئات</option>' + catOptions + '</select></div>' +
+    '<div class="field" style="margin-top:10px;"><label>الحالة</label><select id="invFilterStatus">' +
+      '<option value=""' + (invStatusFilter === '' ? ' selected' : '') + '>الكل</option>' +
+      '<option value="نشط"' + (invStatusFilter === 'نشط' ? ' selected' : '') + '>نشط</option>' +
+      '<option value="غير نشط"' + (invStatusFilter === 'غير نشط' ? ' selected' : '') + '>غير نشط</option>' +
+    '</select></div>' +
+    '<label class="field-row" style="margin-top:10px; display:flex; align-items:center; gap:8px;"><input type="checkbox" id="invFilterLowStock"' + (invLowStockOnly ? ' checked' : '') + '> مخزون منخفض بس</label>' +
+    '<div class="card-row" style="margin-top:12px; gap:8px;">' +
+      '<button class="btn secondary" style="flex:1;" onclick="clearInvFilters_()">مسح الفلاتر</button>' +
+      '<button class="btn success" style="flex:1;" onclick="applyInvFiltersFromPanel_()">تطبيق ✅</button>' +
+    '</div></div>';
+}
+
+function toggleInvFilters_() { invFiltersOpen = !invFiltersOpen; setContent_(buildInventoryMainHtml_()); }
+
+function applyInvFiltersFromPanel_() {
+  invCategoryFilter = document.getElementById('invFilterCategory').value;
+  invStatusFilter = document.getElementById('invFilterStatus').value;
+  invLowStockOnly = document.getElementById('invFilterLowStock').checked;
+  invFiltersOpen = true;
+  setContent_(buildInventoryMainHtml_());
+}
+
+function clearInvFilters_() {
+  invCategoryFilter = ''; invStatusFilter = ''; invLowStockOnly = false;
+  setContent_(buildInventoryMainHtml_());
+}
 
 function buildInventoryCards_(products) {
   if (products.length === 0) {
@@ -941,7 +991,7 @@ function buildInventoryCards_(products) {
 
 function invSearch_(query) {
   const base = Object.values(invProductsCache || {});
-  const products = invLowStockOnly ? base.filter(isLowStock_) : base;
+  const products = applyInvFilters_(base);
   const q = (query || '').trim().toLowerCase();
   const filtered = !q ? products : products.filter(function (p) {
     if (p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)) return true;
