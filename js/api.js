@@ -129,38 +129,6 @@ api.createCategory = async function (session, payload) {
   return data[0];
 };
 
-api.addProduct = async function (session, payload) {
-  const { data, error } = await supabaseClient.rpc('rpc_add_product', {
-    p_name: payload.name, p_sub_category_code: payload.subCategory, p_base_price: payload.basePrice,
-    p_image: payload.image || '', p_description: payload.description || '', p_manual_code: payload.manualCode || null
-  });
-  if (error) throw error;
-  return { success: true, code: data[0].code };
-};
-
-// إضافة سريعة Inline من شاشة أمر الشراء — بتحط المنتج تلقائيًا تحت فئة "عام"
-// لو مش موجودة بتتعمل مرة واحدة بس، وبترجع كود المتغير الجاهز للإضافة للسلة فورًا
-api.quickAddProduct = async function (session, name, price, manualCode) {
-  const tree = await api.getProductTree();
-  let generalMain = tree.mainCategories.find(function (c) { return c.name === 'عام'; });
-  if (!generalMain) {
-    generalMain = await api.createCategory(session, { name: 'عام', type: 'رئيسية' });
-  }
-  const freshTree = await api.getProductTree();
-  let generalSub = freshTree.subCategories.find(function (c) { return c.name === 'عام' && c.parent === generalMain.code; });
-  if (!generalSub) {
-    generalSub = await api.createCategory(session, { name: 'عام', type: 'فرعية', parentCode: generalMain.code });
-  }
-
-  const product = await api.addProduct(session, {
-    name: name, subCategory: generalSub.code, basePrice: price, manualCode: manualCode || null
-  });
-  const variant = await api.addVariant(session, {
-    productCode: product.code, color: '', size: '', quantity: 0, cost: price
-  });
-  return { productCode: product.code, variantCode: variant.variantCode };
-};
-
 api.addVariant = async function (session, payload) {
   const { data, error } = await supabaseClient.rpc('rpc_add_variant', {
     p_product_code: payload.productCode, p_color: payload.color || '', p_size: payload.size || '',
@@ -294,11 +262,6 @@ api.posSearchSaleForReturn = async function (query) {
       items: (s.sale_items || []).map(function (it) { return { variantCode: it.product_variants ? it.product_variants.code : '', qty: it.qty, price: it.unit_price }; })
     };
   });
-};
-
-api.posReturn = async function (session, saleNumber, items, treasuryAccountId) {
-  const { data: sale } = await supabaseClient.from('sales').select('id').eq('sale_number', saleNumber).single();
-  return api.recordReturn(session, sale.id, items, true, treasuryAccountId);
 };
 
 api.recordPartialReturn = async function (session, saleNumber, items, isFull, treasuryAccountId) {
@@ -713,41 +676,6 @@ api.addAccount = async function (session, payload) {
 // ------------------------------------------------------------
 // أرصدة أول مدة (Opening Balances)
 // ------------------------------------------------------------
-api.listOpeningBalances = async function () {
-  const { data, error } = await supabaseClient.from('opening_balances').select('*, accounts(name,code), product_variants(code)').order('created_at', { ascending: false });
-  if (error) throw error;
-  return (data || []).map(function (o) {
-    return {
-      id: o.id, asOfDate: o.as_of_date, accountName: o.accounts ? (o.accounts.code + ' - ' + o.accounts.name) : '',
-      variantCode: o.product_variants ? o.product_variants.code : '', amount: o.amount, quantity: o.quantity,
-      description: o.description, locked: o.locked
-    };
-  });
-};
-
-api.addOpeningBalance = async function (session, payload) {
-  let accountId = null, variantId = null;
-  if (payload.accountCode) {
-    const { data: acc } = await supabaseClient.from('accounts').select('id').eq('code', payload.accountCode).single();
-    accountId = acc ? acc.id : null;
-  }
-  if (payload.variantCode) {
-    const { data: v } = await supabaseClient.from('product_variants').select('id').eq('code', payload.variantCode).single();
-    variantId = v ? v.id : null;
-  }
-  const { error } = await supabaseClient.from('opening_balances').insert({
-    as_of_date: payload.asOfDate, account_id: accountId, variant_id: variantId,
-    amount: payload.amount || 0, quantity: payload.quantity || null, description: payload.description || ''
-  });
-  if (error) throw error;
-  return { success: true };
-};
-
-api.lockOpeningBalances = async function (session) {
-  const { error } = await supabaseClient.rpc('rpc_lock_opening_balances');
-  if (error) throw error;
-  return { success: true };
-};
 
 // ------------------------------------------------------------
 // الخزنة والبنوك المتعددة
