@@ -361,9 +361,20 @@ api.addExpense = async function (session, payload) {
 // الموردون والمشتريات
 // ------------------------------------------------------------
 api.getSuppliers = async function () {
-  const { data, error } = await supabaseClient.from('suppliers').select('*');
+  const { data, error } = await supabaseClient.from('suppliers').select('id, name, contact, notes, purchase_orders(remaining, amount_paid, total)');
   if (error) throw error;
-  return (data || []).map(function (s) { return { name: s.name, contact: s.contact, notes: s.notes }; });
+  return (data || []).map(function (s) {
+    const orders = s.purchase_orders || [];
+    const totalRemaining = orders.reduce(function (sum, o) { return sum + Number(o.remaining); }, 0);
+    const totalPaid = orders.reduce(function (sum, o) { return sum + Number(o.amount_paid); }, 0);
+    let dueStatus = 'لا مشتريات';
+    if (orders.length > 0) {
+      if (totalRemaining <= 0) dueStatus = 'مدفوع بالكامل';
+      else if (totalPaid > 0) dueStatus = 'مدفوع جزئيًا';
+      else dueStatus = 'غير مدفوع';
+    }
+    return { name: s.name, contact: s.contact, notes: s.notes, totalRemaining: totalRemaining, dueStatus: dueStatus };
+  });
 };
 
 api.setVariantSalePrice = async function (session, variantCode, price) {

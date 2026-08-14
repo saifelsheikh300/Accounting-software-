@@ -1687,7 +1687,7 @@ function renderSupplierPageShell_() {
   renderSupplierTabContent_();
 }
 
-function switchSupplierPageTab_(tab) { supplierPageTab = tab; poCart = []; renderSupplierPageShell_(); }
+function switchSupplierPageTab_(tab) { supplierPageTab = tab; poCart = []; supplierDueFilter = ''; renderSupplierPageShell_(); }
 
 async function getSuppliersCached_() {
   if (!suppliersCache_) suppliersCache_ = await api.getSuppliers();
@@ -1786,14 +1786,50 @@ async function submitSupplier_(evt) {
   } catch (err) { btn.disabled = false; showErrorToast_(err); }
 }
 
+let supplierDueFilter = '';
+
 async function loadSuppliersListUI_() {
   try {
     const suppliers = await getSuppliersCached_();
-    document.getElementById('suppliersList').innerHTML = suppliers.length === 0 ? emptyRow_('🏭', 'لا يوجد موردين بعد') :
-      suppliers.map(function (s) {
-        return '<div class="list-item" style="cursor:pointer;" onclick="openSupplierDetailModal_(\'' + s.name.replace(/'/g, "\\'") + '\')"><span><b>' + s.name + '</b></span><span style="color:var(--text-dim);">' + (s.contact || '—') + ' ›</span></div>';
-      }).join('');
+    renderSuppliersList_(suppliers);
   } catch (err) { showErrorToast_(err); }
+}
+
+function dueStatusPillClass_(status) {
+  if (status === 'مدفوع بالكامل') return 'success';
+  if (status === 'مدفوع جزئيًا') return 'warning';
+  if (status === 'غير مدفوع') return 'danger';
+  return 'info';
+}
+
+function renderSuppliersList_(suppliers) {
+  const filtered = supplierDueFilter ? suppliers.filter(function (s) { return s.dueStatus === supplierDueFilter; }) : suppliers;
+  const cur = (state.settings && state.settings.currency) || 'جنيه مصري';
+
+  let filterHtml = '<div class="field"><label>فلترة حسب الاستحقاق</label><select id="supplierDueFilterSelect" onchange="applySupplierDueFilter_()">' +
+    '<option value="">الكل (' + suppliers.length + ')</option>' +
+    '<option value="غير مدفوع"' + (supplierDueFilter === 'غير مدفوع' ? ' selected' : '') + '>🔴 عليّ فلوس (غير مدفوع)</option>' +
+    '<option value="مدفوع جزئيًا"' + (supplierDueFilter === 'مدفوع جزئيًا' ? ' selected' : '') + '>🟡 مدفوع جزئيًا</option>' +
+    '<option value="مدفوع بالكامل"' + (supplierDueFilter === 'مدفوع بالكامل' ? ' selected' : '') + '>🟢 مدفوع بالكامل</option>' +
+    '<option value="لا مشتريات"' + (supplierDueFilter === 'لا مشتريات' ? ' selected' : '') + '>⚪ لا يوجد مشتريات</option>' +
+    '</select></div>';
+
+  document.getElementById('suppliersList').innerHTML = filterHtml + '<div style="margin-top:10px;">' + (
+    filtered.length === 0 ? emptyRow_('🏭', 'لا يوجد موردين مطابقين للفلتر') :
+      filtered.map(function (s) {
+        return '<div class="list-item" style="cursor:pointer; flex-wrap:wrap; gap:6px;" onclick="openSupplierDetailModal_(\'' + s.name.replace(/'/g, "\\'") + '\')">' +
+          '<span><b>' + s.name + '</b><div style="font-size:11px; color:var(--text-faint); margin-top:2px;">' + (s.contact || '—') + '</div></span>' +
+          '<span style="display:flex; align-items:center; gap:8px;">' +
+            (s.totalRemaining > 0 ? '<span style="font-size:12px; color:var(--danger);">' + formatMoney_(s.totalRemaining, cur) + '</span>' : '') +
+            '<span class="pill ' + dueStatusPillClass_(s.dueStatus) + '">' + s.dueStatus + '</span>' +
+          '</span></div>';
+      }).join('')
+  ) + '</div>';
+}
+
+function applySupplierDueFilter_() {
+  supplierDueFilter = document.getElementById('supplierDueFilterSelect').value;
+  getSuppliersCached_().then(renderSuppliersList_);
 }
 
 // ------------------------------------------------------------
