@@ -506,6 +506,10 @@ function renderPosPage() {
         '<div class="card-heading">🛒 السلة الحالية</div>' +
         '<div id="posCartList" style="margin:14px 0;"></div>' +
         '<div class="form-grid">' +
+          '<div class="field"><label>اسم العميل (اختياري)</label><input type="text" id="posCustomerName" placeholder="مثلاً: أحمد محمد"></div>' +
+          '<div class="field"><label>رقم التليفون (اختياري)</label><input type="text" id="posCustomerPhone" placeholder="01xxxxxxxxx"></div>' +
+        '</div>' +
+        '<div class="form-grid" style="margin-top:10px;">' +
           '<div class="field"><label>الخصم</label><input type="number" id="posDiscount" value="0"></div>' +
           '<div class="field"><label>طريقة الدفع</label><select id="posPaymentMethod" onchange="onPosPaymentMethodChange_()"><option>كاش</option><option>فودافون كاش</option><option>بطاقة</option><option>انستاباي</option><option value="آجل">آجل - فاتورة عميل</option></select></div>' +
         '</div>' +
@@ -761,15 +765,19 @@ async function submitPosSale_() {
   if (posCart.length === 0) { showToast_('السلة فاضية', 'error'); return; }
   const discount = Number(document.getElementById('posDiscount').value) || 0;
   const paymentMethod = document.getElementById('posPaymentMethod').value;
+  const customerName = document.getElementById('posCustomerName').value.trim();
+  const customerPhone = document.getElementById('posCustomerPhone').value.trim();
 
   if (paymentMethod === 'آجل') { await submitPosSaleOnInvoice_(discount); return; }
 
   const treasuryAccountId = document.getElementById('posTreasuryAccount').value || null;
   try {
-    const res = await api.posSale({ username: state.user.username }, posCart.map(function (i) { return { variantCode: i.variantCode, qty: i.qty, price: i.price }; }), discount, paymentMethod, treasuryAccountId);
+    const res = await api.posSale({ username: state.user.username }, posCart.map(function (i) { return { variantCode: i.variantCode, qty: i.qty, price: i.price }; }), discount, paymentMethod, treasuryAccountId, customerName, customerPhone);
     showToast_('تمت البيعة بنجاح ✅ الإجمالي: ' + res.total, 'success');
     posCart = []; renderPosCart_();
     document.getElementById('posSearchInput').value = '';
+    document.getElementById('posCustomerName').value = '';
+    document.getElementById('posCustomerPhone').value = '';
     loadPosSummary_();
     loadPosProductGrid_();
   } catch (err) { showErrorToast_(err); }
@@ -2178,10 +2186,16 @@ async function loadCustomers_() {
     const cur = state.settings.currency || 'جنيه';
     document.getElementById('customersList').innerHTML = customers.length === 0 ? emptyRow_('👤', 'لا يوجد عملاء بعد') :
       customers.map(function (c) {
-        return '<div class="list-item"><span>' + (c.name || c.phone) + '<br><span style="color:var(--text-faint); font-size:11px;">' + c.phone + '</span></span>' +
+        return '<div class="list-item" style="cursor:pointer;" onclick="viewCustomerFromList_(\'' + c.phone.replace(/'/g, "\\'") + '\')"><span>' + (c.name || c.phone) + '<br><span style="color:var(--text-faint); font-size:11px;">' + c.phone + '</span></span>' +
           '<span>' + c.orderCount + ' طلب — ' + formatMoney_(c.totalPurchases, cur) + '</span></div>';
       }).join('');
   } catch (err) { showErrorToast_(err); }
+}
+
+function viewCustomerFromList_(phone) {
+  document.getElementById('customerPhoneSearch').value = phone;
+  searchCustomerHistory_();
+  document.getElementById('customerHistoryResult').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function searchCustomerHistory_() {
@@ -2192,8 +2206,19 @@ async function searchCustomerHistory_() {
     const cur = state.settings.currency || 'جنيه';
     const el = document.getElementById('customerHistoryResult');
     if (!history.customer) { el.innerHTML = emptyRow_('🚫', 'مفيش عميل بالرقم ده'); return; }
-    let html = '<div class="pill info" style="margin-bottom:10px;">' + history.customer.name + ' — ' + history.customer.orderCount + ' طلب سابق</div>';
-    history.storeSales.forEach(function (o) { html += '<div class="list-item"><span>' + o.saleId + '</span><span>' + formatMoney_(o.total, cur) + '</span></div>'; });
+    let html = '<div class="card" style="padding:12px 14px; margin-bottom:10px;"><b>' + (history.customer.name || 'بدون اسم') + '</b> — ' + phone +
+      '<div style="margin-top:6px; font-size:12.5px; color:var(--text-dim);">إجمالي ' + history.customer.orderCount + ' عملية · إجمالي مشترياته: ' + formatMoney_(history.customer.totalPurchases, cur) + '</div>' +
+      (history.customer.notes ? '<div style="margin-top:6px; font-size:12px;">📝 ' + history.customer.notes + '</div>' : '') + '</div>';
+
+    if (history.storeSales.length > 0) {
+      html += '<div class="hint">🏪 بيعات من المحل</div>';
+      history.storeSales.forEach(function (o) { html += '<div class="list-item"><span>' + o.saleId + '<br><span style="font-size:11px; color:var(--text-faint);">' + formatDate_(o.date) + '</span></span><span>' + formatMoney_(o.total, cur) + '</span></div>'; });
+    }
+    if (history.onlineOrders.length > 0) {
+      html += '<div class="hint" style="margin-top:10px;">🌐 أوردرات أونلاين</div>';
+      history.onlineOrders.forEach(function (o) { html += '<div class="list-item"><span>' + o.orderId + '<br><span style="font-size:11px; color:var(--text-faint);">' + formatDate_(o.date) + '</span></span><span>' + formatMoney_(o.total, cur) + ' <span class="pill info">' + o.status + '</span></span></div>'; });
+    }
+    if (history.storeSales.length === 0 && history.onlineOrders.length === 0) html += emptyRow_('📭', 'لا يوجد عمليات مسجلة له لسه');
     el.innerHTML = html;
   } catch (err) { showErrorToast_(err); }
 }

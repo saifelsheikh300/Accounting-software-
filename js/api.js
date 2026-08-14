@@ -227,8 +227,8 @@ api.recordSale = async function (session, payload) {
   return { success: true, saleId: data[0].sale_id, saleNumber: data[0].sale_number, total: data[0].total };
 };
 
-api.posSale = async function (session, cart, discount, paymentMethod, treasuryAccountId) {
-  return api.recordSale(session, { source: 'محل', items: cart, discount: discount, paymentMethod: paymentMethod, treasuryAccountId: treasuryAccountId });
+api.posSale = async function (session, cart, discount, paymentMethod, treasuryAccountId, customerName, customerPhone) {
+  return api.recordSale(session, { source: 'محل', items: cart, discount: discount, paymentMethod: paymentMethod, treasuryAccountId: treasuryAccountId, customerName: customerName, customerPhone: customerPhone });
 };
 
 api.recordReturn = async function (session, saleId, items, isFull, treasuryAccountId) {
@@ -417,11 +417,12 @@ api.listCustomers = async function () {
 
 api.getCustomerOrderHistory = async function (phone) {
   const { data: customer } = await supabaseClient.from('customers').select('*').eq('phone', phone).single();
-  const { data: sales } = await supabaseClient.from('sales').select('sale_number,total').eq('customer_phone', phone);
+  const { data: sales } = await supabaseClient.from('sales').select('sale_number,total,sale_date').eq('customer_phone', phone).order('sale_date', { ascending: false });
+  const { data: orders } = await supabaseClient.from('orders').select('id,easy_orders_id,total,status,order_date').eq('customer_phone', phone).order('order_date', { ascending: false });
   return {
-    customer: customer ? { name: customer.name, orderCount: customer.order_count } : null,
-    onlineOrders: [],
-    storeSales: (sales || []).map(function (s) { return { saleId: s.sale_number, total: s.total }; })
+    customer: customer ? { name: customer.name, phone: customer.phone, orderCount: customer.order_count, totalPurchases: customer.total_purchases, notes: customer.notes } : null,
+    onlineOrders: (orders || []).map(function (o) { return { orderId: o.easy_orders_id || o.id, total: o.total, status: o.status, date: o.order_date }; }),
+    storeSales: (sales || []).map(function (s) { return { saleId: s.sale_number, total: s.total, date: s.sale_date }; })
   };
 };
 
