@@ -1877,6 +1877,14 @@ function buildSupplierDetailHtml_() {
         '<div class="card-value ' + (balance > 0 ? 'money-negative' : 'money-positive') + '">' + formatMoney_(balance, cur) + '</div>' +
         '<div class="card-sub">' + (balance > 0 ? 'مستحق للمورد (دائن)' : 'لا يوجد مستحقات') + '</div></div>' +
     '</div>';
+    html += '<div class="card-heading" style="margin-top:18px;">🧾 سجل الدفعات (كل دفعة على حدة)</div>';
+    const payments = s.payments || [];
+    html += '<div class="table-wrap" style="margin-top:8px;"><table><thead><tr><th>التاريخ</th><th>رقم الأوردر</th><th>المبلغ المدفوع</th></tr></thead><tbody>';
+    html += payments.length === 0 ? '<tr><td colspan="3">' + emptyRow_('🧾', 'لا يوجد دفعات مسجلة بعد') + '</td></tr>' :
+      payments.map(function (p) {
+        return '<tr><td>' + formatDate_(p.paidAt) + '</td><td>' + p.orderNumber + '</td><td><b class="money-positive">' + formatMoney_(p.amount, cur) + '</b></td></tr>';
+      }).join('');
+    html += '</tbody></table></div>';
   }
   return html;
 }
