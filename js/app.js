@@ -1837,6 +1837,7 @@ function applySupplierDueFilter_() {
 // ------------------------------------------------------------
 let supplierDetailTab = 'data';
 let supplierDetailCache = null;
+let selectedOrderNumber_ = null;
 
 async function openSupplierDetailModal_(supplierName) {
   try {
@@ -1846,9 +1847,41 @@ async function openSupplierDetailModal_(supplierName) {
   } catch (err) { showErrorToast_(err); }
 }
 
+function openOrderPaymentsView_(orderNumber) {
+  selectedOrderNumber_ = orderNumber;
+  supplierDetailTab = 'orderPayments';
+  document.getElementById('modalBody').innerHTML = buildSupplierDetailHtml_();
+}
+
 function buildSupplierDetailHtml_() {
   const cur = state.settings.currency || 'جنيه';
   const s = supplierDetailCache;
+
+  if (supplierDetailTab === 'orderPayments') {
+    const order = s.purchases.find(function (p) { return p.orderNumber === selectedOrderNumber_; });
+    const orderPayments = (s.payments || []).filter(function (p) { return p.orderNumber === selectedOrderNumber_; });
+    let html = '<div class="hint" style="cursor:pointer; margin-bottom:10px;" onclick="switchSupplierTab_(\'purchases\')">→ رجوع لكل المشتريات</div>';
+    html += '<div class="card-heading">📦 أوردر ' + selectedOrderNumber_ + '</div>';
+    if (order) {
+      const pill = order.paymentStatus === 'مدفوع بالكامل' ? 'success' : (order.paymentStatus === 'مدفوع جزئيًا' ? 'warning' : 'danger');
+      html += '<div class="grid grid-3" style="margin-top:10px;">' +
+        statCard_('💰', 'إجمالي الأوردر', formatMoney_(order.total, cur), '', false) +
+        statCard_('✅', 'المدفوع منه', formatMoney_(order.amountPaid, cur), '', false) +
+        '<div class="card stat-card"><div class="stat-icon">⚖️</div><div class="card-label">المتبقي</div>' +
+          '<div class="card-value">' + formatMoney_(order.remaining, cur) + '</div>' +
+          '<div class="card-sub"><span class="pill ' + pill + '">' + order.paymentStatus + '</span></div></div>' +
+      '</div>';
+    }
+    html += '<div class="card-heading" style="margin-top:18px;">🧾 دفعات الأوردر ده بس (كل دفعة بتاريخها)</div>';
+    html += '<div class="table-wrap" style="margin-top:8px;"><table><thead><tr><th>#</th><th>التاريخ</th><th>المبلغ المدفوع</th></tr></thead><tbody>';
+    html += orderPayments.length === 0 ? '<tr><td colspan="3">' + emptyRow_('🧾', 'لا يوجد دفعات على الأوردر ده لسه') + '</td></tr>' :
+      orderPayments.slice().reverse().map(function (p, i) {
+        return '<tr><td>دفعة ' + (i + 1) + '</td><td>' + formatDate_(p.paidAt) + '</td><td><b class="money-positive">' + formatMoney_(p.amount, cur) + '</b></td></tr>';
+      }).join('');
+    html += '</tbody></table></div>';
+    return html;
+  }
+
   let html = '<div class="subtabs">' +
     '<div class="subtab' + (supplierDetailTab === 'data' ? ' active' : '') + '" onclick="switchSupplierTab_(\'data\')">📇 البيانات</div>' +
     '<div class="subtab' + (supplierDetailTab === 'purchases' ? ' active' : '') + '" onclick="switchSupplierTab_(\'purchases\')">📦 المشتريات</div>' +
@@ -1865,7 +1898,7 @@ function buildSupplierDetailHtml_() {
     html += s.purchases.length === 0 ? '<tr><td colspan="4">' + emptyRow_('📦', 'لا يوجد مشتريات بعد') + '</td></tr>' :
       s.purchases.map(function (p) {
         const pill = p.paymentStatus === 'مدفوع بالكامل' ? 'success' : (p.paymentStatus === 'مدفوع جزئيًا' ? 'warning' : 'danger');
-        return '<tr><td>' + p.orderNumber + '</td><td>' + formatDate_(p.date) + '</td><td><b>' + formatMoney_(p.total, cur) + '</b></td><td><span class="pill ' + pill + '">' + p.paymentStatus + '</span></td></tr>';
+        return '<tr style="cursor:pointer;" onclick=\'openOrderPaymentsView_(' + JSON.stringify(p.orderNumber) + ')\'><td>' + p.orderNumber + '</td><td>' + formatDate_(p.date) + '</td><td><b>' + formatMoney_(p.total, cur) + '</b></td><td><span class="pill ' + pill + '">' + p.paymentStatus + '</span></td></tr>';
       }).join('');
     html += '</tbody></table></div>';
   } else {
