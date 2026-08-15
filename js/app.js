@@ -755,10 +755,33 @@ function renderPosCart_() {
   let total = 0;
   el.innerHTML = posCart.map(function (i, idx) {
     total += i.price * i.qty;
-    return '<div class="variant-chip">' + i.label + ' <span class="qty-tag">×' + i.qty + '</span> = ' + (i.price * i.qty) +
-      ' <span class="del-x" onclick="removeFromCart_(' + idx + ')">✕</span></div>';
+    return '<div class="variant-chip" style="width:100%; justify-content:space-between; box-sizing:border-box;">' +
+      '<span>' + i.label + ' <span style="color:var(--text-faint);">— ' + (i.price * i.qty) + '</span></span>' +
+      '<span style="display:flex; align-items:center; gap:6px;">' +
+        '<button class="qty-btn" onclick="changeCartQty_(' + idx + ', -1)">−</button>' +
+        '<input type="number" class="qty-input" value="' + i.qty + '" min="0" onchange="setCartQty_(' + idx + ', this.value)">' +
+        '<button class="qty-btn" onclick="changeCartQty_(' + idx + ', 1)">+</button>' +
+        '<span class="del-x" onclick="removeFromCart_(' + idx + ')">✕</span>' +
+      '</span></div>';
   }).join('') + '<div class="list-item" style="margin-top:10px;"><b>الإجمالي</b><b style="font-size:17px;">' + total + '</b></div>';
 }
+
+function changeCartQty_(idx, delta) {
+  const item = posCart[idx];
+  if (!item) return;
+  item.qty += delta;
+  if (item.qty <= 0) posCart.splice(idx, 1);
+  renderPosCart_();
+}
+
+function setCartQty_(idx, value) {
+  const item = posCart[idx];
+  if (!item) return;
+  const qty = Math.floor(Number(value)) || 0;
+  if (qty <= 0) posCart.splice(idx, 1); else item.qty = qty;
+  renderPosCart_();
+}
+
 function removeFromCart_(idx) { posCart.splice(idx, 1); renderPosCart_(); }
 
 async function submitPosSale_() {
@@ -771,16 +794,72 @@ async function submitPosSale_() {
   if (paymentMethod === 'آجل') { await submitPosSaleOnInvoice_(discount); return; }
 
   const treasuryAccountId = document.getElementById('posTreasuryAccount').value || null;
+  const cartSnapshot = posCart.map(function (i) { return { label: i.label, qty: i.qty, price: i.price }; });
   try {
     const res = await api.posSale({ username: state.user.username }, posCart.map(function (i) { return { variantCode: i.variantCode, qty: i.qty, price: i.price }; }), discount, paymentMethod, treasuryAccountId, customerName, customerPhone);
-    showToast_('تمت البيعة بنجاح ✅ الإجمالي: ' + res.total, 'success');
     posCart = []; renderPosCart_();
     document.getElementById('posSearchInput').value = '';
     document.getElementById('posCustomerName').value = '';
     document.getElementById('posCustomerPhone').value = '';
     loadPosSummary_();
     loadPosProductGrid_();
+    offerReceiptPrint_(res, cartSnapshot, discount, paymentMethod, customerName, customerPhone);
   } catch (err) { showErrorToast_(err); }
+}
+
+// ------------------------------------------------------------
+// سؤال عن طباعة الفاتورة بعد إتمام البيعة + الطباعة الفعلية عن طريق
+// نافذة مخفية (iframe) بتستخدم طابعة الجهاز المثبتة (بما فيها طابعات
+// الفواتير الحرارية لو متظبطة كطابعة عادية في نظام التشغيل)
+// ------------------------------------------------------------
+function offerReceiptPrint_(saleResult, items, discount, paymentMethod, customerName, customerPhone) {
+  openModal('✅ تمت البيعة بنجاح', 'الإجمالي: ' + saleResult.total + ' — عايزة تطبعي فاتورة؟', '',
+    '<button class="btn secondary" onclick="closeModal()">لأ، شكرًا</button>' +
+    '<button class="btn success" onclick=\'printReceipt_(' + JSON.stringify(saleResult) + ',' + JSON.stringify(items) + ',' + discount + ',' + JSON.stringify(paymentMethod) + ',' + JSON.stringify(customerName) + ',' + JSON.stringify(customerPhone) + '); closeModal();\'>🖨️ طباعة</button>');
+}
+
+function printReceipt_(saleResult, items, discount, paymentMethod, customerName, customerPhone) {
+  const cur = (state.settings && state.settings.currency) || '';
+  const brand = (state.settings && state.settings.brandName) || 'براندي';
+  const subtotal = items.reduce(function (s, i) { return s + i.price * i.qty; }, 0);
+  const now = new Date();
+
+  const rows = items.map(function (i) {
+    return '<tr><td>' + i.label + '</td><td style="text-align:center;">' + i.qty + '</td><td style="text-align:left;">' + (i.price * i.qty) + '</td></tr>';
+  }).join('');
+
+  const html = '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>فاتورة</title><style>' +
+    'body{font-family:Tajawal,Arial,sans-serif; width:280px; margin:0 auto; padding:10px; font-size:12px; color:#000;}' +
+    'h2{text-align:center; margin:0 0 4px;} .c{text-align:center;} hr{border:none; border-top:1px dashed #000; margin:8px 0;}' +
+    'table{width:100%; border-collapse:collapse;} td{padding:3px 0; font-size:11.5px;}' +
+    '.tot{font-size:14px; font-weight:bold; display:flex; justify-content:space-between; margin-top:6px;}' +
+    '.row{display:flex; justify-content:space-between; font-size:11px; margin:2px 0;}' +
+    '</style></head><body>' +
+    '<h2>' + brand + '</h2>' +
+    '<div class="c">فاتورة بيع</div>' +
+    '<div class="row"><span>رقم البيعة</span><span>' + saleResult.saleNumber + '</span></div>' +
+    '<div class="row"><span>التاريخ</span><span>' + now.toLocaleString('ar-EG') + '</span></div>' +
+    (customerName ? '<div class="row"><span>العميل</span><span>' + customerName + '</span></div>' : '') +
+    (customerPhone ? '<div class="row"><span>التليفون</span><span>' + customerPhone + '</span></div>' : '') +
+    '<hr><table><thead><tr><td><b>الصنف</b></td><td style="text-align:center;"><b>الكمية</b></td><td style="text-align:left;"><b>الإجمالي</b></td></tr></thead><tbody>' + rows + '</tbody></table><hr>' +
+    '<div class="row"><span>الإجمالي الفرعي</span><span>' + subtotal + ' ' + cur + '</span></div>' +
+    (discount > 0 ? '<div class="row"><span>الخصم</span><span>-' + discount + ' ' + cur + '</span></div>' : '') +
+    '<div class="tot"><span>الإجمالي</span><span>' + saleResult.total + ' ' + cur + '</span></div>' +
+    '<div class="row" style="margin-top:6px;"><span>طريقة الدفع</span><span>' + paymentMethod + '</span></div>' +
+    '<hr><div class="c">شكرًا لتعاملكم معنا 🌸</div>' +
+    '</body></html>';
+
+  let iframe = document.getElementById('receiptPrintFrame');
+  if (!iframe) {
+    iframe = document.createElement('iframe');
+    iframe.id = 'receiptPrintFrame';
+    iframe.style.position = 'fixed'; iframe.style.right = '-9999px'; iframe.style.width = '0'; iframe.style.height = '0'; iframe.style.border = 'none';
+    document.body.appendChild(iframe);
+  }
+  const doc = iframe.contentWindow.document;
+  doc.open(); doc.write(html); doc.close();
+  iframe.contentWindow.focus();
+  setTimeout(function () { iframe.contentWindow.print(); }, 200);
 }
 
 // ------------------------------------------------------------

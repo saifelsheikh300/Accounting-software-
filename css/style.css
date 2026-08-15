@@ -345,8 +345,17 @@
     border-radius: 20px; padding: 6px 13px; font-size: 12px; margin: 3px 3px 3px 0; font-weight: 600;
   }
   .variant-chip .qty-tag { background: var(--surface); padding: 1px 7px; border-radius: 10px; font-weight: 800; font-size: 11px; }
-  .variant-chip .del-x { cursor: pointer; color: var(--text-faint); font-weight: 900; }
+  .variant-chip .del-x { cursor: pointer; color: var(--text-faint); font-weight: 900; padding: 0 2px; }
   .variant-chip .del-x:hover { color: var(--danger); }
+  .qty-btn {
+    width: 22px; height: 22px; border-radius: 50%; border: none; background: var(--accent); color: #fff;
+    font-weight: 900; font-size: 14px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .qty-btn:active { transform: scale(.92); }
+  .qty-input {
+    width: 40px; text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); font-weight: 800; font-size: 13px; padding: 3px 2px;
+  }
 
   /* ============================================================ Modal system ============================================================ */
   #modalOverlay {
