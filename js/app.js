@@ -2964,7 +2964,48 @@ async function renderSettingsPage() {
       field_('العملة', 'setCurrency', s.currency) +
       field_('EasyOrders API Key', 'setEasyOrdersApiKey', s.easyOrdersApiKey) + field_('EasyOrders Secret', 'setEasyOrdersSecret', s.easyOrdersSecret) +
       field_('حد التنبيه الافتراضي للمخزون', 'setLowStockThresholdDefault', s.lowStockThresholdDefault) +
-      '</div><button class="btn success block" style="margin-top:20px;" onclick="saveSettings_()">💾 حفظ الإعدادات</button></div>');
+      '</div><button class="btn success block" style="margin-top:20px;" onclick="saveSettings_()">💾 حفظ الإعدادات</button></div>' +
+      '<div class="card" style="max-width:760px; margin-top:16px;"><div class="card-heading">📦 نسخة احتياطية من البيانات</div>' +
+      '<div class="hint">تنزيل نسخة من كل بيانات البرنامج (منتجات، مبيعات، حسابات، عملاء...) كملف واحد على جهازك — تقدري تحتفظي بيه أو ترفعيه على برنامج تاني فاضي لنفس النظام لاسترجاع البيانات.</div>' +
+      '<button class="btn secondary block" style="margin-top:12px;" onclick="downloadBackup_()">⬇️ تنزيل نسخة احتياطية</button>' +
+      '<div class="field" style="margin-top:16px;"><label>استرجاع نسخة (اختاري الملف)</label><input type="file" id="restoreFileInput" accept=".json"></div>' +
+      '<button class="btn danger block" style="margin-top:8px;" onclick="restoreBackup_()">⬆️ استرجاع من الملف</button>' +
+      '<div id="backupReportBox" style="margin-top:12px;"></div>' +
+      '<div class="hint" style="margin-top:10px; color:var(--warning);">⚠️ الاسترجاع بيحط البيانات فوق الموجود حاليًا (upsert) — الأفضل تستخدميه بس على برنامج فاضي جديد. حسابات الدخول (المستخدمون) مش بترجع تلقائي، لازم تتضاف يدويًا من "المستخدمون" بعد الاسترجاع.</div>' +
+      '</div>');
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function downloadBackup_() {
+  try {
+    showToast_('جاري تجهيز النسخة... ممكن ياخد لحظات', 'success');
+    const backup = await api.exportFullBackup();
+    const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.href = url; a.download = 'نسخة-احتياطية-' + dateStr + '.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast_('تم تنزيل النسخة الاحتياطية ✅', 'success');
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function restoreBackup_() {
+  const fileInput = document.getElementById('restoreFileInput');
+  if (!fileInput.files || fileInput.files.length === 0) { showToast_('اختاري ملف النسخة الاحتياطية الأول', 'error'); return; }
+  const file = fileInput.files[0];
+  try {
+    const text = await file.text();
+    const backupData = JSON.parse(text);
+    showToast_('جاري الاسترجاع... متقفليش الصفحة', 'success');
+    const report = await api.restoreFromBackup(backupData);
+    const box = document.getElementById('backupReportBox');
+    box.innerHTML = '<div class="card-heading">نتيجة الاسترجاع</div>' + report.map(function (r) {
+      const ok = r.status.indexOf('خطأ') === -1;
+      return '<div class="list-item"><span>' + r.table + '</span><span class="pill ' + (ok ? 'success' : 'danger') + '">' + r.status + '</span></div>';
+    }).join('');
+    showToast_('تم الاسترجاع ✅ راجعي التفاصيل تحت', 'success');
   } catch (err) { showErrorToast_(err); }
 }
 

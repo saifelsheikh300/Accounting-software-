@@ -656,8 +656,45 @@ api.updateSettingsBulk = async function (session, settingsObject) {
 };
 
 // ------------------------------------------------------------
-// شجرة الحسابات (Chart of Accounts)
+// نسخة احتياطية كاملة من البيانات (تصدير/استرجاع) — من الإعدادات
 // ------------------------------------------------------------
+const BACKUP_TABLES_ORDER = [
+  'settings', 'accounts', 'cost_centers', 'currencies', 'exchange_rates', 'seasons', 'accounting_periods',
+  'warehouses', 'product_tree', 'products', 'product_variants', 'cost_history',
+  'suppliers', 'purchase_orders', 'purchase_order_items', 'supplier_payments', 'purchase_requests', 'purchase_request_items',
+  'customers', 'orders', 'order_items', 'sales', 'sale_items', 'invoices',
+  'treasury_accounts', 'cash_flow', 'checks', 'petty_cash',
+  'partners', 'capital_movements', 'admin_rights', 'profits_distribution',
+  'employees', 'salaries', 'advances', 'attendance', 'fixed_assets',
+  'expenses', 'other_revenue', 'journal_entries', 'opening_balances',
+  'stock_transfers', 'stock_transfer_items', 'notifications', 'operations_log', 'webhooks_log', 'backup_log', 'attachments',
+  'profiles' // بيانات مرجعية بس — مش بترجع تلقائي عند الاسترجاع (مرتبطة بحسابات الدخول)
+];
+
+api.exportFullBackup = async function () {
+  const result = { exportedAt: new Date().toISOString(), tables: {} };
+  for (const t of BACKUP_TABLES_ORDER) {
+    try {
+      const { data, error } = await supabaseClient.from(t).select('*');
+      result.tables[t] = error ? [] : (data || []);
+    } catch (e) { result.tables[t] = []; }
+  }
+  return result;
+};
+
+api.restoreFromBackup = async function (backupData) {
+  const report = [];
+  for (const t of BACKUP_TABLES_ORDER) {
+    if (t === 'profiles') continue; // لازم تتضاف يدويًا من "المستخدمون" — مرتبطة بحسابات الدخول
+    const rows = (backupData.tables && backupData.tables[t]) || [];
+    if (rows.length === 0) { report.push({ table: t, status: 'تخطي (فاضي)' }); continue; }
+    try {
+      const { error } = await supabaseClient.from(t).upsert(rows);
+      report.push({ table: t, status: error ? ('خطأ: ' + error.message) : ('تم (' + rows.length + ' صف)') });
+    } catch (e) { report.push({ table: t, status: 'خطأ: ' + e.message }); }
+  }
+  return report;
+};
 api.getAccounts = async function () {
   const { data, error } = await supabaseClient.from('accounts').select('*').eq('active', true).order('code');
   if (error) throw error;
