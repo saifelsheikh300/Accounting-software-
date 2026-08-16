@@ -312,7 +312,10 @@ async function getTreasuryAccountsCached_(forceRefresh) {
 
 function treasuryAccountOptionsHtml_(accounts) {
   if (!accounts || accounts.length === 0) return '<option value="">لا يوجد حسابات — ضيفي من صفحة "الخزنة والبنوك"</option>';
-  return accounts.map(function (t) { return '<option value="' + t.id + '">' + t.name + ' (' + t.type + ')</option>'; }).join('');
+  const defaultId = state.settings && state.settings.defaultTreasuryAccountId;
+  return accounts.map(function (t) {
+    return '<option value="' + t.id + '"' + (t.id === defaultId ? ' selected' : '') + '>' + t.name + ' (' + t.type + ')</option>';
+  }).join('');
 }
 
 // ============================================================
@@ -2974,13 +2977,18 @@ async function submitPermissions_(username) {
 async function renderSettingsPage() {
   try {
     const s = await api.getSettings();
+    const treasuryAccounts = await getTreasuryAccountsCached_().catch(function () { return []; });
     setContent_('<div class="card" style="max-width:760px;"><div class="card-heading">⚙️ إعدادات النظام</div><div class="form-grid" style="margin-top:10px;">' +
       field_('اسم البراند', 'setBrandName', s.brandName) + field_('رابط اللوجو', 'setLogoUrl', s.logoUrl) +
       field_('اللون الأساسي', 'setPrimaryColor', s.primaryColor, 'color') + field_('لون التمييز', 'setAccentColor', s.accentColor, 'color') +
       field_('العملة', 'setCurrency', s.currency) +
+      '<div class="field"><label>الحساب الافتراضي (كاش/بنك)</label><select id="setDefaultTreasuryAccount"><option value="">بدون افتراضي</option>' +
+        treasuryAccounts.map(function (t) { return '<option value="' + t.id + '"' + (t.id === s.defaultTreasuryAccountId ? ' selected' : '') + '>' + t.name + ' (' + t.type + ')</option>'; }).join('') +
+      '</select></div>' +
       field_('EasyOrders API Key', 'setEasyOrdersApiKey', s.easyOrdersApiKey) + field_('EasyOrders Secret', 'setEasyOrdersSecret', s.easyOrdersSecret) +
       field_('حد التنبيه الافتراضي للمخزون', 'setLowStockThresholdDefault', s.lowStockThresholdDefault) +
-      '</div><button class="btn success block" style="margin-top:20px;" onclick="saveSettings_()">💾 حفظ الإعدادات</button></div>' +
+      '</div><div class="hint" style="margin-top:8px;">الحساب الافتراضي بيبقى محدد تلقائي في كل مكان في البرنامج فيه اختيار حساب (بيعة، مصروف، شراء...) — تقدري تغيريه وقت العملية نفسها عادي لو محتاجة.</div>' +
+      '<button class="btn success block" style="margin-top:20px;" onclick="saveSettings_()">💾 حفظ الإعدادات</button></div>' +
       '<div class="card" style="max-width:760px; margin-top:16px;"><div class="card-heading">📦 نسخة احتياطية من البيانات</div>' +
       '<div class="hint">تنزيل نسخة من كل بيانات البرنامج (منتجات، مبيعات، حسابات، عملاء...) كملف واحد على جهازك — تقدري تحتفظي بيه أو ترفعيه على برنامج تاني فاضي لنفس النظام لاسترجاع البيانات.</div>' +
       '<button class="btn secondary block" style="margin-top:12px;" onclick="downloadBackup_()">⬇️ تنزيل نسخة احتياطية</button>' +
@@ -3036,6 +3044,7 @@ async function saveSettings_() {
     brandName: document.getElementById('setBrandName').value, logoUrl: document.getElementById('setLogoUrl').value,
     primaryColor: document.getElementById('setPrimaryColor').value, accentColor: document.getElementById('setAccentColor').value,
     currency: document.getElementById('setCurrency').value,
+    defaultTreasuryAccountId: document.getElementById('setDefaultTreasuryAccount').value,
     easyOrdersApiKey: document.getElementById('setEasyOrdersApiKey').value, easyOrdersSecret: document.getElementById('setEasyOrdersSecret').value,
     lowStockThresholdDefault: document.getElementById('setLowStockThresholdDefault').value
   };
