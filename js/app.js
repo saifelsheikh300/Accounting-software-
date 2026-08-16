@@ -1446,6 +1446,7 @@ async function renderExpensesPage() {
     setContent_(buildExpensesPageHtml_());
     onExpSubCatChange_();
     loadExpTreasuryOptions_();
+    loadExpensesHistory_();
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -1486,7 +1487,22 @@ function buildExpensesPageHtml_() {
       '</div>' +
       '<div id="expRecurrenceDaysWrap" style="display:none; margin-top:12px;"><div class="field"><label>يتكرر كل (يوم)</label><input type="number" id="expRecurrenceDays" value="30"></div></div>' +
       '<button class="btn success block" style="margin-top:18px;" onclick="submitExpense_()">✅ تسجيل المصروف</button></div>' +
-    '<div class="card"><div class="card-heading">📋 آخر المصروفات</div><div id="expensesHistoryList" style="margin-top:14px;">' + emptyRow_('📊', 'راجع التقارير لتفاصيل المصروفات الكاملة') + '</div></div></div>';
+    '<div class="card"><div class="card-heading">📋 آخر المصروفات</div><div id="expensesHistoryList" style="margin-top:14px;">' + emptyRow_('⏳', 'جاري التحميل...') + '</div></div></div>';
+}
+
+async function loadExpensesHistory_() {
+  try {
+    const expenses = await api.getExpenses(50);
+    const cur = (state.settings && state.settings.currency) || '';
+    const el = document.getElementById('expensesHistoryList');
+    el.innerHTML = expenses.length === 0 ? emptyRow_('💸', 'لسه مفيش أي مصروف متسجل') :
+      expenses.map(function (e) {
+        return '<div class="list-item" style="display:block; padding:12px 4px;">' +
+          '<div class="card-row"><b>' + e.mainCategory + (e.subCategory ? ' — ' + e.subCategory : '') + '</b><b class="money-negative">' + formatMoney_(e.amount, cur) + '</b></div>' +
+          '<div style="margin-top:4px; font-size:11.5px; color:var(--text-dim);">' + formatDate_(e.date) +
+          ' · 🏦 ' + e.treasuryAccountName + (e.description ? ' · ' + e.description : '') + '</div></div>';
+      }).join('');
+  } catch (err) { showErrorToast_(err); }
 }
 
 // ------------------------------------------------------------

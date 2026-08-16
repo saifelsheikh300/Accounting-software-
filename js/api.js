@@ -307,6 +307,20 @@ api.listExpenseCategories = async function () {
   };
 };
 
+api.getExpenses = async function (limit) {
+  const { data, error } = await supabaseClient.from('expenses')
+    .select('id, expense_date, main_category, sub_category, description, amount, payment_method, treasury_accounts(name)')
+    .order('expense_date', { ascending: false }).limit(limit || 50);
+  if (error) throw error;
+  return (data || []).map(function (e) {
+    return {
+      id: e.id, date: e.expense_date, mainCategory: e.main_category, subCategory: e.sub_category,
+      description: e.description, amount: e.amount, paymentMethod: e.payment_method,
+      treasuryAccountName: e.treasury_accounts ? e.treasury_accounts.name : (e.payment_method === 'آجل' ? 'آجل (لسه متدفعش)' : '—')
+    };
+  });
+};
+
 api.addExpense = async function (session, payload) {
   const { data, error } = await supabaseClient.rpc('rpc_add_expense', {
     p_main_category: payload.mainCategory, p_amount: payload.amount, p_sub_category: payload.subCategory || '', p_description: payload.description || '',
