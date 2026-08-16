@@ -2667,6 +2667,11 @@ function renderReportsPage() {
       '<div class="field"><label>إلى تاريخ</label><input type="date" id="repEnd" value="' + today + '"></div></div>' +
       '<button class="btn info-btn" style="margin-top:16px;" onclick="loadIncomeStatement_()">📊 عرض</button></div>' +
     '<div id="incomeStatementResult" style="margin-top:18px;"></div>' +
+    '<div class="section-title">📋 كل المصروفات (تفصيلي)</div>' +
+    '<div class="card"><div class="form-grid"><div class="field"><label>من تاريخ</label><input type="date" id="expRepStart" value="' + firstOfMonth + '"></div>' +
+      '<div class="field"><label>إلى تاريخ</label><input type="date" id="expRepEnd" value="' + today + '"></div></div>' +
+      '<button class="btn info-btn" style="margin-top:16px;" onclick="loadExpensesReport_()">📋 عرض المصروفات</button>' +
+      '<div id="expensesReportResult" style="margin-top:14px;"></div></div>' +
     '<div class="section-title">📊 الربحية الحقيقية</div>' +
     '<div class="card"><div class="card-row" style="gap:10px; flex-wrap:wrap;">' +
       '<button class="btn info-btn" onclick="loadProfitabilityByProduct_()">🏷️ حسب الصنف</button>' +
@@ -2738,6 +2743,33 @@ async function loadIncomeStatement_() {
   } catch (err) { showErrorToast_(err); }
 }
 function rowLine_(label, value, bold) { return '<div class="list-item"><span' + (bold ? ' style="font-weight:900;"' : '') + '>' + label + '</span><b>' + value + '</b></div>'; }
+
+async function loadExpensesReport_() {
+  const start = document.getElementById('expRepStart').value, end = document.getElementById('expRepEnd').value;
+  try {
+    const expenses = await api.getExpensesInRange(start, end);
+    const cur = state.settings.currency || 'جنيه';
+    const el = document.getElementById('expensesReportResult');
+    if (expenses.length === 0) { el.innerHTML = emptyRow_('💸', 'مفيش مصروفات في الفترة دي'); return; }
+
+    const total = expenses.reduce(function (s, e) { return s + Number(e.amount); }, 0);
+    const byCategory = {};
+    expenses.forEach(function (e) { byCategory[e.mainCategory] = (byCategory[e.mainCategory] || 0) + Number(e.amount); });
+
+    let html = '<div class="card" style="margin-bottom:12px;"><div class="card-heading">الإجمالي: ' + formatMoney_(total, cur) + ' — ' + expenses.length + ' مصروف</div>';
+    html += Object.keys(byCategory).sort(function (a, b) { return byCategory[b] - byCategory[a]; }).map(function (c) {
+      return rowLine_(c, formatMoney_(byCategory[c], cur));
+    }).join('') + '</div>';
+
+    html += '<div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>الفئة</th><th>الوصف</th><th>الحساب</th><th>المبلغ</th></tr></thead><tbody>';
+    html += expenses.map(function (e) {
+      return '<tr><td>' + formatDate_(e.date) + '</td><td>' + e.mainCategory + (e.subCategory ? ' — ' + e.subCategory : '') + '</td>' +
+        '<td>' + (e.description || '—') + '</td><td>🏦 ' + e.treasuryAccountName + '</td><td><b class="money-negative">' + formatMoney_(e.amount, cur) + '</b></td></tr>';
+    }).join('');
+    html += '</tbody></table></div>';
+    el.innerHTML = html;
+  } catch (err) { showErrorToast_(err); }
+}
 
 async function submitSeason_() {
   const payload = { name: document.getElementById('seasonName').value, startDate: document.getElementById('seasonStart').value, endDate: document.getElementById('seasonEnd').value };
