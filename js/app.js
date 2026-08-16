@@ -1184,8 +1184,9 @@ function buildCategoriesTreeView_() {
   return invTreeCache.mainCategories.map(function (m) {
     const subs = invTreeCache.subCategories.filter(function (s) { return s.parent === m.code; });
     return '<div style="padding:10px 0; border-bottom:1px solid var(--border);">' +
-      '<div style="font-weight:800; font-size:13.5px; display:flex; align-items:center; gap:8px;">📁 ' + m.name + ' <span class="pill info">' + m.code + '</span>' +
-      '<span style="cursor:pointer; font-size:11.5px; color:var(--accent); font-weight:700;" onclick="promptRenameCategory_(\'' + m.code + '\', \'' + escapeJsStr_(m.name) + '\')">✏️ تعديل</span></div>' +
+      '<div style="font-weight:800; font-size:13.5px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">📁 ' + m.name + ' <span class="pill info">' + m.code + '</span>' +
+      '<span style="cursor:pointer; font-size:11.5px; color:var(--accent); font-weight:700;" onclick="promptRenameCategory_(\'' + m.code + '\', \'' + escapeJsStr_(m.name) + '\')">✏️ تعديل</span>' +
+      (invTreeCache.mainCategories.length > 1 ? '<span style="cursor:pointer; font-size:11.5px; color:var(--warning); font-weight:700;" onclick="promptConvertCategory_(\'' + m.code + '\', \'' + escapeJsStr_(m.name) + '\')">🔀 تحويل لفرعية</span>' : '') + '</div>' +
       (subs.length > 0 ? '<div style="padding-right:22px; margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;">' + subs.map(function (s) {
         return '<span class="variant-chip">' + s.name + ' <span class="qty-tag">' + s.code + '</span> <span style="cursor:pointer; color:var(--accent);" onclick="promptRenameCategory_(\'' + s.code + '\', \'' + escapeJsStr_(s.name) + '\')">✏️</span></span>';
       }).join('') + '</div>' :
@@ -1194,6 +1195,26 @@ function buildCategoriesTreeView_() {
 }
 
 function escapeJsStr_(s) { return String(s || '').replace(/'/g, "\\'"); }
+
+function promptConvertCategory_(code, currentName) {
+  const otherMains = invTreeCache.mainCategories.filter(function (m) { return m.code !== code; });
+  openModal('🔀 تحويل "' + currentName + '" لفئة فرعية', 'اختاري الفئة الرئيسية اللي هتبقى تحتها',
+    '<div class="field"><label>تبقى فرعية تحت</label><select id="convertParentSelect">' +
+      otherMains.map(function (m) { return '<option value="' + m.code + '">' + m.name + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="hint" style="margin-top:8px;">شرط: الفئة دي مايكونش تحتها فئات فرعية خاصة بيها الأول</div>',
+    '<button class="btn secondary" onclick="openCategoriesModal_()">إلغاء</button><button class="btn success" onclick="submitConvertCategory_(\'' + code + '\')">✅ تحويل</button>');
+}
+
+async function submitConvertCategory_(code) {
+  const newParent = document.getElementById('convertParentSelect').value;
+  try {
+    await api.convertCategoryToSub({ username: state.user.username }, code, newParent);
+    showToast_('تم التحويل ✅', 'success');
+    await loadInventoryBaseData_();
+    openCategoriesModal_();
+  } catch (err) { showErrorToast_(err); }
+}
 
 function promptRenameCategory_(code, currentName) {
   openModal('✏️ تعديل اسم الفئة', 'الكود: ' + code,
@@ -1530,6 +1551,10 @@ function onExpPaymentMethodChange_() {
   document.getElementById('expTreasuryFieldWrap').style.display = document.getElementById('expPaymentMethod').value === 'آجل' ? 'none' : 'block';
 }
 
+function onExpFixedAssetChange_() {
+  document.getElementById('expFixedAssetWrap').style.display = document.getElementById('expIsFixedAsset').checked ? 'block' : 'none';
+}
+
 function buildExpensesPageHtml_() {
   return '<div class="grid grid-2">' +
     '<div class="card"><div class="card-heading">💸 مصروف جديد</div><div class="card-desc">اختار الفئة الرئيسية والفرعية، أو ضيف فئة جديدة لو مش موجودة</div>' +
@@ -1550,9 +1575,13 @@ function buildExpensesPageHtml_() {
       '</div>' +
       '<div class="field" id="expTreasuryFieldWrap"><label>هتتخصم من حساب</label><select id="expTreasuryAccount"><option value="">جاري التحميل...</option></select></div>' +
       '<div style="display:flex; gap:18px; margin-top:14px;">' +
-        '<label style="display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:700; color:var(--text-dim); cursor:pointer;"><input type="checkbox" id="expIsFixedAsset" style="width:auto;"> أصل ثابت؟</label>' +
+        '<label style="display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:700; color:var(--text-dim); cursor:pointer;"><input type="checkbox" id="expIsFixedAsset" onchange="onExpFixedAssetChange_()" style="width:auto;"> أصل ثابت؟</label>' +
         '<label style="display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:700; color:var(--text-dim); cursor:pointer;"><input type="checkbox" id="expIsRecurring" style="width:auto;"> مصروف متكرر؟</label>' +
       '</div>' +
+      '<div id="expFixedAssetWrap" style="display:none; margin-top:12px;"><div class="form-grid">' +
+        '<div class="field"><label>العمر الافتراضي (بالشهور)</label><input type="number" id="expUsefulLifeMonths" value="36"></div>' +
+        '<div class="field"><label>طريقة الإهلاك</label><select id="expDepreciationMethod"><option value="شهري">شهري (تقسيط على العمر الافتراضي)</option><option value="دفعة نهائية">دفعة واحدة في نهاية العمر الافتراضي</option></select></div>' +
+      '</div></div>' +
       '<div id="expRecurrenceDaysWrap" style="display:none; margin-top:12px;"><div class="field"><label>يتكرر كل (يوم)</label><input type="number" id="expRecurrenceDays" value="30"></div></div>' +
       '<button class="btn success block" style="margin-top:18px;" onclick="submitExpense_()">✅ تسجيل المصروف</button></div>' +
     '<div class="card"><div class="card-heading">📋 آخر المصروفات</div><div id="expensesHistoryList" style="margin-top:14px;">' + emptyRow_('⏳', 'جاري التحميل...') + '</div></div></div>';
@@ -1641,6 +1670,8 @@ async function submitExpense_() {
     description: document.getElementById('expDesc').value, amount: Number(document.getElementById('expAmount').value),
     paymentMethod: document.getElementById('expPaymentMethod').value, date: document.getElementById('expDate').value,
     isFixedAsset: document.getElementById('expIsFixedAsset').checked, isRecurring: document.getElementById('expIsRecurring').checked,
+    usefulLifeMonths: document.getElementById('expIsFixedAsset').checked ? Number(document.getElementById('expUsefulLifeMonths').value) : null,
+    depreciationMethod: document.getElementById('expIsFixedAsset').checked ? document.getElementById('expDepreciationMethod').value : null,
     recurrenceDays: document.getElementById('expIsRecurring').checked ? Number(document.getElementById('expRecurrenceDays').value) : '',
     treasuryAccountId: document.getElementById('expTreasuryAccount').value || null
   };
@@ -3825,7 +3856,7 @@ async function renderFixedAssetsPage() {
         return '<div class="list-item" style="display:block; padding:14px 4px;"><b>' + (a.description || 'أصل') + '</b>' +
           '<div style="margin-top:6px; font-size:12px; color:var(--text-dim);">التكلفة: ' + formatMoney_(a.amount, cur) +
           ' · مجمع الإهلاك: ' + formatMoney_(a.accumulatedDepreciation, cur) + ' · صافي القيمة: ' + formatMoney_(net, cur) +
-          ' · العمر الافتراضي: ' + a.usefulLifeMonths + ' شهر</div></div>';
+          ' · العمر الافتراضي: ' + a.usefulLifeMonths + ' شهر · الإهلاك: ' + a.depreciationMethod + '</div></div>';
       }).join('');
     html += '</div>';
     setContent_(html);

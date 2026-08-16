@@ -343,10 +343,17 @@ api.addExpense = async function (session, payload) {
     p_is_fixed_asset: !!payload.isFixedAsset, p_payment_method: payload.paymentMethod || 'كاش',
     p_employee_id: payload.employeeId || null, p_bonus: payload.bonus || null,
     p_expense_date: payload.date ? new Date(payload.date).toISOString() : new Date().toISOString(),
-    p_treasury_account_id: payload.treasuryAccountId || null
+    p_treasury_account_id: payload.treasuryAccountId || null,
+    p_useful_life_months: payload.usefulLifeMonths || 36, p_depreciation_method: payload.depreciationMethod || 'شهري'
   });
   if (error) throw error;
   return { success: true, expenseId: data };
+};
+
+api.convertCategoryToSub = async function (session, code, newParentCode) {
+  const { error } = await supabaseClient.rpc('rpc_convert_category_to_sub', { p_code: code, p_new_parent_code: newParentCode });
+  if (error) throw error;
+  return { success: true };
 };
 
 // ------------------------------------------------------------
@@ -855,7 +862,7 @@ api.listFixedAssets = async function () {
   const { data, error } = await supabaseClient.from('fixed_assets').select('*').order('acquired_at', { ascending: false });
   if (error) throw error;
   return (data || []).map(function (a) {
-    return { id: a.id, description: a.description, amount: a.amount, acquiredAt: a.acquired_at, usefulLifeMonths: a.useful_life_months, accumulatedDepreciation: a.accumulated_depreciation };
+    return { id: a.id, description: a.description, amount: a.amount, acquiredAt: a.acquired_at, usefulLifeMonths: a.useful_life_months, accumulatedDepreciation: a.accumulated_depreciation, depreciationMethod: a.depreciation_method };
   });
 };
 
