@@ -3850,15 +3850,14 @@ async function renderOpeningBalancesPage() {
       '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>المبلغ</label><input type="number" id="obAmount"></div>' +
       '<div class="field"><label>كتاريخ</label><input type="date" id="obDate" value="' + today + '"></div></div>' +
       '<div class="field" style="margin-top:10px;"><label>وصف</label><input type="text" id="obDesc"></div>' +
-      '<button class="btn success block" style="margin-top:14px;" onclick="submitOpeningBalance_()">➕ إضافة</button>' +
-      '<button class="btn block" style="margin-top:10px;" onclick="submitPostOpeningBalances_()">📮 ترحيل كل الأرصدة المفتوحة لدفتر اليومية</button>' +
-      '<div class="hint" style="margin-top:8px;">الترحيل بيقفل الرصيد بحيث محدش يقدر يعدله تاني، وبيسجله كقيد رسمي في دفتر اليومية</div></div>';
+      '<button class="btn success block" style="margin-top:14px;" onclick="submitOpeningBalance_()">➕ إضافة وترحيل فورًا</button>' +
+      '<div class="hint" style="margin-top:8px;">أي رصيد بتضيفيه هنا بيترحّل تلقائيًا لدفتر اليومية على طول — مفيش خطوة تانية مطلوبة</div></div>';
 
     html += '<div class="section-title">الأرصدة المسجّلة</div><div class="card">';
     html += balances.length === 0 ? emptyRow_('📂', 'لسه مفيش أرصدة أول مدة مضافة') :
       balances.map(function (b) {
         return '<div class="list-item"><span>' + b.accountName + (b.description ? ' — ' + b.description : '') + '</span>' +
-          '<span>' + formatMoney_(b.amount, cur) + ' <span class="pill ' + (b.locked ? 'success' : 'warning') + '">' + (b.locked ? 'مُرحّل' : 'لسه') + '</span></span></div>';
+          '<span>' + formatMoney_(b.amount, cur) + ' <span class="pill success">مُرحّل ✅</span></span></div>';
       }).join('');
     html += '</div>';
     setContent_(html);
@@ -3871,15 +3870,8 @@ async function submitOpeningBalance_() {
     asOfDate: document.getElementById('obDate').value, description: document.getElementById('obDesc').value
   };
   if (!payload.accountId || !payload.amount) { showToast_('الحساب والمبلغ مطلوبين', 'error'); return; }
-  try { await api.addOpeningBalance({ username: state.user.username }, payload); showToast_('تم الإضافة ✅', 'success'); renderOpeningBalancesPage(); }
+  try { await api.addOpeningBalance({ username: state.user.username }, payload); showToast_('تم الإضافة والترحيل ✅', 'success'); renderOpeningBalancesPage(); }
   catch (err) { showErrorToast_(err); }
-}
-
-async function submitPostOpeningBalances_() {
-  openConfirmModal('تأكيد الترحيل', 'هيترحّل كل الأرصدة المفتوحة لدفتر اليومية ويتقفلوا نهائيًا', async function () {
-    try { await api.postOpeningBalances({ username: state.user.username }); showToast_('تم الترحيل ✅', 'success'); renderOpeningBalancesPage(); }
-    catch (err) { showErrorToast_(err); }
-  });
 }
 
 // ============================================================

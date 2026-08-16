@@ -875,8 +875,8 @@ api.listOpeningBalances = async function () {
 };
 
 api.addOpeningBalance = async function (session, payload) {
-  const { error } = await supabaseClient.from('opening_balances').insert({
-    as_of_date: payload.asOfDate, account_id: payload.accountId, amount: payload.amount, description: payload.description || ''
+  const { error } = await supabaseClient.rpc('rpc_add_opening_balance', {
+    p_account_id: payload.accountId, p_amount: payload.amount, p_description: payload.description || '', p_as_of_date: payload.asOfDate
   });
   if (error) throw error;
   return { success: true };
