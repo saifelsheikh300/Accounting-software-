@@ -502,7 +502,7 @@ function renderPosPage() {
       '<div class="card">' +
         '<div class="card-heading">🛍️ المنتجات</div>' +
         '<div class="card-desc">دوسي على أي منتج عشان تضيفيه للسلة، أو دوري لو عايزة تفلتري</div>' +
-        '<div class="field"><input type="text" id="posSearchInput" oninput="posSearch_(this.value)" placeholder="فلترة (اختياري)..."></div>' +
+        '<div class="field"><input type="text" id="posSearchInput" oninput="posSearch_(this.value)" onkeydown="posSearchKeydown_(event)" placeholder="فلترة (اختياري) أو سكان باركود..."></div>' +
         '<div id="posSearchResults" style="margin-top:14px;"></div>' +
       '</div>' +
       '<div class="card">' +
@@ -552,6 +552,23 @@ async function loadPosProductGrid_() {
 
 function renderPosProductGrid_(list) {
   document.getElementById('posSearchResults').innerHTML = list.length === 0 ? emptyRow_('📦', 'لا يوجد منتجات') : buildProductResultsHtml_(list, 'addToPosCart_');
+}
+
+function posSearchKeydown_(event) {
+  if (event.key !== 'Enter') return;
+  const code = event.target.value.trim();
+  if (!code) return;
+  let matchProduct = null, matchVariant = null;
+  for (const p of posAllProducts) {
+    const v = p.variants.find(function (v) { return v.code === code; });
+    if (v) { matchProduct = p; matchVariant = v; break; }
+  }
+  if (matchVariant) {
+    const label = matchProduct.name + (matchVariant.color || matchVariant.size ? ' — ' + (matchVariant.color || '') + ' ' + (matchVariant.size || '') : '');
+    addToPosCart_(matchVariant.code, label, matchVariant.specialPrice || matchProduct.basePrice);
+    event.target.value = '';
+    posSearch_('');
+  }
 }
 
 function posSearch_(query) {
@@ -1067,7 +1084,8 @@ function buildInventoryCards_(products) {
     const catLine = (p.mainCategoryName ? p.mainCategoryName + ' ← ' : '') + (p.subCategoryName || 'بدون فئة');
     return '<div class="card" style="margin-bottom:10px; padding:14px;">' +
       '<div class="card-row"><b style="font-size:15.5px;">' + p.name + '</b>' +
-      '<span style="font-size:12px; color:var(--accent); cursor:pointer; white-space:nowrap;" onclick="openEditProductModal_(\'' + p.code + '\')">✏️ تعديل</span></div>' +
+      '<span style="display:flex; gap:12px;"><span style="font-size:12px; color:var(--text-dim); cursor:pointer; white-space:nowrap;" onclick="openBarcodeModal_(\'' + p.code + '\')">🏷️ باركود</span>' +
+      '<span style="font-size:12px; color:var(--accent); cursor:pointer; white-space:nowrap;" onclick="openEditProductModal_(\'' + p.code + '\')">✏️ تعديل</span></span></div>' +
       '<div style="font-size:11px; color:var(--text-faint); margin-top:3px;">' + catLine + '</div>' +
       '<div class="card-row" style="margin-top:10px; flex-wrap:wrap; gap:8px;">' +
         '<span class="pill">' + p.code + '</span>' +
@@ -1077,6 +1095,53 @@ function buildInventoryCards_(products) {
         '<span class="pill ' + (p.status === 'نشط' ? 'success' : 'danger') + '">' + p.status + '</span>' +
       '</div></div>';
   }).join('');
+}
+
+// ------------------------------------------------------------
+// طباعة باركود المنتجات — بيستخدم JsBarcode لرسم الباركود، وبيطبع
+// عن طريق iframe مخفي زي فاتورة الكاشير بالظبط
+// ------------------------------------------------------------
+function openBarcodeModal_(productCode) {
+  const p = invProductsCache[productCode];
+  if (!p) return;
+  const body = p.variants.map(function (v, idx) {
+    const label = v.color || v.size ? (v.color || '') + ' ' + (v.size || '') : 'بدون تفاصيل';
+    return '<div class="list-item" style="flex-wrap:wrap; gap:8px;">' +
+      '<span><b>' + p.name + '</b> — ' + label + '<br><span style="font-size:11px; color:var(--text-faint);">' + v.code + '</span></span>' +
+      '<span style="display:flex; align-items:center; gap:6px;"><input type="number" id="bcCopies_' + idx + '" value="1" min="1" style="width:50px; text-align:center;"><button class="btn sm secondary" onclick=\'printBarcodeLabels_([{code:' + JSON.stringify(v.code) + ',name:' + JSON.stringify(p.name + " " + label) + ',price:' + (v.specialPrice || p.basePrice) + ',copies:document.getElementById("bcCopies_' + idx + '").value}])\'>🖨️ طباعة</button></span></div>';
+  }).join('');
+  openModal('🏷️ باركود — ' + p.name, 'حددي عدد النسخ لكل متغير واطبعي', body, '<button class="btn secondary" onclick="closeModal()">إغلاق</button>');
+}
+
+function printBarcodeLabels_(labels) {
+  let labelsHtml = '';
+  labels.forEach(function (l) {
+    const copies = Math.max(1, parseInt(l.copies, 10) || 1);
+    for (let i = 0; i < copies; i++) {
+      labelsHtml += '<div class="label"><div class="pname">' + l.name + '</div><svg class="bc" jsbarcode-value="' + l.code + '"></svg><div class="price">' + l.price + '</div></div>';
+    }
+  });
+
+  const html = '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>باركود</title>' +
+    '<script src="https://cdnjs.cloudflare.com/ajax/libs/JsBarcode/3.11.5/JsBarcode.all.min.js"><\/script>' +
+    '<style>' +
+    'body{font-family:Tajawal,Arial,sans-serif; margin:0; padding:6px;}' +
+    '.label{display:inline-block; width:150px; text-align:center; padding:6px; border:1px dashed #999; margin:3px; page-break-inside:avoid;}' +
+    '.pname{font-size:10px; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}' +
+    '.price{font-size:12px; font-weight:bold; margin-top:2px;}' +
+    '</style></head><body>' + labelsHtml +
+    '<script>window.onload=function(){ JsBarcode(".bc", { width:1.4, height:35, fontSize:11 }); setTimeout(function(){ window.print(); }, 300); };<\/script>' +
+    '</body></html>';
+
+  let iframe = document.getElementById('barcodePrintFrame');
+  if (!iframe) {
+    iframe = document.createElement('iframe');
+    iframe.id = 'barcodePrintFrame';
+    iframe.style.position = 'fixed'; iframe.style.right = '-9999px'; iframe.style.width = '0'; iframe.style.height = '0'; iframe.style.border = 'none';
+    document.body.appendChild(iframe);
+  }
+  const doc = iframe.contentWindow.document;
+  doc.open(); doc.write(html); doc.close();
 }
 
 function invSearch_(query) {
