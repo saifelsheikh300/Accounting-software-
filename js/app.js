@@ -2621,7 +2621,7 @@ async function renderCapitalPage() {
         '<div class="field"><label>نوع الحركة</label><select id="capType"><option>إضافة رأس مال</option><option>سحب رأس مال</option></select></div>' +
         '<div class="field"><label>المبلغ <span class="req">*</span></label><input type="number" id="capAmount"></div>' +
       '</div>' +
-      '<div class="field" style="margin-top:12px;"><label>هتضاف/تتسحب من حساب</label><select id="capTreasuryAccount">' +
+      '<div class="field" style="margin-top:12px;"><label>هتضاف/تتسحب من حساب <span class="req">*</span></label><select id="capTreasuryAccount">' +
         (treasuryAccounts.length === 0 ? '<option value="">لا يوجد حسابات خزنة/بنوك مضافة</option>' :
           treasuryAccounts.map(function (t) { return '<option value="' + t.id + '">' + t.name + ' (' + t.type + ')</option>'; }).join('')) +
       '</select></div>' +
@@ -2697,6 +2697,7 @@ async function submitCapitalMovement_() {
     amount: Number(document.getElementById('capAmount').value), treasuryAccountId: document.getElementById('capTreasuryAccount').value || null
   };
   if (!payload.partnerName || !payload.amount) { showToast_('اسم الشريك والمبلغ مطلوبين', 'error'); return; }
+  if (!payload.treasuryAccountId) { showToast_('لازم تحددي حساب الخزنة/البنك اللي هتضاف أو تتسحب منه', 'error'); return; }
   try { await api.addCapitalMovement({ username: state.user.username }, payload); showToast_('تم تسجيل الحركة ✅', 'success'); renderCapitalPage(); }
   catch (err) { showErrorToast_(err); }
 }
@@ -3311,23 +3312,60 @@ function scanBarcodeAddToCart_(code) {
 // ============================================================
 async function renderAccountsPage() {
   try {
-    const accounts = await api.getAccounts();
+    const [accounts, trialBalance] = await Promise.all([api.getAccounts(), api.getTrialBalance(new Date().toISOString().slice(0, 10))]);
     const cur = state.settings.currency || 'جنيه';
+    const balanceByCode = {};
+    trialBalance.forEach(function (r) { balanceByCode[r.accountCode] = r.balance; });
+
     let html = '<div class="card"><div class="card-heading">🗂️ حساب جديد</div>' +
       '<div class="form-grid"><div class="field"><label>اسم الحساب <span class="req">*</span></label><input type="text" id="accName"></div>' +
       '<div class="field"><label>النوع <span class="req">*</span></label><select id="accType"><option>أصول</option><option>خصوم</option><option>حقوق ملكية</option><option>إيرادات</option><option>مصروفات</option></select></div></div>' +
-      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>كود الحساب الأب (اختياري)</label><input type="text" id="accParentCode" placeholder="مثال: 1"></div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>كود الحساب الأب (اختياري)</label><input type="text" id="accParentCode" placeholder="مثال: 1.1"></div>' +
       '<div class="field"><label>حساب تجميعي (Group)؟</label><select id="accIsGroup"><option value="false">لا</option><option value="true">نعم</option></select></div></div>' +
       '<button class="btn success block" style="margin-top:16px;" onclick="submitAccount_()">✅ إضافة الحساب</button></div>';
 
-    html += '<div class="section-title">شجرة الحسابات الحالية</div><div class="card">';
-    html += accounts.length === 0 ? emptyRow_('🗂️', 'لسه مفيش حسابات مضافة') :
-      accounts.map(function (a) {
-        return '<div class="list-item"><span><b>' + a.code + '</b> — ' + a.name + (a.isGroup ? ' <span class="pill">تجميعي</span>' : '') + '</span><span class="pill">' + a.type + '</span></div>';
-      }).join('');
+    html += '<div class="section-title">شجرة الحسابات <span style="font-size:11px; color:var(--text-dim); font-weight:400;">(دوسي على أي مجموعة عشان تتمدد)</span></div><div class="card">';
+    const roots = accounts.filter(function (a) { return !a.parentId; }).sort(function (a, b) { return a.code.localeCompare(b.code, undefined, { numeric: true }); });
+    html += roots.length === 0 ? emptyRow_('🗂️', 'لسه مفيش حسابات مضافة') : roots.map(function (a) { return buildAccountNode_(a, accounts, balanceByCode, cur, 0); }).join('');
     html += '</div>';
     setContent_(html);
   } catch (err) { showErrorToast_(err); }
+}
+
+function buildAccountNode_(account, allAccounts, balanceByCode, cur, depth) {
+  const children = allAccounts.filter(function (a) { return a.parentId === account.id; }).sort(function (a, b) { return a.code.localeCompare(b.code, undefined, { numeric: true }); });
+  const balance = balanceByCode[account.code];
+  const nodeId = 'accnode_' + account.id;
+  const hasChildren = children.length > 0;
+
+  let html = '<div style="padding-right:' + (depth * 18) + 'px; border-bottom:1px solid var(--border);">' +
+    '<div class="list-item" style="cursor:' + (hasChildren ? 'pointer' : 'default') + ';"' + (hasChildren ? ' onclick="toggleAccountNode_(\'' + nodeId + '\')"' : '') + '>' +
+      '<span>' + (hasChildren ? '<span id="' + nodeId + '_arrow" style="display:inline-block; width:14px;">▸</span> ' : '<span style="display:inline-block; width:14px;"></span> ') +
+      (account.isGroup ? '📁' : '📄') + ' <b>' + account.code + '</b> — ' + account.name + '</span>' +
+      '<span style="display:flex; align-items:center; gap:8px;">' +
+        (account.isGroup ? '<span class="pill">تجميعي</span>' : (balance !== undefined ? '<b>' + formatMoney_(balance, cur) + '</b>' : '')) +
+        '<span class="pill ' + accountTypePillClass_(account.type) + '">' + account.type + '</span>' +
+      '</span></div>' +
+    (hasChildren ? '<div id="' + nodeId + '" style="display:none;">' + children.map(function (c) { return buildAccountNode_(c, allAccounts, balanceByCode, cur, depth + 1); }).join('') + '</div>' : '') +
+  '</div>';
+  return html;
+}
+
+function accountTypePillClass_(type) {
+  if (type === 'أصول') return 'success';
+  if (type === 'خصوم') return 'danger';
+  if (type === 'إيرادات') return 'info';
+  if (type === 'مصروفات') return 'warning';
+  return '';
+}
+
+function toggleAccountNode_(nodeId) {
+  const el = document.getElementById(nodeId);
+  const arrow = document.getElementById(nodeId + '_arrow');
+  if (!el) return;
+  const isOpen = el.style.display !== 'none';
+  el.style.display = isOpen ? 'none' : 'block';
+  if (arrow) arrow.textContent = isOpen ? '▸' : '▾';
 }
 
 async function submitAccount_() {
