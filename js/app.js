@@ -502,7 +502,7 @@ function renderPosPage() {
       '<div class="card">' +
         '<div class="card-heading">🛍️ المنتجات</div>' +
         '<div class="card-desc">دوسي على أي منتج عشان تضيفيه للسلة، أو دوري لو عايزة تفلتري</div>' +
-        '<div class="field"><input type="text" id="posSearchInput" oninput="posSearch_(this.value)" onkeydown="posSearchKeydown_(event)" placeholder="فلترة (اختياري) أو سكان باركود..."></div>' +
+        '<div class="field"><input type="text" id="posSearchInput" oninput="posSearch_(this.value)" placeholder="فلترة (اختياري) أو سكان باركود..."></div>' +
         '<div id="posSearchResults" style="margin-top:14px;"></div>' +
       '</div>' +
       '<div class="card">' +
@@ -3220,7 +3220,60 @@ window.addEventListener('DOMContentLoaded', async function () {
 
   document.getElementById('loginPassword').addEventListener('keydown', function (e) { if (e.key === 'Enter') handleLogin(); });
   setInterval(function () { if (state.user) refreshNotifications(); }, 90000);
+
+  setupGlobalBarcodeScanner_();
 });
+
+// ------------------------------------------------------------
+// سكانر باركود عام — بيشتغل طول ما إنتي في شاشة الكاشير حتى لو
+// المؤشر مش واقف في خانة البحث بالظبط. بيميّز سكان الباركود عن
+// الكتابة العادية عن طريق سرعة الحروف (السكانر بيكتب أسرع بكتير
+// من أي إنسان)، وبيتجاهل الكتابة العادية في خانات زي الاسم/التليفون/الخصم
+// ------------------------------------------------------------
+function setupGlobalBarcodeScanner_() {
+  let buffer = '';
+  let lastKeyTime = 0;
+  const FAST_KEY_THRESHOLD_MS = 60;
+  const IGNORE_INPUT_IDS = ['posCustomerName', 'posCustomerPhone', 'posDiscount'];
+
+  document.addEventListener('keydown', function (e) {
+    if (state.currentPage !== 'pos') { buffer = ''; return; }
+    const active = document.activeElement;
+    const activeId = active ? active.id : '';
+    if (IGNORE_INPUT_IDS.indexOf(activeId) !== -1) { buffer = ''; return; }
+    if (active && active.tagName === 'SELECT') { buffer = ''; return; }
+
+    const now = Date.now();
+    if (now - lastKeyTime > FAST_KEY_THRESHOLD_MS + 150) buffer = ''; // فاصل كبير = بداية سكان/كتابة جديدة
+    lastKeyTime = now;
+
+    if (e.key === 'Enter') {
+      if (buffer.length >= 3) {
+        e.preventDefault();
+        scanBarcodeAddToCart_(buffer);
+      }
+      buffer = '';
+      return;
+    }
+    if (e.key.length === 1) buffer += e.key; // حروف/أرقام عادية بس
+  });
+}
+
+function scanBarcodeAddToCart_(code) {
+  code = code.trim();
+  if (!code || !posAllProducts) return;
+  for (const p of posAllProducts) {
+    const v = p.variants.find(function (v) { return v.code === code; });
+    if (v) {
+      const label = p.name + (v.color || v.size ? ' — ' + (v.color || '') + ' ' + (v.size || '') : '');
+      addToPosCart_(v.code, label, v.specialPrice || p.basePrice);
+      const input = document.getElementById('posSearchInput');
+      if (input) { input.value = ''; posSearch_(''); }
+      return;
+    }
+  }
+  showToast_('الكود ده مش موجود: ' + code, 'error');
+}
 
 // ============================================================
 // شجرة الحسابات
