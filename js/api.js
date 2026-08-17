@@ -113,12 +113,12 @@ api.getNotifications = async function () {
 // المخزون: الفئات + المنتجات + المتغيرات
 // ------------------------------------------------------------
 api.getProductTree = async function () {
-  const { data, error } = await supabaseClient.from('product_tree').select('*').eq('active', true);
+  const { data, error } = await supabaseClient.from('product_tree').select('*').eq('active', true).is('deleted_at', null);
   if (error) throw error;
-  const main = data.filter(function (c) { return c.type === 'رئيسية'; }).map(function (c) { return { code: c.code, name: c.name, type: c.type }; });
+  const main = data.filter(function (c) { return c.type === 'رئيسية'; }).map(function (c) { return { id: c.id, code: c.code, name: c.name, type: c.type }; });
   const sub = data.filter(function (c) { return c.type === 'فرعية'; }).map(function (c) {
     const parent = data.find(function (p) { return p.id === c.parent_id; });
-    return { code: c.code, name: c.name, type: c.type, parent: parent ? parent.code : null };
+    return { id: c.id, code: c.code, name: c.name, type: c.type, parent: parent ? parent.code : null };
   });
   return { mainCategories: main, subCategories: sub };
 };
@@ -145,7 +145,7 @@ api.getInventoryIndex = async function () {
   const result = { products: {} };
   products.forEach(function (p) {
     result.products[p.code] = {
-      code: p.code, name: p.name, basePrice: p.base_price, image: p.image_url, hasVariants: p.has_variants, status: p.status,
+      id: p.id, code: p.code, name: p.name, basePrice: p.base_price, image: p.image_url, hasVariants: p.has_variants, status: p.status,
       subCategoryCode: p.sub_category ? p.sub_category.code : '',
       subCategoryName: p.sub_category ? p.sub_category.name : '',
       mainCategoryName: p.main_category ? p.main_category.name : '',
@@ -617,9 +617,11 @@ api.runMonthlySalaries = async function (session, monthLabel) {
 };
 
 api.listSalaries = async function (monthLabel) {
-  const { data, error } = await supabaseClient.from('salaries').select('*, employees(name)').eq('month_label', monthLabel);
+  let q = supabaseClient.from('salaries').select('*, employees(name)').order('month_label', { ascending: false });
+  if (monthLabel) q = q.eq('month_label', monthLabel);
+  const { data, error } = await q;
   if (error) throw error;
-  return (data || []).map(function (s) { return { employeeName: s.employees ? s.employees.name : '', net: s.net, paid: s.paid ? 'نعم' : 'لا' }; });
+  return (data || []).map(function (s) { return { employeeName: s.employees ? s.employees.name : '', monthLabel: s.month_label, net: s.net, netAmount: s.net, paid: s.paid ? 'نعم' : 'لا' }; });
 };
 
 api.paySalary = async function (session, monthLabel, employeeName, treasuryAccountId) {

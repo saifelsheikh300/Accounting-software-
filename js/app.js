@@ -1085,7 +1085,8 @@ function buildInventoryCards_(products) {
     return '<div class="card" style="margin-bottom:10px; padding:14px;">' +
       '<div class="card-row"><b style="font-size:15.5px;">' + p.name + '</b>' +
       '<span style="display:flex; gap:12px;"><span style="font-size:12px; color:var(--text-dim); cursor:pointer; white-space:nowrap;" onclick="openBarcodeModal_(\'' + p.code + '\')">🏷️ باركود</span>' +
-      '<span style="font-size:12px; color:var(--accent); cursor:pointer; white-space:nowrap;" onclick="openEditProductModal_(\'' + p.code + '\')">✏️ تعديل</span></span></div>' +
+      '<span style="font-size:12px; color:var(--accent); cursor:pointer; white-space:nowrap;" onclick="openEditProductModal_(\'' + p.code + '\')">✏️ تعديل</span>' +
+      '<span style="font-size:12px; color:var(--danger); cursor:pointer; white-space:nowrap;" onclick="confirmDeleteProduct_(' + JSON.stringify(p.id) + ', ' + JSON.stringify(p.name) + ')">🗑️ حذف</span></span></div>' +
       '<div style="font-size:11px; color:var(--text-faint); margin-top:3px;">' + catLine + '</div>' +
       '<div class="card-row" style="margin-top:10px; flex-wrap:wrap; gap:8px;">' +
         '<span class="pill">' + p.code + '</span>' +
@@ -1144,6 +1145,20 @@ function printBarcodeLabels_(labels) {
   doc.open(); doc.write(html); doc.close();
 }
 
+function confirmDeleteProduct_(productId, productName) {
+  openModal('🗑️ حذف منتج', 'متأكدة إنك عايزة تمسحي "' + productName + '"؟ هيتنقل لسلة المحذوفات وتقدري ترجعيه في أي وقت.', '',
+    '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn danger" onclick="submitDeleteProduct_(\'' + productId + '\')">حذف</button>');
+}
+
+async function submitDeleteProduct_(productId) {
+  try {
+    await api.softDeleteRecord({ username: state.user.username }, 'products', productId);
+    closeModal(); showToast_('تم حذف المنتج ✅ (ممكن ترجعيه من سلة المحذوفات)', 'success');
+    await loadInventoryBaseData_();
+    setContent_(buildInventoryMainHtml_());
+  } catch (err) { showErrorToast_(err); }
+}
+
 function invSearch_(query) {
   const base = Object.values(invProductsCache || {});
   const products = applyInvFilters_(base);
@@ -1186,15 +1201,30 @@ function buildCategoriesTreeView_() {
     return '<div style="padding:10px 0; border-bottom:1px solid var(--border);">' +
       '<div style="font-weight:800; font-size:13.5px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">📁 ' + m.name + ' <span class="pill info">' + m.code + '</span>' +
       '<span style="cursor:pointer; font-size:11.5px; color:var(--accent); font-weight:700;" onclick="promptRenameCategory_(\'' + m.code + '\', \'' + escapeJsStr_(m.name) + '\')">✏️ تعديل</span>' +
-      (invTreeCache.mainCategories.length > 1 ? '<span style="cursor:pointer; font-size:11.5px; color:var(--warning); font-weight:700;" onclick="promptConvertCategory_(\'' + m.code + '\', \'' + escapeJsStr_(m.name) + '\')">🔀 تحويل لفرعية</span>' : '') + '</div>' +
+      (invTreeCache.mainCategories.length > 1 ? '<span style="cursor:pointer; font-size:11.5px; color:var(--warning); font-weight:700;" onclick="promptConvertCategory_(\'' + m.code + '\', \'' + escapeJsStr_(m.name) + '\')">🔀 تحويل لفرعية</span>' : '') +
+      '<span style="cursor:pointer; font-size:11.5px; color:var(--danger); font-weight:700;" onclick="confirmDeleteCategory_(' + JSON.stringify(m.id) + ', ' + JSON.stringify(m.name) + ')">🗑️ حذف</span></div>' +
       (subs.length > 0 ? '<div style="padding-right:22px; margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;">' + subs.map(function (s) {
-        return '<span class="variant-chip">' + s.name + ' <span class="qty-tag">' + s.code + '</span> <span style="cursor:pointer; color:var(--accent);" onclick="promptRenameCategory_(\'' + s.code + '\', \'' + escapeJsStr_(s.name) + '\')">✏️</span></span>';
+        return '<span class="variant-chip">' + s.name + ' <span class="qty-tag">' + s.code + '</span> <span style="cursor:pointer; color:var(--accent);" onclick="promptRenameCategory_(\'' + s.code + '\', \'' + escapeJsStr_(s.name) + '\')">✏️</span> <span style="cursor:pointer; color:var(--danger);" onclick="confirmDeleteCategory_(' + JSON.stringify(s.id) + ', ' + JSON.stringify(s.name) + ')">🗑️</span></span>';
       }).join('') + '</div>' :
         '<div style="padding-right:22px; margin-top:6px; font-size:11.5px; color:var(--text-faint);">لا يوجد فئات فرعية بعد</div>') + '</div>';
   }).join('');
 }
 
 function escapeJsStr_(s) { return String(s || '').replace(/'/g, "\\'"); }
+
+function confirmDeleteCategory_(categoryId, categoryName) {
+  openModal('🗑️ حذف فئة', 'متأكدة إنك عايزة تمسحي "' + categoryName + '"؟ (مش هيتنفذ لو لسه فيها منتجات أو فئات فرعية)', '',
+    '<button class="btn secondary" onclick="openCategoriesModal_()">إلغاء</button><button class="btn danger" onclick="submitDeleteCategory_(\'' + categoryId + '\')">حذف</button>');
+}
+
+async function submitDeleteCategory_(categoryId) {
+  try {
+    await api.softDeleteRecord({ username: state.user.username }, 'product_tree', categoryId);
+    showToast_('تم حذف الفئة ✅', 'success');
+    invTreeCache = await api.getProductTree();
+    openCategoriesModal_();
+  } catch (err) { showErrorToast_(err); }
+}
 
 function promptConvertCategory_(code, currentName) {
   const otherMains = invTreeCache.mainCategories.filter(function (m) { return m.code !== code; });
@@ -3332,19 +3362,30 @@ async function renderAccountsPage() {
   } catch (err) { showErrorToast_(err); }
 }
 
-const ACCOUNT_DRILLDOWN_MAP = { 'الأصول الثابتة': 'fixedAssets' };
+function resolveDrilldownType_(name) {
+  if (name === 'الأصول الثابتة') return 'fixedAssets';
+  if (name === 'الخزينة') return 'treasury';
+  if (name === 'العملاء (مدينون)') return 'receivables';
+  if (name === 'العهدة') return 'pettyCash';
+  if (name === 'الموردون') return 'suppliers';
+  if (name === 'المرتبات') return 'salaries';
+  if (name.indexOf('رأس المال') === 0) return 'partnerCapital';
+  if (name.indexOf('مستحقات إدارة') === 0) return 'partnerAdminRights';
+  if (name.indexOf('المصروفات:') === 0 && name !== 'المصروفات: إهلاك') return 'expenseCategory';
+  return null;
+}
 
 function buildAccountNode_(account, allAccounts, balanceByCode, cur, depth) {
   const children = allAccounts.filter(function (a) { return a.parentId === account.id; }).sort(function (a, b) { return a.code.localeCompare(b.code, undefined, { numeric: true }); });
   const balance = balanceByCode[account.code];
   const nodeId = 'accnode_' + account.id;
   const hasChildren = children.length > 0;
-  const drilldownType = ACCOUNT_DRILLDOWN_MAP[account.name];
+  const drilldownType = account.isGroup ? null : resolveDrilldownType_(account.name);
   const isExpandable = hasChildren || !!drilldownType;
 
   let clickHandler = '';
   if (hasChildren) clickHandler = ' onclick="toggleAccountNode_(\'' + nodeId + '\')"';
-  else if (drilldownType) clickHandler = ' onclick="toggleAccountDrilldown_(\'' + nodeId + '\', \'' + drilldownType + '\')"';
+  else if (drilldownType) clickHandler = ' onclick=\'toggleAccountDrilldown_("' + nodeId + '", "' + drilldownType + '", ' + JSON.stringify(account.name) + ')\'';
 
   let html = '<div style="padding-right:' + (depth * 18) + 'px; border-bottom:1px solid var(--border);">' +
     '<div class="list-item" style="cursor:' + (isExpandable ? 'pointer' : 'default') + ';"' + clickHandler + '>' +
@@ -3360,7 +3401,7 @@ function buildAccountNode_(account, allAccounts, balanceByCode, cur, depth) {
   return html;
 }
 
-async function toggleAccountDrilldown_(nodeId, drilldownType) {
+async function toggleAccountDrilldown_(nodeId, drilldownType, accountName) {
   const el = document.getElementById(nodeId);
   const arrow = document.getElementById(nodeId + '_arrow');
   if (!el) return;
@@ -3378,6 +3419,53 @@ async function toggleAccountDrilldown_(nodeId, drilldownType) {
           const net = Number(a.amount) - Number(a.accumulatedDepreciation);
           return '<div class="list-item"><span>🏗️ ' + (a.description || 'أصل') + '<br><span style="font-size:11px; color:var(--text-faint);">' + formatDate_(a.acquiredAt) + ' · إهلاك متراكم: ' + formatMoney_(a.accumulatedDepreciation, cur) + '</span></span><b>' + formatMoney_(net, cur) + '</b></div>';
         }).join('');
+
+    } else if (drilldownType === 'treasury') {
+      const accounts = await getTreasuryAccountsCached_(true);
+      el.innerHTML = accounts.length === 0 ? emptyRow_('🏦', 'مفيش حسابات خزنة/بنك بعد') :
+        accounts.map(function (t) { return '<div class="list-item"><span>' + (t.type === 'كاش' ? '💵' : '🏦') + ' ' + t.name + '</span><b>' + formatMoney_(t.currentBalance, cur) + '</b></div>'; }).join('');
+
+    } else if (drilldownType === 'receivables') {
+      const invoices = (await api.listInvoices({})).filter(function (i) { return Number(i.remaining) > 0; });
+      el.innerHTML = invoices.length === 0 ? emptyRow_('👥', 'مفيش فواتير آجلة مفتوحة') :
+        invoices.map(function (i) { return '<div class="list-item"><span>' + i.customerName + '<br><span style="font-size:11px; color:var(--text-faint);">' + i.invoiceNumber + '</span></span><b class="money-negative">' + formatMoney_(i.remaining, cur) + '</b></div>'; }).join('');
+
+    } else if (drilldownType === 'pettyCash') {
+      const history = await api.getPettyCashHistory(15);
+      el.innerHTML = history.length === 0 ? emptyRow_('👛', 'مفيش حركات عهدة مسجّلة') :
+        history.map(function (h) { return '<div class="list-item"><span>' + h.description + '<br><span style="font-size:11px; color:var(--text-faint);">' + formatDate_(h.date) + '</span></span><b>' + formatMoney_(h.amount, cur) + '</b></div>'; }).join('');
+
+    } else if (drilldownType === 'suppliers') {
+      const suppliers = (await getSuppliersCached_()).filter(function (s) { return Number(s.totalRemaining) > 0; });
+      el.innerHTML = suppliers.length === 0 ? emptyRow_('🏭', 'مفيش مستحقات لموردين حاليًا') :
+        suppliers.map(function (s) { return '<div class="list-item"><span>' + s.name + '</span><b class="money-negative">' + formatMoney_(s.totalRemaining, cur) + '</b></div>'; }).join('');
+
+    } else if (drilldownType === 'salaries') {
+      const salaries = await api.listSalaries();
+      el.innerHTML = salaries.length === 0 ? emptyRow_('👷', 'مفيش رواتب مسجّلة بعد') :
+        salaries.slice(0, 15).map(function (s) { return '<div class="list-item"><span>' + s.employeeName + '<br><span style="font-size:11px; color:var(--text-faint);">' + s.monthLabel + '</span></span><b>' + formatMoney_(s.netAmount, cur) + '</b></div>'; }).join('');
+
+    } else if (drilldownType === 'partnerCapital') {
+      const summary = await api.getCapitalSummary();
+      const partnerName = accountName.replace('رأس المال — ', '').replace('رأس المال', '').trim();
+      const partner = summary.partners.find(function (p) { return p.name === partnerName; });
+      el.innerHTML = !partner ? emptyRow_('🤝', 'مفيش بيانات لهذا الشريك') :
+        '<div class="list-item"><span>الرصيد الحالي</span><b>' + formatMoney_(partner.balance, cur) + '</b></div>' +
+        '<div class="list-item"><span>نسبة الملكية</span><b>' + partner.ownershipPercent + '%</b></div>';
+
+    } else if (drilldownType === 'partnerAdminRights') {
+      const rights = await api.getAdminRights();
+      const partnerName = accountName.replace('مستحقات إدارة — ', '').replace('مستحقات إدارة', '').trim();
+      const mine = rights.filter(function (r) { return r.partnerName === partnerName; });
+      el.innerHTML = mine.length === 0 ? emptyRow_('💼', 'مفيش مستحقات مسجّلة له') :
+        mine.map(function (r) { return '<div class="list-item"><span>' + r.monthLabel + '</span><b>متاح: ' + formatMoney_(r.available, cur) + '</b></div>'; }).join('');
+
+    } else if (drilldownType === 'expenseCategory') {
+      const category = accountName.replace('المصروفات:', '').trim();
+      const wide = await api.getExpensesInRange('2000-01-01', new Date().toISOString().slice(0, 10));
+      const mine = wide.filter(function (e) { return e.mainCategory === category; }).slice(0, 15);
+      el.innerHTML = mine.length === 0 ? emptyRow_('💸', 'مفيش مصروفات مسجّلة في الفئة دي') :
+        mine.map(function (e) { return '<div class="list-item"><span>' + (e.description || e.mainCategory) + '<br><span style="font-size:11px; color:var(--text-faint);">' + formatDate_(e.date) + '</span></span><b class="money-negative">' + formatMoney_(e.amount, cur) + '</b></div>'; }).join('');
     }
   } catch (err) { showErrorToast_(err); }
 }
