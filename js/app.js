@@ -3332,23 +3332,54 @@ async function renderAccountsPage() {
   } catch (err) { showErrorToast_(err); }
 }
 
+const ACCOUNT_DRILLDOWN_MAP = { 'الأصول الثابتة': 'fixedAssets' };
+
 function buildAccountNode_(account, allAccounts, balanceByCode, cur, depth) {
   const children = allAccounts.filter(function (a) { return a.parentId === account.id; }).sort(function (a, b) { return a.code.localeCompare(b.code, undefined, { numeric: true }); });
   const balance = balanceByCode[account.code];
   const nodeId = 'accnode_' + account.id;
   const hasChildren = children.length > 0;
+  const drilldownType = ACCOUNT_DRILLDOWN_MAP[account.name];
+  const isExpandable = hasChildren || !!drilldownType;
+
+  let clickHandler = '';
+  if (hasChildren) clickHandler = ' onclick="toggleAccountNode_(\'' + nodeId + '\')"';
+  else if (drilldownType) clickHandler = ' onclick="toggleAccountDrilldown_(\'' + nodeId + '\', \'' + drilldownType + '\')"';
 
   let html = '<div style="padding-right:' + (depth * 18) + 'px; border-bottom:1px solid var(--border);">' +
-    '<div class="list-item" style="cursor:' + (hasChildren ? 'pointer' : 'default') + ';"' + (hasChildren ? ' onclick="toggleAccountNode_(\'' + nodeId + '\')"' : '') + '>' +
-      '<span>' + (hasChildren ? '<span id="' + nodeId + '_arrow" style="display:inline-block; width:14px;">▸</span> ' : '<span style="display:inline-block; width:14px;"></span> ') +
+    '<div class="list-item" style="cursor:' + (isExpandable ? 'pointer' : 'default') + ';"' + clickHandler + '>' +
+      '<span>' + (isExpandable ? '<span id="' + nodeId + '_arrow" style="display:inline-block; width:14px;">▸</span> ' : '<span style="display:inline-block; width:14px;"></span> ') +
       (account.isGroup ? '📁' : '📄') + ' <b>' + account.code + '</b> — ' + account.name + '</span>' +
       '<span style="display:flex; align-items:center; gap:8px;">' +
         (account.isGroup ? '<span class="pill">تجميعي</span>' : (balance !== undefined ? '<b>' + formatMoney_(balance, cur) + '</b>' : '')) +
         '<span class="pill ' + accountTypePillClass_(account.type) + '">' + account.type + '</span>' +
       '</span></div>' +
     (hasChildren ? '<div id="' + nodeId + '" style="display:none;">' + children.map(function (c) { return buildAccountNode_(c, allAccounts, balanceByCode, cur, depth + 1); }).join('') + '</div>' : '') +
+    (drilldownType ? '<div id="' + nodeId + '" style="display:none; padding-right:18px;"></div>' : '') +
   '</div>';
   return html;
+}
+
+async function toggleAccountDrilldown_(nodeId, drilldownType) {
+  const el = document.getElementById(nodeId);
+  const arrow = document.getElementById(nodeId + '_arrow');
+  if (!el) return;
+  const isOpen = el.style.display !== 'none';
+  if (isOpen) { el.style.display = 'none'; if (arrow) arrow.textContent = '▸'; return; }
+
+  el.style.display = 'block'; if (arrow) arrow.textContent = '▾';
+  el.innerHTML = emptyRow_('⏳', 'جاري التحميل...');
+  const cur = state.settings.currency || 'جنيه';
+  try {
+    if (drilldownType === 'fixedAssets') {
+      const assets = await api.listFixedAssets();
+      el.innerHTML = assets.length === 0 ? emptyRow_('🏗️', 'مفيش أصول ثابتة مسجّلة لسه') :
+        assets.map(function (a) {
+          const net = Number(a.amount) - Number(a.accumulatedDepreciation);
+          return '<div class="list-item"><span>🏗️ ' + (a.description || 'أصل') + '<br><span style="font-size:11px; color:var(--text-faint);">' + formatDate_(a.acquiredAt) + ' · إهلاك متراكم: ' + formatMoney_(a.accumulatedDepreciation, cur) + '</span></span><b>' + formatMoney_(net, cur) + '</b></div>';
+        }).join('');
+    }
+  } catch (err) { showErrorToast_(err); }
 }
 
 function accountTypePillClass_(type) {
