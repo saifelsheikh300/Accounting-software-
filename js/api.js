@@ -59,7 +59,7 @@ api.getAppShellData = async function () {
   return {
     user: { username: profile.username, fullName: profile.full_name, role: profile.role, isCashier: profile.role === 'كاشير', permissions: profile.permissions || {} },
     settings: {
-      brandName: settings.brandName, logoUrl: settings.logoUrl, primaryColor: settings.primaryColor,
+      brandName: settings.brandName, logoUrl: settings.logoUrl, productIcon: settings.productIcon || '📦', primaryColor: settings.primaryColor,
       accentColor: settings.accentColor, currency: settings.currency, darkMode: settings.darkMode === 'true',
       operatingMode: settings.operatingMode, taxEnabled: settings.taxEnabled === 'true',
       multiWarehouse: (warehouses || []).length > 1
@@ -822,11 +822,35 @@ api.addOtherRevenue = async function (session, payload) {
 // ------------------------------------------------------------
 // التقارير المحاسبية: ميزان المراجعة + الميزانية العمومية
 // ------------------------------------------------------------
-api.getTrialBalance = async function (endDate) {
-  const { data, error } = await supabaseClient.rpc('rpc_trial_balance', { p_end_date: endDate });
+api.getTrialBalance = async function (startDate, endDate) {
+  const { data, error } = await supabaseClient.rpc('rpc_trial_balance', { p_start_date: startDate || null, p_end_date: endDate });
   if (error) throw error;
-  return (data || []).map(function (r) {
-    return { accountCode: r.accountCode, accountName: r.accountName, accountType: r.accountType, debit: r.debit, credit: r.credit, balance: r.balance };
+  return data || { rows: [], totals: {}, balanced: true };
+};
+
+api.reparentSubcategory = async function (session, code, newParentCode) {
+  const { error } = await supabaseClient.rpc('rpc_reparent_subcategory', { p_code: code, p_new_parent_code: newParentCode });
+  if (error) throw error;
+  return { success: true };
+};
+
+api.bulkMoveCategoryProducts = async function (session, oldCode, newCode) {
+  const { data, error } = await supabaseClient.rpc('rpc_bulk_move_category_products', { p_old_sub_category_code: oldCode, p_new_sub_category_code: newCode });
+  if (error) throw error;
+  return { moved: data };
+};
+
+api.searchSalesByCode = async function (query) {
+  const { data, error } = await supabaseClient.from('sales').select('*, sale_items(*, product_variants(code))')
+    .or('sale_number.ilike.%' + query + '%,customer_name.ilike.%' + query + '%')
+    .order('sale_date', { ascending: false }).limit(20);
+  if (error) throw error;
+  return (data || []).map(function (s) {
+    return {
+      saleId: s.sale_number, date: s.sale_date, source: s.source, total: s.total, status: s.status,
+      paymentMethod: s.payment_method, customerName: s.customer_name,
+      items: (s.sale_items || []).map(function (it) { return { variantCode: it.product_variants ? it.product_variants.code : '', qty: it.qty, price: it.unit_price }; })
+    };
   });
 };
 

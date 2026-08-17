@@ -754,7 +754,7 @@ function buildProductResultsHtml_(results, addFnName) {
       const label = (p.name + ' — ' + v.color + ' ' + v.size).replace(/'/g, '');
       const price = v.specialPrice || p.basePrice;
       return '<div class="product-tile" onclick="' + addFnName + '(\'' + v.code + '\', \'' + label + '\', ' + price + ')">' +
-        '<div class="product-thumb">👕</div>' +
+        '<div class="product-thumb">' + ((state.settings && state.settings.productIcon) || '📦') + '</div>' +
         '<div class="product-tile-info"><div class="product-tile-name">' + p.name + '</div>' +
         '<div class="product-tile-meta">' + v.color + ' · ' + v.size + ' · متاح: ' + v.quantity + '</div></div>' +
         '<b>' + price + '</b></div>';
@@ -1204,7 +1204,7 @@ function buildCategoriesTreeView_() {
       (invTreeCache.mainCategories.length > 1 ? '<span style="cursor:pointer; font-size:11.5px; color:var(--warning); font-weight:700;" onclick="promptConvertCategory_(\'' + m.code + '\', \'' + escapeJsStr_(m.name) + '\')">🔀 تحويل لفرعية</span>' : '') +
       '<span style="cursor:pointer; font-size:11.5px; color:var(--danger); font-weight:700;" onclick="confirmDeleteCategory_(' + JSON.stringify(m.id) + ', ' + JSON.stringify(m.name) + ')">🗑️ حذف</span></div>' +
       (subs.length > 0 ? '<div style="padding-right:22px; margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;">' + subs.map(function (s) {
-        return '<span class="variant-chip">' + s.name + ' <span class="qty-tag">' + s.code + '</span> <span style="cursor:pointer; color:var(--accent);" onclick="promptRenameCategory_(\'' + s.code + '\', \'' + escapeJsStr_(s.name) + '\')">✏️</span> <span style="cursor:pointer; color:var(--danger);" onclick="confirmDeleteCategory_(' + JSON.stringify(s.id) + ', ' + JSON.stringify(s.name) + ')">🗑️</span></span>';
+        return '<span class="variant-chip">' + s.name + ' <span class="qty-tag">' + s.code + '</span> <span style="cursor:pointer; color:var(--accent);" onclick="promptRenameCategory_(\'' + s.code + '\', \'' + escapeJsStr_(s.name) + '\')">✏️</span> <span style="cursor:pointer; color:var(--info);" onclick="promptReparentSubcategory_(\'' + s.code + '\', \'' + escapeJsStr_(s.name) + '\')" title="نقل لفئة رئيسية تانية">🔀</span> <span style="cursor:pointer; color:var(--warning);" onclick="promptBulkMoveCategoryProducts_(\'' + s.code + '\', \'' + escapeJsStr_(s.name) + '\')" title="نقل كل منتجاتها لفئة تانية">🔁</span> <span style="cursor:pointer; color:var(--danger);" onclick="confirmDeleteCategory_(' + JSON.stringify(s.id) + ', ' + JSON.stringify(s.name) + ')">🗑️</span></span>';
       }).join('') + '</div>' :
         '<div style="padding-right:22px; margin-top:6px; font-size:11.5px; color:var(--text-faint);">لا يوجد فئات فرعية بعد</div>') + '</div>';
   }).join('');
@@ -1241,6 +1241,44 @@ async function submitConvertCategory_(code) {
   try {
     await api.convertCategoryToSub({ username: state.user.username }, code, newParent);
     showToast_('تم التحويل ✅', 'success');
+    await loadInventoryBaseData_();
+    openCategoriesModal_();
+  } catch (err) { showErrorToast_(err); }
+}
+
+function promptReparentSubcategory_(code, currentName) {
+  openModal('🔀 نقل "' + currentName + '" لفئة رئيسية تانية', 'المنتجات اللي تحتها هتفضل زي ما هي — بس تبقى تحت الفئة الرئيسية الجديدة',
+    '<div class="field"><label>تبقى تحت</label><select id="reparentMainSelect">' +
+      mainCategoryOptions_() +
+    '</select></div>',
+    '<button class="btn secondary" onclick="openCategoriesModal_()">إلغاء</button><button class="btn success" onclick="submitReparentSubcategory_(\'' + code + '\')">✅ نقل</button>');
+}
+
+async function submitReparentSubcategory_(code) {
+  const newParent = document.getElementById('reparentMainSelect').value;
+  try {
+    await api.reparentSubcategory({ username: state.user.username }, code, newParent);
+    showToast_('تم النقل ✅', 'success');
+    await loadInventoryBaseData_();
+    openCategoriesModal_();
+  } catch (err) { showErrorToast_(err); }
+}
+
+function promptBulkMoveCategoryProducts_(code, currentName) {
+  const otherSubs = invTreeCache.subCategories.filter(function (s) { return s.code !== code; });
+  if (otherSubs.length === 0) { showToast_('مفيش فئة فرعية تانية تنقل ليها', 'error'); return; }
+  openModal('🔁 نقل كل منتجات "' + currentName + '"', 'هينقل كل المنتجات المرتبطة بالفئة دي لفئة فرعية تانية دفعة واحدة',
+    '<div class="field"><label>تنقل لفئة فرعية</label><select id="bulkMoveTargetSelect">' +
+      otherSubs.map(function (s) { return '<option value="' + s.code + '">' + s.name + '</option>'; }).join('') +
+    '</select></div>',
+    '<button class="btn secondary" onclick="openCategoriesModal_()">إلغاء</button><button class="btn success" onclick="submitBulkMoveCategoryProducts_(\'' + code + '\')">✅ نقل الكل</button>');
+}
+
+async function submitBulkMoveCategoryProducts_(code) {
+  const target = document.getElementById('bulkMoveTargetSelect').value;
+  try {
+    const res = await api.bulkMoveCategoryProducts({ username: state.user.username }, code, target);
+    showToast_('تم نقل ' + res.moved + ' منتج ✅', 'success');
     await loadInventoryBaseData_();
     openCategoriesModal_();
   } catch (err) { showErrorToast_(err); }
@@ -1317,7 +1355,7 @@ async function openAddProductModal_() {
   await ensureDefaultCategory_();
   prodVariantRowCount = 0;
   const body =
-    '<div class="field"><label>اسم المنتج <span class="req">*</span></label><input type="text" id="prodName" placeholder="مثال: تيشرت أساسي"></div>' +
+    '<div class="field"><label>اسم المنتج <span class="req">*</span></label><input type="text" id="prodName" placeholder="اكتبي اسم المنتج"></div>' +
     '<div class="form-grid" style="margin-bottom:14px;">' +
       '<div class="field"><label>سعر البيع <span class="req">*</span></label><input type="number" id="prodPrice" placeholder="0"></div>' +
       '<div class="field"><label>سعر الشراء (التكلفة)</label><input type="number" id="prodCost" placeholder="0"></div>' +
@@ -1739,7 +1777,9 @@ function renderSalesPage() {
         '<div class="field" id="salesTreasuryFieldWrap"><label>هتضاف لحساب</label><select id="salesTreasuryAccount"><option value="">جاري التحميل...</option></select></div>' +
         '<div id="salesInvoiceSection" style="display:none;"></div>' +
         '<button class="btn success block" style="margin-top:16px;" onclick="submitSale_()">✅ تسجيل البيعة</button></div>' +
-      '<div class="card"><div class="card-heading">📋 آخر المبيعات</div><div id="salesHistoryList" style="margin-top:14px;"></div></div></div>'
+      '<div class="card"><div class="card-heading">📋 آخر المبيعات</div>' +
+        '<div class="field" style="margin-top:8px;"><input type="text" id="salesHistorySearchInput" oninput="salesHistorySearch_(this.value)" placeholder="🔍 ابحث بكود البيعة أو اسم العميل..."></div>' +
+        '<div id="salesHistoryList" style="margin-top:14px;"></div></div></div>'
   );
   salesCart = [];
   document.getElementById('salesDate').value = new Date().toISOString().slice(0, 16);
@@ -1870,19 +1910,34 @@ async function submitSaleOnInvoice_(discount) {
 async function loadSalesHistory_() {
   try {
     const sales = await api.listSales({ limit: 30 });
-    const el = document.getElementById('salesHistoryList');
-    const cur = state.settings.currency || 'جنيه';
-    if (sales.length === 0) { el.innerHTML = emptyRow_('🧾', 'لا يوجد مبيعات بعد'); return; }
-    let html = '<div class="table-wrap"><table><thead><tr><th>رقم البيعة</th><th>المصدر</th><th>التاريخ</th><th>الإجمالي</th><th>الحالة</th><th></th></tr></thead><tbody>';
-    html += sales.map(function (s) {
-      const statusPill = s.status === 'مكتملة' ? 'success' : 'warning';
-      return '<tr><td>' + s.saleId + '</td><td>' + s.source + '</td><td>' + formatDate_(s.date) + '</td>' +
-        '<td class="money-positive">' + formatMoney_(s.total, cur) + '</td><td><span class="pill ' + statusPill + '">' + s.status + '</span></td>' +
-        '<td>' + (s.status === 'مكتملة' ? '<button class="eye-btn" onclick="quickReturnSale_(\'' + s.saleId + '\')">↩️</button>' : '') + '</td></tr>';
-    }).join('');
-    html += '</tbody></table></div>';
-    el.innerHTML = html;
+    renderSalesHistoryRows_(sales);
   } catch (err) { showErrorToast_(err); }
+}
+
+function renderSalesHistoryRows_(sales) {
+  const el = document.getElementById('salesHistoryList');
+  if (!el) return;
+  const cur = state.settings.currency || 'جنيه';
+  if (sales.length === 0) { el.innerHTML = emptyRow_('🧾', 'لا يوجد مبيعات'); return; }
+  let html = '<div class="table-wrap"><table><thead><tr><th>رقم البيعة</th><th>المصدر</th><th>التاريخ</th><th>الإجمالي</th><th>الحالة</th><th></th></tr></thead><tbody>';
+  html += sales.map(function (s) {
+    const statusPill = s.status === 'مكتملة' ? 'success' : 'warning';
+    return '<tr><td>' + s.saleId + '</td><td>' + s.source + '</td><td>' + formatDate_(s.date) + '</td>' +
+      '<td class="money-positive">' + formatMoney_(s.total, cur) + '</td><td><span class="pill ' + statusPill + '">' + s.status + '</span></td>' +
+      '<td>' + (s.status === 'مكتملة' ? '<button class="eye-btn" onclick="quickReturnSale_(\'' + s.saleId + '\')">↩️</button>' : '') + '</td></tr>';
+  }).join('');
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+let salesHistorySearchTimer_ = null;
+function salesHistorySearch_(query) {
+  clearTimeout(salesHistorySearchTimer_);
+  salesHistorySearchTimer_ = setTimeout(async function () {
+    if (!query || query.trim().length < 2) { loadSalesHistory_(); return; }
+    try { renderSalesHistoryRows_(await api.searchSalesByCode(query.trim())); }
+    catch (err) { showErrorToast_(err); }
+  }, 300);
 }
 
 async function quickReturnSale_(saleId) {
@@ -2159,21 +2214,42 @@ function switchSupplierTab_(tab) {
   document.getElementById('modalBody').innerHTML = buildSupplierDetailHtml_();
 }
 
+let poTilesCache_ = []; let poTilesShown_ = 0;
+const PRODUCT_TILES_PAGE_SIZE = 5;
+
+function productTileHtml_(p, v, onClickFn) {
+  const label = (p.name + ' — ' + v.color + ' ' + v.size).replace(/'/g, '');
+  const salePrice = v.specialPrice != null ? v.specialPrice : p.basePrice;
+  const icon = (state.settings && state.settings.productIcon) || '📦';
+  return '<div class="product-tile" onclick="' + onClickFn + '(\'' + v.code + '\', \'' + label + '\', ' + v.cost + ', ' + salePrice + ')">' +
+    '<div class="product-thumb">' + icon + '</div><div class="product-tile-info"><div class="product-tile-name">' + p.name + '</div>' +
+    '<div class="product-tile-meta">' + v.color + ' · ' + v.size + '</div></div>' +
+    '<b style="text-align:left; line-height:1.6;">شراء: ' + v.cost + '<br>بيع: ' + salePrice + '</b></div>';
+}
+
+function renderPoTilesPage_() {
+  const batch = poTilesCache_.slice(0, poTilesShown_);
+  let html = batch.map(function (t) { return productTileHtml_(t.p, t.v, 'addToPoCart_'); }).join('');
+  if (poTilesShown_ < poTilesCache_.length) {
+    html += '<button class="btn secondary block" style="margin-top:8px;" onclick="poShowMoreTiles_()">⬇️ عرض المزيد (' + (poTilesCache_.length - poTilesShown_) + ')</button>';
+  }
+  document.getElementById('poSearchResults').innerHTML = html;
+}
+
+function poShowMoreTiles_() {
+  poTilesShown_ += PRODUCT_TILES_PAGE_SIZE;
+  renderPoTilesPage_();
+}
+
 async function poSearch_(query) {
   try {
     const results = await api.searchProducts(query, query ? 30 : 60);
-    let html = results.map(function (p) {
-      return p.variants.map(function (v) {
-        const label = (p.name + ' — ' + v.color + ' ' + v.size).replace(/'/g, '');
-        const salePrice = v.specialPrice != null ? v.specialPrice : p.basePrice;
-        return '<div class="product-tile" onclick="addToPoCart_(\'' + v.code + '\', \'' + label + '\', ' + v.cost + ', ' + salePrice + ')">' +
-          '<div class="product-thumb">👕</div><div class="product-tile-info"><div class="product-tile-name">' + p.name + '</div>' +
-          '<div class="product-tile-meta">' + v.color + ' · ' + v.size + '</div></div>' +
-          '<b style="text-align:left; line-height:1.6;">شراء: ' + v.cost + '<br>بيع: ' + salePrice + '</b></div>';
-      }).join('');
-    }).join('');
+    poTilesCache_ = [];
+    results.forEach(function (p) { p.variants.forEach(function (v) { poTilesCache_.push({ p: p, v: v }); }); });
+    poTilesShown_ = Math.min(PRODUCT_TILES_PAGE_SIZE, poTilesCache_.length);
 
     if (results.length === 0) {
+      let html;
       if (query) {
         const safeQuery = query.replace(/'/g, "\\'");
         html = '<div class="callout-notfound" id="poNotFoundPrompt">' +
@@ -2183,8 +2259,10 @@ async function poSearch_(query) {
       } else {
         html = emptyRow_('📦', 'لا يوجد منتجات في المخزون بعد — دوري باسم منتج جديد وهقولك تضيفيه ازاي');
       }
+      document.getElementById('poSearchResults').innerHTML = html;
+      return;
     }
-    document.getElementById('poSearchResults').innerHTML = html;
+    renderPoTilesPage_();
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -2575,7 +2653,7 @@ async function invAddSearch_(query) {
         const label = (p.name + ' — ' + v.color + ' ' + v.size).replace(/'/g, '');
         const price = v.specialPrice || p.basePrice;
         return '<div class="product-tile" onclick="addToInvoiceCart_(\'' + v.code + '\', \'' + label + '\', ' + price + ')">' +
-          '<div class="product-thumb">👕</div><div class="product-tile-info"><div class="product-tile-name">' + p.name + '</div>' +
+          '<div class="product-thumb">' + ((state.settings && state.settings.productIcon) || '📦') + '</div><div class="product-tile-info"><div class="product-tile-name">' + p.name + '</div>' +
           '<div class="product-tile-meta">' + v.color + ' · ' + v.size + ' · متاح: ' + v.quantity + '</div></div><b>' + price + '</b></div>';
       }).join('');
     }).join('');
@@ -3139,6 +3217,11 @@ async function renderSettingsPage() {
     const treasuryAccounts = await getTreasuryAccountsCached_().catch(function () { return []; });
     setContent_('<div class="card" style="max-width:760px;"><div class="card-heading">⚙️ إعدادات النظام</div><div class="form-grid" style="margin-top:10px;">' +
       field_('اسم البراند', 'setBrandName', s.brandName) + field_('رابط اللوجو', 'setLogoUrl', s.logoUrl) +
+      '<div class="field"><label>أيقونة المنتج الافتراضية (لما يكون بدون صورة)</label><select id="setProductIcon">' +
+        ['📦','👕','👖','👟','🔧','🚗','🏍️','💊','📱','🛋️','🍽️','💄'].map(function (ic) {
+          return '<option value="' + ic + '"' + ((s.productIcon || '📦') === ic ? ' selected' : '') + '>' + ic + '</option>';
+        }).join('') +
+      '</select></div>' +
       field_('اللون الأساسي', 'setPrimaryColor', s.primaryColor, 'color') + field_('لون التمييز', 'setAccentColor', s.accentColor, 'color') +
       field_('العملة', 'setCurrency', s.currency) +
       '<div class="field"><label>الحساب الافتراضي (كاش/بنك)</label><select id="setDefaultTreasuryAccount"><option value="">بدون افتراضي</option>' +
@@ -3201,6 +3284,7 @@ function selectField_(label, id, value, options) {
 async function saveSettings_() {
   const payload = {
     brandName: document.getElementById('setBrandName').value, logoUrl: document.getElementById('setLogoUrl').value,
+    productIcon: document.getElementById('setProductIcon').value,
     primaryColor: document.getElementById('setPrimaryColor').value, accentColor: document.getElementById('setAccentColor').value,
     currency: document.getElementById('setCurrency').value,
     defaultTreasuryAccountId: document.getElementById('setDefaultTreasuryAccount').value,
@@ -3877,8 +3961,11 @@ async function updateCheck_(id, status, treasuryAccountId) {
 async function renderTrialBalancePage() {
   const today = new Date().toISOString().slice(0, 10);
   setContent_(
-    '<div class="card"><div class="card-heading">⚖️ ميزان المراجعة</div><div class="card-desc">كل الحسابات ومجاميعها المدينة والدائنة من دفتر اليومية حتى تاريخ معيّن</div>' +
-      '<div class="field"><label>حتى تاريخ</label><input type="date" id="tbEndDate" value="' + today + '"></div>' +
+    '<div class="card"><div class="card-heading">⚖️ ميزان المراجعة</div><div class="card-desc">الرصيد السابق + حركة الفترة + الرصيد النهائي لكل حساب</div>' +
+      '<div class="form-grid">' +
+        '<div class="field"><label>من تاريخ</label><input type="date" id="tbStartDate"></div>' +
+        '<div class="field"><label>إلى تاريخ</label><input type="date" id="tbEndDate" value="' + today + '"></div>' +
+      '</div>' +
       '<button class="btn info-btn" style="margin-top:14px;" onclick="loadTrialBalance_()">📊 عرض</button></div>' +
     '<div id="trialBalanceResult" style="margin-top:18px;"></div>'
   );
@@ -3886,27 +3973,38 @@ async function renderTrialBalancePage() {
 }
 
 async function loadTrialBalance_() {
+  const startDate = document.getElementById('tbStartDate').value || null;
   const endDate = document.getElementById('tbEndDate').value;
   const cur = state.settings.currency || 'جنيه';
   try {
-    const rows = await api.getTrialBalance(endDate);
-    let totalDebit = 0, totalCredit = 0;
+    const result = await api.getTrialBalance(startDate, endDate);
+    const rows = result.rows || [];
+    const t = result.totals || {};
     let html = '<div class="card">';
     if (rows.length === 0) {
-      html += emptyRow_('⚖️', 'لا يوجد قيود محاسبية لغاية التاريخ ده');
+      html += emptyRow_('⚖️', 'لا يوجد قيود محاسبية في الفترة دي');
     } else {
-      rows.forEach(function (r) {
-        totalDebit += Number(r.debit); totalCredit += Number(r.credit);
-        html += '<div class="list-item"><span><b>' + r.accountCode + '</b> — ' + r.accountName + ' <span class="pill">' + r.accountType + '</span></span>' +
-          '<span>مدين: ' + formatMoney_(r.debit, cur) + ' &nbsp; دائن: ' + formatMoney_(r.credit, cur) + '</span></div>';
-      });
-      html += '<div class="list-item" style="font-weight:900; border-top:2px solid var(--border); margin-top:6px; padding-top:12px;"><span>الإجمالي</span>' +
-        '<span>مدين: ' + formatMoney_(totalDebit, cur) + ' &nbsp; دائن: ' + formatMoney_(totalCredit, cur) + '</span></div>';
-      if (Math.abs(totalDebit - totalCredit) > 0.01) {
-        html += '<div class="hint" style="color:var(--danger); margin-top:10px;">⚠️ الميزان مش متزن! فرق ' + formatMoney_(Math.abs(totalDebit - totalCredit), cur) + '</div>';
-      } else {
-        html += '<div class="hint" style="color:var(--success); margin-top:10px;">✅ الميزان متزن</div>';
-      }
+      html += '<div class="table-wrap"><table><thead>' +
+        '<tr><th rowspan="2" style="vertical-align:bottom;">الحساب</th>' +
+          '<th colspan="2" style="text-align:center;">الرصيد السابق</th>' +
+          '<th colspan="2" style="text-align:center;">حركة الفترة</th>' +
+          '<th colspan="2" style="text-align:center;">الرصيد النهائي</th></tr>' +
+        '<tr><th>مدين</th><th>دائن</th><th>مدين</th><th>دائن</th><th>مدين</th><th>دائن</th></tr>' +
+        '</thead><tbody>';
+      html += rows.map(function (r) {
+        return '<tr><td><b>' + r.accountCode + '</b> — ' + r.accountName + '</td>' +
+          '<td>' + formatMoney_(r.prevDebit, cur) + '</td><td>' + formatMoney_(r.prevCredit, cur) + '</td>' +
+          '<td>' + formatMoney_(r.periodDebit, cur) + '</td><td>' + formatMoney_(r.periodCredit, cur) + '</td>' +
+          '<td><b>' + formatMoney_(r.finalDebit, cur) + '</b></td><td><b>' + formatMoney_(r.finalCredit, cur) + '</b></td></tr>';
+      }).join('');
+      html += '<tr style="font-weight:900; border-top:2px solid var(--border);"><td>الإجمالي</td>' +
+        '<td>' + formatMoney_(t.prevDebit, cur) + '</td><td>' + formatMoney_(t.prevCredit, cur) + '</td>' +
+        '<td>' + formatMoney_(t.periodDebit, cur) + '</td><td>' + formatMoney_(t.periodCredit, cur) + '</td>' +
+        '<td>' + formatMoney_(t.finalDebit, cur) + '</td><td>' + formatMoney_(t.finalCredit, cur) + '</td></tr>';
+      html += '</tbody></table></div>';
+      html += result.balanced
+        ? '<div class="hint" style="color:var(--success); margin-top:10px;">✅ الميزان متزن</div>'
+        : '<div class="hint" style="color:var(--danger); margin-top:10px;">⚠️ الميزان غير متزن! فرق ' + formatMoney_(Math.abs((t.finalDebit||0) - (t.finalCredit||0)), cur) + '</div>';
     }
     html += '</div>';
     document.getElementById('trialBalanceResult').innerHTML = html;
