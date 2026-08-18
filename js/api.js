@@ -470,14 +470,26 @@ api.getCustomerOrderHistory = async function (phone) {
 // الفواتير
 // ------------------------------------------------------------
 api.createInvoice = async function (session, payload) {
-  const remaining = payload.total - payload.paid;
-  let status = 'متأخرة';
-  if (payload.isCOD) status = 'تم التحصيل COD';
-  else if (remaining === 0) status = 'مدفوعة بالكامل';
-  else if (payload.paid > 0) status = 'مدفوعة جزئيًا';
+  const { data, error } = await supabaseClient.rpc('rpc_create_quick_invoice', {
+    p_customer_name: payload.customerName, p_total: payload.total, p_paid: payload.paid || 0, p_is_cod: !!payload.isCOD
+  });
+  if (error) throw error;
+  return { success: true, invoiceNumber: data };
+};
 
-  const { error } = await supabaseClient.from('invoices').insert({
-    invoice_number: 'INV-' + Date.now(), customer_name: payload.customerName, total: payload.total, paid: payload.paid, remaining: remaining, status: status
+api.addCustomerOpeningBalance = async function (session, payload) {
+  const { data, error } = await supabaseClient.rpc('rpc_add_customer_opening_balance', {
+    p_customer_name: payload.customerName, p_customer_phone: payload.customerPhone || '', p_amount: payload.amount,
+    p_as_of_date: payload.asOfDate, p_description: payload.description || ''
+  });
+  if (error) throw error;
+  return { success: true, invoiceNumber: data };
+};
+
+api.addTreasuryOpeningBalance = async function (session, payload) {
+  const { error } = await supabaseClient.rpc('rpc_add_treasury_opening_balance', {
+    p_treasury_account_id: payload.treasuryAccountId, p_amount: payload.amount,
+    p_as_of_date: payload.asOfDate, p_description: payload.description || ''
   });
   if (error) throw error;
   return { success: true };

@@ -24,7 +24,7 @@ const NAV_GROUPS = [
     { key: 'suppliers', label: 'الموردون والمشتريات', icon: '🚚', module: 'Suppliers' },
     { key: 'purchaserequests', label: 'طلبات الشراء والاعتماد', icon: '📝', module: 'Suppliers' },
     { key: 'orders', label: 'الأوردرات والعملاء', icon: '🧍', module: 'Orders' },
-    { key: 'invoices', label: 'الفواتير', icon: '📄', module: 'Invoices' }
+    { key: 'invoices', label: 'حسابات العملاء', icon: '📄', module: 'Invoices' }
   ]},
   { label: 'المالية', items: [
     { key: 'capital', label: 'رأس المال والشركاء', icon: '🤝', module: 'Capital' },
@@ -59,7 +59,7 @@ const PAGE_META = {
   suppliers: ['الموردون والمشتريات', 'تسجيل مشتريات جديدة ومتابعة الموردين'],
   purchaserequests: ['طلبات الشراء والاعتماد', 'مرحلة الطلب قبل تحويله لأمر شراء فعلي'],
   orders: ['الأوردرات والعملاء', 'طلبات الأونلاين وسجل العملاء'],
-  invoices: ['الفواتير', 'متابعة حالة التحصيل'],
+  invoices: ['حسابات العملاء', 'الفواتير ومتابعة حالة التحصيل'],
   capital: ['رأس المال والشركاء', 'نسب الملكية والأرباح'],
   pettycash: ['العهدة', 'حركة الكاش اليومي بالمحل'],
   reports: ['التقارير', 'قائمة الدخل، الضريبة، المواسم'],
@@ -4139,14 +4139,38 @@ async function submitRunDepreciation_() {
 // ============================================================
 async function renderOpeningBalancesPage() {
   try {
-    const [balances, accounts] = await Promise.all([api.listOpeningBalances(), api.getAccounts()]);
+    const [balances, accounts, treasuryAccounts] = await Promise.all([api.listOpeningBalances(), api.getAccounts(), getTreasuryAccountsCached_()]);
     const cur = state.settings.currency || 'جنيه';
     const today = new Date().toISOString().slice(0, 10);
     const leafAccounts = accounts.filter(function (a) { return !a.isGroup; }).sort(function (a, b) { return a.code.localeCompare(b.code, undefined, { numeric: true }); });
-    let html = '<div class="card"><div class="card-heading">📂 رصيد افتتاحي جديد</div>' +
+
+    let html = '<div class="grid grid-2">';
+
+    html += '<div class="card"><div class="card-heading">🏦 رصيد افتتاحي لخزنة أو بنك</div>' +
+      '<div class="card-desc">لو عندك أكتر من خزنة أو حساب بنكي، اختاري بالظبط أنهي واحد فيه الفلوس دي</div>' +
+      '<div class="field"><label>الخزنة/البنك</label><select id="obTreasuryAccount">' +
+        (treasuryAccounts.length === 0 ? '<option value="">لسه مفيش خزنة أو بنك مضاف — ضيفي واحد من "الخزنة والبنوك" الأول</option>' :
+          treasuryAccounts.map(function (t) { return '<option value="' + t.id + '">' + t.name + ' (' + t.type + ')</option>'; }).join('')) +
+      '</select></div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>المبلغ</label><input type="number" id="obTreasuryAmount"></div>' +
+      '<div class="field"><label>التاريخ</label><input type="date" id="obTreasuryDate" value="' + today + '"></div></div>' +
+      '<button class="btn success block" style="margin-top:14px;" onclick="submitTreasuryOpeningBalance_()">➕ إضافة وترحيل فورًا</button></div>';
+
+    html += '<div class="card"><div class="card-heading">👤 مديونية سابقة لعميل</div>' +
+      '<div class="card-desc">فلوس كانت عليها العملاء قبل ما تبدئي تستخدمي البرنامج — كل عميل باسمه لوحده، وتظهر بعدها في "حسابات العملاء"</div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>اسم العميل</label><input type="text" id="obCustName"></div>' +
+      '<div class="field"><label>تليفون (اختياري)</label><input type="text" id="obCustPhone"></div></div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>المبلغ</label><input type="number" id="obCustAmount"></div>' +
+      '<div class="field"><label>التاريخ</label><input type="date" id="obCustDate" value="' + today + '"></div></div>' +
+      '<button class="btn success block" style="margin-top:14px;" onclick="submitCustomerOpeningBalance_()">➕ إضافة العميل ده</button></div>';
+
+    html += '</div>';
+
+    html += '<div class="card" style="margin-top:18px;"><div class="card-heading">📂 رصيد افتتاحي — أي حساب تاني</div>' +
+      '<div class="card-desc">للمخزون، الموردين، الأصول الثابتة، وأي حساب مش خزنة أو عميل</div>' +
       '<div class="field"><label>الحساب</label><select id="obAccount">' + leafAccounts.map(function (a) { return '<option value="' + a.id + '">' + a.code + ' — ' + a.name + ' (' + a.type + ')</option>'; }).join('') + '</select></div>' +
       '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>المبلغ</label><input type="number" id="obAmount"></div>' +
-      '<div class="field"><label>كتاريخ</label><input type="date" id="obDate" value="' + today + '"></div></div>' +
+      '<div class="field"><label>التاريخ</label><input type="date" id="obDate" value="' + today + '"></div></div>' +
       '<div class="field" style="margin-top:10px;"><label>وصف</label><input type="text" id="obDesc"></div>' +
       '<button class="btn success block" style="margin-top:14px;" onclick="submitOpeningBalance_()">➕ إضافة وترحيل فورًا</button>' +
       '<div class="hint" style="margin-top:8px;">أي رصيد بتضيفيه هنا بيترحّل تلقائيًا لدفتر اليومية على طول — مفيش خطوة تانية مطلوبة</div></div>';
@@ -4159,6 +4183,34 @@ async function renderOpeningBalancesPage() {
       }).join('');
     html += '</div>';
     setContent_(html);
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function submitTreasuryOpeningBalance_() {
+  const treasuryAccountId = document.getElementById('obTreasuryAccount').value;
+  const amount = Number(document.getElementById('obTreasuryAmount').value);
+  if (!treasuryAccountId || !amount) { showToast_('اختاري الخزنة/البنك واكتبي المبلغ', 'error'); return; }
+  try {
+    await api.addTreasuryOpeningBalance({ username: state.user.username }, {
+      treasuryAccountId: treasuryAccountId, amount: amount, asOfDate: document.getElementById('obTreasuryDate').value
+    });
+    showToast_('تم الإضافة والترحيل ✅', 'success');
+    renderOpeningBalancesPage();
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function submitCustomerOpeningBalance_() {
+  const name = document.getElementById('obCustName').value.trim();
+  const amount = Number(document.getElementById('obCustAmount').value);
+  if (!name || !amount) { showToast_('اسم العميل والمبلغ مطلوبين', 'error'); return; }
+  try {
+    await api.addCustomerOpeningBalance({ username: state.user.username }, {
+      customerName: name, customerPhone: document.getElementById('obCustPhone').value.trim(),
+      amount: amount, asOfDate: document.getElementById('obCustDate').value
+    });
+    showToast_('تم إضافة العميل ✅ هتلاقيه في حسابات العملاء', 'success');
+    document.getElementById('obCustName').value = ''; document.getElementById('obCustPhone').value = ''; document.getElementById('obCustAmount').value = '';
+    renderOpeningBalancesPage();
   } catch (err) { showErrorToast_(err); }
 }
 
