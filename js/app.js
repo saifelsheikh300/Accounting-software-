@@ -91,10 +91,10 @@ function openModal(title, desc, bodyHtml, actionsHtml, wide) {
     (desc ? '<div class="modal-desc">' + desc + '</div>' : '') +
     '<div id="modalBody">' + (bodyHtml || '') + '</div>' +
     '<div class="modal-actions">' + (actionsHtml || '') + '</div>';
-  document.getElementById('modalOverlay').style.display = 'flex';
+  var __ht = document.getElementById('modalOverlay'); if (__ht) __ht.style.display = 'flex';
   enhanceSelects_(box);
 }
-function closeModal() { document.getElementById('modalOverlay').style.display = 'none'; }
+function closeModal() { var __ht = document.getElementById('modalOverlay'); if (__ht) __ht.style.display = 'none'; }
 
 function openConfirmModal(title, desc, onConfirm) {
   openModal(title, desc, '', '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" onclick="window.__modalConfirmCb()">تأكيد</button>');
@@ -197,34 +197,34 @@ async function bootApp() {
     renderSidebar();
     populateUserChip_();
 
-    document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('app').style.display = 'flex';
+    var __ht = document.getElementById('loginScreen'); if (__ht) __ht.style.display = 'none';
+    var __ht = document.getElementById('app'); if (__ht) __ht.style.display = 'flex';
 
     navigate(state.user.isCashier ? 'pos' : 'dashboard');
     refreshNotifications();
   } catch (err) {
-    document.getElementById('loginScreen').style.display = 'flex';
-    document.getElementById('app').style.display = 'none';
+    var __ht = document.getElementById('loginScreen'); if (__ht) __ht.style.display = 'flex';
+    var __ht = document.getElementById('app'); if (__ht) __ht.style.display = 'none';
   }
 }
 
 function applySettingsToUI() {
   const s = state.settings;
   document.body.setAttribute('data-theme', s.darkMode ? 'dark' : 'light');
-  document.getElementById('themeToggleBtn').textContent = s.darkMode ? '🌙' : '☀️';
+  var __ht = document.getElementById('themeToggleBtn'); if (__ht) __ht.textContent = s.darkMode ? '🌙' : '☀️';
   document.documentElement.style.setProperty('--accent', s.accentColor || '#e94560');
-  document.getElementById('sidebarBrandName').textContent = s.brandName || 'براندي';
+  var __ht = document.getElementById('sidebarBrandName'); if (__ht) __ht.textContent = s.brandName || 'براندي';
   if (s.logoUrl) {
     const logo = document.getElementById('sidebarLogo');
     logo.src = s.logoUrl; logo.style.display = 'block';
-    document.getElementById('sidebarLogoFallback').style.display = 'none';
+    var __ht = document.getElementById('sidebarLogoFallback'); if (__ht) __ht.style.display = 'none';
   }
 }
 
 function populateUserChip_() {
-  document.getElementById('userNameChip').textContent = state.user.fullName || state.user.username;
-  document.getElementById('userRoleChip').textContent = state.user.role;
-  document.getElementById('userAvatar').textContent = (state.user.fullName || state.user.username).charAt(0);
+  var __ht = document.getElementById('userNameChip'); if (__ht) __ht.textContent = state.user.fullName || state.user.username;
+  var __ht = document.getElementById('userRoleChip'); if (__ht) __ht.textContent = state.user.role;
+  var __ht = document.getElementById('userAvatar'); if (__ht) __ht.textContent = (state.user.fullName || state.user.username).charAt(0);
 }
 
 // ------------------------------------------------------------
@@ -260,7 +260,7 @@ function toggleSidebar() { document.getElementById('sidebar').classList.toggle('
 async function toggleTheme() {
   const isDark = document.body.getAttribute('data-theme') === 'dark';
   document.body.setAttribute('data-theme', isDark ? 'light' : 'dark');
-  document.getElementById('themeToggleBtn').textContent = isDark ? '☀️' : '🌙';
+  var __ht = document.getElementById('themeToggleBtn'); if (__ht) __ht.textContent = isDark ? '☀️' : '🌙';
   await api.updateSetting(null, 'darkMode', String(!isDark));
 }
 
@@ -273,10 +273,10 @@ function navigate(pageKey) {
   document.querySelectorAll('.nav-item').forEach(function (el) { el.classList.toggle('active', el.dataset.key === pageKey); });
 
   const meta = PAGE_META[pageKey] || ['', ''];
-  document.getElementById('pageTitle').textContent = meta[0];
-  document.getElementById('pageSubtitle').textContent = meta[1];
+  var __ht = document.getElementById('pageTitle'); if (__ht) __ht.textContent = meta[0];
+  var __ht = document.getElementById('pageSubtitle'); if (__ht) __ht.textContent = meta[1];
 
-  document.getElementById('content').innerHTML = renderSkeleton_();
+  var __ht = document.getElementById('content'); if (__ht) __ht.innerHTML = renderSkeleton_();
 
   const renderers = {
     dashboard: renderDashboardPage, pos: renderPosPage, sales: renderSalesPage,
@@ -296,8 +296,8 @@ function navigate(pageKey) {
 }
 
 function renderSkeleton_() { return '<div class="grid grid-4">' + '<div class="loading-skeleton" style="height:110px; border-radius:16px;"></div>'.repeat(4) + '</div>'; }
-function renderComingSoon_() { document.getElementById('content').innerHTML = '<div class="card"><div class="empty-state"><span class="emoji">🚧</span><div class="msg">الشاشة دي هتُبنى قريبًا</div></div></div>'; }
-function setContent_(html) { document.getElementById('content').innerHTML = '<div class="page-fade">' + html + '</div>'; enhanceSelects_(document.getElementById('content')); }
+function renderComingSoon_() { var __ht = document.getElementById('content'); if (__ht) __ht.innerHTML = '<div class="card"><div class="empty-state"><span class="emoji">🚧</span><div class="msg">الشاشة دي هتُبنى قريبًا</div></div></div>'; }
+function setContent_(html) { var __ht = document.getElementById('content'); if (__ht) __ht.innerHTML = '<div class="page-fade">' + html + '</div>'; enhanceSelects_(document.getElementById('content')); }
 
 // ============================================================
 // هيلبر مشترك: حسابات الخزنة/البنوك — تُستخدم في أي شاشة بتحرك
@@ -533,13 +533,13 @@ function renderPosPage() {
 async function loadPosTreasuryOptions_() {
   try {
     const accounts = await getTreasuryAccountsCached_();
-    document.getElementById('posTreasuryAccount').innerHTML = treasuryAccountOptionsHtml_(accounts);
+    var __ht = document.getElementById('posTreasuryAccount'); if (__ht) __ht.innerHTML = treasuryAccountOptionsHtml_(accounts);
     refreshSelect_('posTreasuryAccount');
   } catch (err) { /* صامت — مش بيمنع إتمام البيع لو فشل التحميل */ }
 }
 
 async function loadPosProductGrid_() {
-  document.getElementById('posSearchResults').innerHTML = emptyRow_('⏳', 'جاري التحميل...');
+  var __ht = document.getElementById('posSearchResults'); if (__ht) __ht.innerHTML = emptyRow_('⏳', 'جاري التحميل...');
   try {
     const idx = await api.getInventoryIndex();
     posAllProducts = Object.values(idx.products)
@@ -551,7 +551,7 @@ async function loadPosProductGrid_() {
 }
 
 function renderPosProductGrid_(list) {
-  document.getElementById('posSearchResults').innerHTML = list.length === 0 ? emptyRow_('📦', 'لا يوجد منتجات') : buildProductResultsHtml_(list, 'addToPosCart_');
+  var __ht = document.getElementById('posSearchResults'); if (__ht) __ht.innerHTML = list.length === 0 ? emptyRow_('📦', 'لا يوجد منتجات') : buildProductResultsHtml_(list, 'addToPosCart_');
 }
 
 function posSearchKeydown_(event) {
@@ -608,7 +608,7 @@ async function openStandaloneReturnModal_() {
   if (!posAllProducts || posAllProducts.length === 0) { await loadPosProductGrid_(); }
   renderReturnProductGrid_(posAllProducts || []);
   getTreasuryAccountsCached_().then(function (accounts) {
-    document.getElementById('returnTreasuryAccount').innerHTML = treasuryAccountOptionsHtml_(accounts);
+    var __ht = document.getElementById('returnTreasuryAccount'); if (__ht) __ht.innerHTML = treasuryAccountOptionsHtml_(accounts);
     refreshSelect_('returnTreasuryAccount');
   }).catch(function () { /* صامت */ });
 }
@@ -629,8 +629,8 @@ async function returnInvoiceSearch_(query) {
 
 function linkReturnToSale_(saleId, customerName) {
   returnLinkedSale = saleId;
-  document.getElementById('returnInvoiceSearch').value = '';
-  document.getElementById('returnInvoiceResults').innerHTML = '';
+  var __ht = document.getElementById('returnInvoiceSearch'); if (__ht) __ht.value = '';
+  var __ht = document.getElementById('returnInvoiceResults'); if (__ht) __ht.innerHTML = '';
   const badge = document.getElementById('returnLinkedSaleBadge');
   badge.style.display = 'block';
   badge.innerHTML = '<div class="list-item"><span class="pill success">🔗 مرتبط بفاتورة ' + saleId + (customerName ? ' — ' + customerName : '') + '</span>' +
@@ -639,8 +639,8 @@ function linkReturnToSale_(saleId, customerName) {
 
 function unlinkReturnSale_() {
   returnLinkedSale = null;
-  document.getElementById('returnLinkedSaleBadge').style.display = 'none';
-  document.getElementById('returnLinkedSaleBadge').innerHTML = '';
+  var __ht = document.getElementById('returnLinkedSaleBadge'); if (__ht) __ht.style.display = 'none';
+  var __ht = document.getElementById('returnLinkedSaleBadge'); if (__ht) __ht.innerHTML = '';
 }
 
 function renderReturnProductGrid_(list) {
@@ -684,7 +684,7 @@ function removeFromReturnCart_(idx) { returnCart.splice(idx, 1); renderReturnCar
 
 function onReturnPaymentMethodChange_() {
   const val = document.getElementById('returnPaymentMethod').value;
-  document.getElementById('returnTreasuryFieldWrap').style.display = val === 'آجل' ? 'none' : 'block';
+  var __ht = document.getElementById('returnTreasuryFieldWrap'); if (__ht) __ht.style.display = val === 'آجل' ? 'none' : 'block';
 }
 
 async function submitStandaloneReturn_() {
@@ -818,9 +818,9 @@ async function submitPosSale_() {
   try {
     const res = await api.posSale({ username: state.user.username }, posCart.map(function (i) { return { variantCode: i.variantCode, qty: i.qty, price: i.price }; }), discount, paymentMethod, treasuryAccountId, customerName, customerPhone);
     posCart = []; renderPosCart_();
-    document.getElementById('posSearchInput').value = '';
-    document.getElementById('posCustomerName').value = '';
-    document.getElementById('posCustomerPhone').value = '';
+    var __ht = document.getElementById('posSearchInput'); if (__ht) __ht.value = '';
+    var __ht = document.getElementById('posCustomerName'); if (__ht) __ht.value = '';
+    var __ht = document.getElementById('posCustomerPhone'); if (__ht) __ht.value = '';
     loadPosSummary_();
     loadPosProductGrid_();
     offerReceiptPrint_(res, cartSnapshot, discount, paymentMethod, customerName, customerPhone);
@@ -889,7 +889,7 @@ function printReceipt_(saleResult, items, discount, paymentMethod, customerName,
 function onPosPaymentMethodChange_() {
   const val = document.getElementById('posPaymentMethod').value;
   const section = document.getElementById('posInvoiceSection');
-  document.getElementById('posTreasuryFieldWrap').style.display = val === 'آجل' ? 'none' : 'block';
+  var __ht = document.getElementById('posTreasuryFieldWrap'); if (__ht) __ht.style.display = val === 'آجل' ? 'none' : 'block';
   if (val === 'آجل') {
     section.style.display = 'block';
     section.innerHTML =
@@ -914,11 +914,11 @@ function onPosInvoiceModeChange_() {
 }
 
 async function posInvoiceSearch_(query) {
-  if (!query || query.length < 2) { document.getElementById('posInvSearchResults').innerHTML = ''; return; }
+  if (!query || query.length < 2) { var __ht = document.getElementById('posInvSearchResults'); if (__ht) __ht.innerHTML = ''; return; }
   try {
     const invoices = await api.listInvoices({});
     const matched = invoices.filter(function (i) { return i.status !== 'مدفوعة بالكامل' && i.customerName.toLowerCase().includes(query.toLowerCase()); });
-    document.getElementById('posInvSearchResults').innerHTML = matched.length === 0 ? emptyRow_('🔎', 'لا يوجد فواتير مفتوحة بهذا الاسم') :
+    var __ht = document.getElementById('posInvSearchResults'); if (__ht) __ht.innerHTML = matched.length === 0 ? emptyRow_('🔎', 'لا يوجد فواتير مفتوحة بهذا الاسم') :
       matched.map(function (i) {
         return '<div class="list-item" style="cursor:pointer;" onclick="selectPosInvoice_(\'' + i.invoiceId + '\', \'' + i.customerName.replace(/'/g, '') + '\')"><span>' + i.customerName + ' — ' + i.invoiceNumber + '</span><span class="pill warning">متبقي ' + i.remaining + '</span></div>';
       }).join('');
@@ -926,8 +926,8 @@ async function posInvoiceSearch_(query) {
 }
 
 function selectPosInvoice_(id, name) {
-  document.getElementById('posSelectedInvoiceId').value = id;
-  document.getElementById('posInvSearchResults').innerHTML = '<div class="hint">✅ هيتضاف على فاتورة: ' + name + '</div>';
+  var __ht = document.getElementById('posSelectedInvoiceId'); if (__ht) __ht.value = id;
+  var __ht = document.getElementById('posInvSearchResults'); if (__ht) __ht.innerHTML = '<div class="hint">✅ هيتضاف على فاتورة: ' + name + '</div>';
 }
 
 async function submitPosSaleOnInvoice_(discount) {
@@ -952,8 +952,8 @@ async function submitPosSaleOnInvoice_(discount) {
     await api.addItemsToInvoice({ username: state.user.username }, invoiceId, items);
     showToast_('تم تسجيل الأصناف على الفاتورة ✅', 'success');
     posCart = []; renderPosCart_();
-    document.getElementById('posSearchInput').value = '';
-    document.getElementById('posPaymentMethod').value = 'كاش';
+    var __ht = document.getElementById('posSearchInput'); if (__ht) __ht.value = '';
+    var __ht = document.getElementById('posPaymentMethod'); if (__ht) __ht.value = 'كاش';
     onPosPaymentMethodChange_();
     loadPosSummary_();
     loadPosProductGrid_();
@@ -1170,7 +1170,7 @@ function invSearch_(query) {
       return v.code.toLowerCase().includes(q) || (v.color || '').toLowerCase().includes(q) || (v.size || '').toLowerCase().includes(q);
     });
   });
-  document.getElementById('invCardsWrap').innerHTML = buildInventoryCards_(filtered);
+  var __ht = document.getElementById('invCardsWrap'); if (__ht) __ht.innerHTML = buildInventoryCards_(filtered);
 }
 
 // ------------------------------------------------------------
@@ -1318,7 +1318,7 @@ async function submitMainCategory_() {
     const res = await api.createCategory({ username: state.user.username }, { name: name, type: 'رئيسية' });
     showToast_('تمت إضافة "' + res.name + '" ✅', 'success');
     await loadInventoryBaseData_();
-    document.getElementById('modalBody').innerHTML = buildCategoriesModalBody_();
+    var __ht = document.getElementById('modalBody'); if (__ht) __ht.innerHTML = buildCategoriesModalBody_();
     enhanceSelects_(document.getElementById('modalBody'));
   } catch (err) { showErrorToast_(err); }
 }
@@ -1332,7 +1332,7 @@ async function submitSubCategory_() {
     const res = await api.createCategory({ username: state.user.username }, { name: name, type: 'فرعية', parentCode: parentCode });
     showToast_('تمت إضافة "' + res.name + '" ✅', 'success');
     await loadInventoryBaseData_();
-    document.getElementById('modalBody').innerHTML = buildCategoriesModalBody_();
+    var __ht = document.getElementById('modalBody'); if (__ht) __ht.innerHTML = buildCategoriesModalBody_();
     enhanceSelects_(document.getElementById('modalBody'));
   } catch (err) { showErrorToast_(err); }
 }
@@ -1425,7 +1425,7 @@ function collectProductVariantRows_() {
 }
 
 function onProductMainCatChange_() {
-  document.getElementById('prodSubCat').innerHTML = subCategoryOptionsForParent_(document.getElementById('prodMainCat').value);
+  var __ht = document.getElementById('prodSubCat'); if (__ht) __ht.innerHTML = subCategoryOptionsForParent_(document.getElementById('prodMainCat').value);
   refreshSelect_('prodSubCat');
 }
 
@@ -1501,7 +1501,7 @@ function openEditProductModal_(code) {
 }
 
 function onEditProdMainCatChange_() {
-  document.getElementById('editProdSubCat').innerHTML = subCategoryOptionsForParent_(document.getElementById('editProdMainCat').value);
+  var __ht = document.getElementById('editProdSubCat'); if (__ht) __ht.innerHTML = subCategoryOptionsForParent_(document.getElementById('editProdMainCat').value);
   refreshSelect_('editProdSubCat');
 }
 
@@ -1610,17 +1610,17 @@ async function renderExpensesPage() {
 async function loadExpTreasuryOptions_() {
   try {
     const accounts = await getTreasuryAccountsCached_();
-    document.getElementById('expTreasuryAccount').innerHTML = treasuryAccountOptionsHtml_(accounts);
+    var __ht = document.getElementById('expTreasuryAccount'); if (__ht) __ht.innerHTML = treasuryAccountOptionsHtml_(accounts);
     refreshSelect_('expTreasuryAccount');
   } catch (err) { /* صامت */ }
 }
 
 function onExpPaymentMethodChange_() {
-  document.getElementById('expTreasuryFieldWrap').style.display = document.getElementById('expPaymentMethod').value === 'آجل' ? 'none' : 'block';
+  var __ht = document.getElementById('expTreasuryFieldWrap'); if (__ht) __ht.style.display = document.getElementById('expPaymentMethod').value === 'آجل' ? 'none' : 'block';
 }
 
 function onExpFixedAssetChange_() {
-  document.getElementById('expFixedAssetWrap').style.display = document.getElementById('expIsFixedAsset').checked ? 'block' : 'none';
+  var __ht = document.getElementById('expFixedAssetWrap'); if (__ht) __ht.style.display = document.getElementById('expIsFixedAsset').checked ? 'block' : 'none';
 }
 
 function buildExpensesPageHtml_() {
@@ -1701,7 +1701,7 @@ function expSubCatOptions_(mainCat) {
   const subs = (expCategoriesCache.subCategoriesByMain && expCategoriesCache.subCategoriesByMain[mainCat]) || [];
   return '<option value="">بدون فئة فرعية</option>' + subs.map(function (s) { return '<option value="' + s + '">' + s + '</option>'; }).join('');
 }
-function onExpMainCatChange_() { document.getElementById('expSubCat').innerHTML = expSubCatOptions_(document.getElementById('expMainCat').value); refreshSelect_('expSubCat'); onExpSubCatChange_(); }
+function onExpMainCatChange_() { var __ht = document.getElementById('expSubCat'); if (__ht) __ht.innerHTML = expSubCatOptions_(document.getElementById('expMainCat').value); refreshSelect_('expSubCat'); onExpSubCatChange_(); }
 
 function openAddExpenseCategoryModal_(isSub) {
   openModal(isSub ? 'فئة فرعية جديدة' : 'فئة رئيسية جديدة', isSub ? 'هتُضاف تحت "' + document.getElementById('expMainCat').value + '"' : 'فئة مصروفات جديدة من المستوى الأول',
@@ -1716,12 +1716,12 @@ function confirmAddExpenseCategory_(isSub) {
     const mainCat = document.getElementById('expMainCat').value;
     expCategoriesCache.subCategoriesByMain[mainCat] = expCategoriesCache.subCategoriesByMain[mainCat] || [];
     if (expCategoriesCache.subCategoriesByMain[mainCat].indexOf(name) === -1) expCategoriesCache.subCategoriesByMain[mainCat].push(name);
-    document.getElementById('expSubCat').innerHTML = expSubCatOptions_(mainCat);
-    document.getElementById('expSubCat').value = name;
+    var __ht = document.getElementById('expSubCat'); if (__ht) __ht.innerHTML = expSubCatOptions_(mainCat);
+    var __ht = document.getElementById('expSubCat'); if (__ht) __ht.value = name;
   } else {
     if (expCategoriesCache.mainCategories.indexOf(name) === -1) expCategoriesCache.mainCategories.push(name);
-    document.getElementById('expMainCat').innerHTML = expMainCatOptions_();
-    document.getElementById('expMainCat').value = name;
+    var __ht = document.getElementById('expMainCat'); if (__ht) __ht.innerHTML = expMainCatOptions_();
+    var __ht = document.getElementById('expMainCat'); if (__ht) __ht.value = name;
     onExpMainCatChange_();
   }
   closeModal();
@@ -1729,7 +1729,7 @@ function confirmAddExpenseCategory_(isSub) {
 }
 
 document.addEventListener('change', function (e) {
-  if (e.target && e.target.id === 'expIsRecurring') document.getElementById('expRecurrenceDaysWrap').style.display = e.target.checked ? 'block' : 'none';
+  if (e.target && e.target.id === 'expIsRecurring') var __ht = document.getElementById('expRecurrenceDaysWrap'); if (__ht) __ht.style.display = e.target.checked ? 'block' : 'none';
 });
 
 async function submitExpense_() {
@@ -1783,7 +1783,7 @@ function renderSalesPage() {
         '<div id="salesHistoryList" style="margin-top:14px;"></div></div></div>'
   );
   salesCart = [];
-  document.getElementById('salesDate').value = new Date().toISOString().slice(0, 16);
+  var __ht = document.getElementById('salesDate'); if (__ht) __ht.value = new Date().toISOString().slice(0, 16);
   loadSalesHistory_();
   loadSalesTreasuryOptions_();
 }
@@ -1791,14 +1791,14 @@ function renderSalesPage() {
 async function loadSalesTreasuryOptions_() {
   try {
     const accounts = await getTreasuryAccountsCached_();
-    document.getElementById('salesTreasuryAccount').innerHTML = treasuryAccountOptionsHtml_(accounts);
+    var __ht = document.getElementById('salesTreasuryAccount'); if (__ht) __ht.innerHTML = treasuryAccountOptionsHtml_(accounts);
     refreshSelect_('salesTreasuryAccount');
   } catch (err) { /* صامت */ }
 }
 
 async function salesSearch_(query) {
-  if (!query || query.length < 2) { document.getElementById('salesSearchResults').innerHTML = ''; return; }
-  try { document.getElementById('salesSearchResults').innerHTML = buildProductResultsHtml_(await api.searchProducts(query), 'addToSalesCart_'); }
+  if (!query || query.length < 2) { var __ht = document.getElementById('salesSearchResults'); if (__ht) __ht.innerHTML = ''; return; }
+  try { var __ht = document.getElementById('salesSearchResults'); if (__ht) __ht.innerHTML = buildProductResultsHtml_(await api.searchProducts(query), 'addToSalesCart_'); }
   catch (err) { showErrorToast_(err); }
 }
 
@@ -1845,7 +1845,7 @@ async function submitSale_() {
 function onSalesPaymentMethodChange_() {
   const val = document.getElementById('salesPaymentMethod').value;
   const section = document.getElementById('salesInvoiceSection');
-  document.getElementById('salesTreasuryFieldWrap').style.display = val === 'آجل' ? 'none' : 'block';
+  var __ht = document.getElementById('salesTreasuryFieldWrap'); if (__ht) __ht.style.display = val === 'آجل' ? 'none' : 'block';
   if (val === 'آجل') {
     section.style.display = 'block';
     section.innerHTML =
@@ -1868,11 +1868,11 @@ function onSalesInvoiceModeChange_() {
 }
 
 async function salesInvoiceSearch_(query) {
-  if (!query || query.length < 2) { document.getElementById('salesInvSearchResults').innerHTML = ''; return; }
+  if (!query || query.length < 2) { var __ht = document.getElementById('salesInvSearchResults'); if (__ht) __ht.innerHTML = ''; return; }
   try {
     const invoices = await api.listInvoices({});
     const matched = invoices.filter(function (i) { return i.status !== 'مدفوعة بالكامل' && i.customerName.toLowerCase().includes(query.toLowerCase()); });
-    document.getElementById('salesInvSearchResults').innerHTML = matched.length === 0 ? emptyRow_('🔎', 'لا يوجد فواتير مفتوحة بهذا الاسم') :
+    var __ht = document.getElementById('salesInvSearchResults'); if (__ht) __ht.innerHTML = matched.length === 0 ? emptyRow_('🔎', 'لا يوجد فواتير مفتوحة بهذا الاسم') :
       matched.map(function (i) {
         return '<div class="list-item" style="cursor:pointer;" onclick="selectSalesInvoice_(\'' + i.invoiceId + '\', \'' + i.customerName.replace(/'/g, '') + '\')"><span>' + i.customerName + ' — ' + i.invoiceNumber + '</span><span class="pill warning">متبقي ' + i.remaining + '</span></div>';
       }).join('');
@@ -1880,8 +1880,8 @@ async function salesInvoiceSearch_(query) {
 }
 
 function selectSalesInvoice_(id, name) {
-  document.getElementById('salesSelectedInvoiceId').value = id;
-  document.getElementById('salesInvSearchResults').innerHTML = '<div class="hint">✅ هيتضاف على فاتورة: ' + name + '</div>';
+  var __ht = document.getElementById('salesSelectedInvoiceId'); if (__ht) __ht.value = id;
+  var __ht = document.getElementById('salesInvSearchResults'); if (__ht) __ht.innerHTML = '<div class="hint">✅ هيتضاف على فاتورة: ' + name + '</div>';
 }
 
 async function submitSaleOnInvoice_(discount) {
@@ -2013,7 +2013,7 @@ async function renderSupplierTabContent_() {
     renderPoCart_();
     poSearch_('');
     getTreasuryAccountsCached_().then(function (accounts) {
-      document.getElementById('poTreasuryAccount').innerHTML = treasuryAccountOptionsHtml_(accounts);
+      var __ht = document.getElementById('poTreasuryAccount'); if (__ht) __ht.innerHTML = treasuryAccountOptionsHtml_(accounts);
       refreshSelect_('poTreasuryAccount');
     }).catch(function (err) { showErrorToast_(err); });
 
@@ -2037,8 +2037,8 @@ async function renderSupplierTabContent_() {
 
 function onPoPaymentStatusChange_() {
   const status = document.getElementById('poPaymentStatus').value;
-  document.getElementById('poAmountPaidWrap').style.display = status === 'مدفوع جزئيًا' ? '' : 'none';
-  document.getElementById('poTreasuryWrap').style.display = status === 'متأخر/غير مدفوع' ? 'none' : '';
+  var __ht = document.getElementById('poAmountPaidWrap'); if (__ht) __ht.style.display = status === 'مدفوع جزئيًا' ? '' : 'none';
+  var __ht = document.getElementById('poTreasuryWrap'); if (__ht) __ht.style.display = status === 'متأخر/غير مدفوع' ? 'none' : '';
 }
 
 function openQuickAddSupplierModal_() {
@@ -2102,7 +2102,7 @@ function renderSuppliersList_(suppliers) {
     '<option value="لا مشتريات"' + (supplierDueFilter === 'لا مشتريات' ? ' selected' : '') + '>⚪ لا يوجد مشتريات</option>' +
     '</select></div>';
 
-  document.getElementById('suppliersList').innerHTML = filterHtml + '<div style="margin-top:10px;">' + (
+  var __ht = document.getElementById('suppliersList'); if (__ht) __ht.innerHTML = filterHtml + '<div style="margin-top:10px;">' + (
     filtered.length === 0 ? emptyRow_('🏭', 'لا يوجد موردين مطابقين للفلتر') :
       filtered.map(function (s) {
         return '<div class="list-item" style="cursor:pointer; flex-wrap:wrap; gap:6px;" onclick="openSupplierDetailModal_(\'' + s.name.replace(/'/g, "\\'") + '\')">' +
@@ -2138,7 +2138,7 @@ async function openSupplierDetailModal_(supplierName) {
 function openOrderPaymentsView_(orderNumber) {
   selectedOrderNumber_ = orderNumber;
   supplierDetailTab = 'orderPayments';
-  document.getElementById('modalBody').innerHTML = buildSupplierDetailHtml_();
+  var __ht = document.getElementById('modalBody'); if (__ht) __ht.innerHTML = buildSupplierDetailHtml_();
 }
 
 function buildSupplierDetailHtml_() {
@@ -2212,7 +2212,7 @@ function buildSupplierDetailHtml_() {
 
 function switchSupplierTab_(tab) {
   supplierDetailTab = tab;
-  document.getElementById('modalBody').innerHTML = buildSupplierDetailHtml_();
+  var __ht = document.getElementById('modalBody'); if (__ht) __ht.innerHTML = buildSupplierDetailHtml_();
 }
 
 let poTilesCache_ = []; let poTilesShown_ = 0;
@@ -2234,7 +2234,7 @@ function renderPoTilesPage_() {
   if (poTilesShown_ < poTilesCache_.length) {
     html += '<button class="btn secondary block" style="margin-top:8px;" onclick="poShowMoreTiles_()">⬇️ عرض المزيد (' + (poTilesCache_.length - poTilesShown_) + ')</button>';
   }
-  document.getElementById('poSearchResults').innerHTML = html;
+  var __ht = document.getElementById('poSearchResults'); if (__ht) __ht.innerHTML = html;
 }
 
 function poShowMoreTiles_() {
@@ -2260,7 +2260,7 @@ async function poSearch_(query) {
       } else {
         html = emptyRow_('📦', 'لا يوجد منتجات في المخزون بعد — دوري باسم منتج جديد وهقولك تضيفيه ازاي');
       }
-      document.getElementById('poSearchResults').innerHTML = html;
+      var __ht = document.getElementById('poSearchResults'); if (__ht) __ht.innerHTML = html;
       return;
     }
     renderPoTilesPage_();
@@ -2278,7 +2278,7 @@ async function openPoQuickAddForm_(prefillName) {
     poTreeCache = await api.getProductTree();
   } catch (err) { showErrorToast_(err); return; }
   if (!poTreeCache.mainCategories.length) {
-    document.getElementById('poQuickAddInline').innerHTML = '<div class="hint" style="color:var(--danger);">لازم تضيفي فئة رئيسية وفرعية الأول من صفحة المخزون</div>';
+    var __ht = document.getElementById('poQuickAddInline'); if (__ht) __ht.innerHTML = '<div class="hint" style="color:var(--danger);">لازم تضيفي فئة رئيسية وفرعية الأول من صفحة المخزون</div>';
     return;
   }
   renderPoQuickAddForm_(prefillName);
@@ -2315,7 +2315,7 @@ function poSubCategoryOptions_(parentCode) {
 }
 
 function onPoQuickMainCatChange_() {
-  document.getElementById('poQuickSubCat').innerHTML = poSubCategoryOptions_(document.getElementById('poQuickMainCat').value);
+  var __ht = document.getElementById('poQuickSubCat'); if (__ht) __ht.innerHTML = poSubCategoryOptions_(document.getElementById('poQuickMainCat').value);
   refreshSelect_('poQuickSubCat');
 }
 
@@ -2361,7 +2361,7 @@ async function submitPoQuickAdd_() {
     });
     showToast_('تمت إضافة "' + name + '" للمخزون ✅', 'success');
     addToPoCart_(res.variantCodes[0], name, price, salePrice, qty);
-    document.getElementById('poSearchInput').value = '';
+    var __ht = document.getElementById('poSearchInput'); if (__ht) __ht.value = '';
     poSearch_('');
   } catch (err) { showErrorToast_(err); }
 }
@@ -2416,7 +2416,7 @@ async function loadPurchaseOrders_() {
   try {
     const orders = await api.listPurchaseOrders();
     const cur = state.settings.currency || 'جنيه';
-    document.getElementById('poList').innerHTML = orders.length === 0 ? emptyRow_('📭', 'لا يوجد أوردرات شراء بعد') :
+    var __ht = document.getElementById('poList'); if (__ht) __ht.innerHTML = orders.length === 0 ? emptyRow_('📭', 'لا يوجد أوردرات شراء بعد') :
       orders.map(function (o) {
         const pill = o.paymentStatus === 'مدفوع بالكامل' ? 'success' : (o.paymentStatus === 'مدفوع جزئيًا' ? 'warning' : 'danger');
         return '<div class="list-item"><span>' + o.supplierName + '</span><span>' + formatMoney_(o.total, cur) + ' <span class="pill ' + pill + '">' + o.paymentStatus + '</span>' +
@@ -2469,7 +2469,7 @@ async function loadOrders_() {
   try {
     const orders = await api.listOrders(status ? { status: status } : {});
     const cur = state.settings.currency || 'جنيه';
-    document.getElementById('ordersList').innerHTML = orders.length === 0 ? emptyRow_('📭', 'لا يوجد أوردرات') :
+    var __ht = document.getElementById('ordersList'); if (__ht) __ht.innerHTML = orders.length === 0 ? emptyRow_('📭', 'لا يوجد أوردرات') :
       orders.map(function (o) {
         return '<div class="list-item"><span>' + o.orderId + ' — ' + (o.customerName || 'بدون اسم') + '</span>' +
           '<span>' + formatMoney_(o.total, cur) + ' <span class="pill info">' + o.status + '</span>' +
@@ -2487,7 +2487,7 @@ async function loadCustomers_() {
   try {
     const customers = await api.listCustomers();
     const cur = state.settings.currency || 'جنيه';
-    document.getElementById('customersList').innerHTML = customers.length === 0 ? emptyRow_('👤', 'لا يوجد عملاء بعد') :
+    var __ht = document.getElementById('customersList'); if (__ht) __ht.innerHTML = customers.length === 0 ? emptyRow_('👤', 'لا يوجد عملاء بعد') :
       customers.map(function (c) {
         return '<div class="list-item" style="cursor:pointer;" onclick="viewCustomerFromList_(\'' + c.phone.replace(/'/g, "\\'") + '\')"><span>' + (c.name || c.phone) + '<br><span style="color:var(--text-faint); font-size:11px;">' + c.phone + '</span></span>' +
           '<span>' + c.orderCount + ' طلب — ' + formatMoney_(c.totalPurchases, cur) + '</span></div>';
@@ -2496,7 +2496,7 @@ async function loadCustomers_() {
 }
 
 function viewCustomerFromList_(phone) {
-  document.getElementById('customerPhoneSearch').value = phone;
+  var __ht = document.getElementById('customerPhoneSearch'); if (__ht) __ht.value = phone;
   searchCustomerHistory_();
   document.getElementById('customerHistoryResult').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -2559,8 +2559,8 @@ async function submitOpenInvoice_() {
   try {
     const res = await api.openInvoice({ username: state.user.username }, { customerName: name, customerPhone: phone });
     showToast_('تم فتح الفاتورة ✅ ' + res.invoiceNumber, 'success');
-    document.getElementById('invOpenCustomerName').value = '';
-    document.getElementById('invOpenCustomerPhone').value = '';
+    var __ht = document.getElementById('invOpenCustomerName'); if (__ht) __ht.value = '';
+    var __ht = document.getElementById('invOpenCustomerPhone'); if (__ht) __ht.value = '';
     loadInvoices_();
     openInvoiceDetailModal_(res.invoiceId);
   } catch (err) { showErrorToast_(err); }
@@ -2646,7 +2646,7 @@ function buildInvoiceDetailHtml_() {
 }
 
 async function invAddSearch_(query) {
-  if (!query || query.length < 2) { document.getElementById('invAddSearchResults').innerHTML = ''; return; }
+  if (!query || query.length < 2) { var __ht = document.getElementById('invAddSearchResults'); if (__ht) __ht.innerHTML = ''; return; }
   try {
     const results = await api.searchProducts(query);
     let html = results.map(function (p) {
@@ -2658,7 +2658,7 @@ async function invAddSearch_(query) {
           '<div class="product-tile-meta">' + v.color + ' · ' + v.size + ' · متاح: ' + v.quantity + '</div></div><b>' + price + '</b></div>';
       }).join('');
     }).join('');
-    document.getElementById('invAddSearchResults').innerHTML = html || '<div class="hint">مفيش نتايج</div>';
+    var __ht = document.getElementById('invAddSearchResults'); if (__ht) __ht.innerHTML = html || '<div class="hint">مفيش نتايج</div>';
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -2850,7 +2850,7 @@ async function renderPettyCashPage() {
 
 function onPcTypeChange_() {
   const type = document.getElementById('pcType').value;
-  document.getElementById('pcTreasuryFieldWrap').style.display = type === 'مصروف' ? 'none' : 'block';
+  var __ht = document.getElementById('pcTreasuryFieldWrap'); if (__ht) __ht.style.display = type === 'مصروف' ? 'none' : 'block';
 }
 
 async function submitPettyCash_() {
@@ -2907,7 +2907,7 @@ function renderReportsPage() {
   loadSeasons_();
   loadOtherRevenue_();
   getTreasuryAccountsCached_().then(function (accounts) {
-    document.getElementById('orTreasuryAccount').innerHTML = treasuryAccountOptionsHtml_(accounts);
+    var __ht = document.getElementById('orTreasuryAccount'); if (__ht) __ht.innerHTML = treasuryAccountOptionsHtml_(accounts);
     refreshSelect_('orTreasuryAccount');
   }).catch(function () { /* صامت */ });
 }
@@ -2926,7 +2926,7 @@ async function loadOtherRevenue_() {
   try {
     const list = await api.listOtherRevenue(15);
     const cur = state.settings.currency || 'جنيه';
-    document.getElementById('otherRevenueList').innerHTML = list.length === 0 ? emptyRow_('💵', 'لا يوجد إيرادات أخرى مسجلة بعد') :
+    var __ht = document.getElementById('otherRevenueList'); if (__ht) __ht.innerHTML = list.length === 0 ? emptyRow_('💵', 'لا يوجد إيرادات أخرى مسجلة بعد') :
       list.map(function (r) { return '<div class="list-item"><span>' + r.source + (r.description ? ' — ' + r.description : '') + '<br><span style="color:var(--text-faint); font-size:11px;">' + formatDate_(r.date) + '</span></span><b>' + formatMoney_(r.amount, cur) + '</b></div>'; }).join('');
   } catch (err) { /* صامت */ }
 }
@@ -2945,7 +2945,7 @@ async function loadIncomeStatement_() {
     html += rowLine_('صافي الربح قبل الضريبة', formatMoney_(income.netProfitBeforeTax, cur), true);
     if (income.taxEnabled) { html += rowLine_('الضريبة', formatMoney_(income.tax, cur)); html += rowLine_('صافي الربح بعد الضريبة', formatMoney_(income.netProfitAfterTax, cur), true); }
     html += '</div>';
-    document.getElementById('incomeStatementResult').innerHTML = html;
+    var __ht = document.getElementById('incomeStatementResult'); if (__ht) __ht.innerHTML = html;
   } catch (err) { showErrorToast_(err); }
 }
 function rowLine_(label, value, bold) { return '<div class="list-item"><span' + (bold ? ' style="font-weight:900;"' : '') + '>' + label + '</span><b>' + value + '</b></div>'; }
@@ -2987,7 +2987,7 @@ async function submitSeason_() {
 async function loadSeasons_() {
   try {
     const seasons = await api.listSeasons();
-    document.getElementById('seasonsList').innerHTML = seasons.length === 0 ? emptyRow_('📅', 'لا يوجد مواسم بعد') :
+    var __ht = document.getElementById('seasonsList'); if (__ht) __ht.innerHTML = seasons.length === 0 ? emptyRow_('📅', 'لا يوجد مواسم بعد') :
       seasons.map(function (s) { return '<div class="list-item"><span>' + s.name + '</span><span>' + formatDate_(s.startDate) + ' → ' + formatDate_(s.endDate) + '</span></div>'; }).join('');
   } catch (err) { showErrorToast_(err); }
 }
@@ -3019,7 +3019,7 @@ async function renderHrPage() {
   );
   loadEmployees_();
   getTreasuryAccountsCached_().then(function (accounts) {
-    document.getElementById('advTreasuryAccount').innerHTML = treasuryAccountOptionsHtml_(accounts);
+    var __ht = document.getElementById('advTreasuryAccount'); if (__ht) __ht.innerHTML = treasuryAccountOptionsHtml_(accounts);
     refreshSelect_('advTreasuryAccount');
   }).catch(function () { /* صامت */ });
 }
@@ -3035,11 +3035,11 @@ async function loadEmployees_() {
   try {
     const employees = await api.listEmployees(true);
     const cur = state.settings.currency || 'جنيه';
-    document.getElementById('employeesList').innerHTML = employees.length === 0 ? emptyRow_('👥', 'لا يوجد موظفين بعد') :
+    var __ht = document.getElementById('employeesList'); if (__ht) __ht.innerHTML = employees.length === 0 ? emptyRow_('👥', 'لا يوجد موظفين بعد') :
       employees.map(function (e) { return '<div class="list-item"><span>' + e.name + ' — ' + e.jobTitle + '</span><span>' + formatMoney_(e.baseSalary, cur) + '</span></div>'; }).join('');
     const options = employees.map(function (e) { return '<option>' + e.name + '</option>'; }).join('');
-    document.getElementById('attEmployeeSelect').innerHTML = options;
-    document.getElementById('advEmployeeSelect').innerHTML = options;
+    var __ht = document.getElementById('attEmployeeSelect'); if (__ht) __ht.innerHTML = options;
+    var __ht = document.getElementById('advEmployeeSelect'); if (__ht) __ht.innerHTML = options;
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -3066,7 +3066,7 @@ async function loadSalaries_(monthLabel) {
   try {
     const salaries = await api.listSalaries(monthLabel);
     const cur = state.settings.currency || 'جنيه';
-    document.getElementById('salariesList').innerHTML = salaries.map(function (s) {
+    var __ht = document.getElementById('salariesList'); if (__ht) __ht.innerHTML = salaries.map(function (s) {
       return '<div class="list-item"><span>' + s.employeeName + '</span><span>' + formatMoney_(s.net, cur) +
         (s.paid === 'لا' ? ' <button class="eye-btn" onclick="paySalaryUI_(\'' + monthLabel + '\', \'' + s.employeeName + '\')">💳</button>' : ' <span class="pill success">مدفوع</span>') + '</span></div>';
     }).join('');
@@ -3331,7 +3331,7 @@ function toggleNotifications() {
 
 async function onNotifClick_(id, linkPage) {
   try { await api.markNotificationRead(id); } catch (e) {}
-  document.getElementById('notifDropdown').style.display = 'none';
+  var __ht = document.getElementById('notifDropdown'); if (__ht) __ht.style.display = 'none';
   refreshNotifications();
   if (linkPage) navigate(linkPage);
 }
@@ -3363,7 +3363,7 @@ window.addEventListener('DOMContentLoaded', async function () {
   applyPublicBranding();
   const { data: { session } } = await supabaseClient.auth.getSession();
   if (session) await bootApp();
-  else document.getElementById('loginScreen').style.display = 'flex';
+  else var __ht = document.getElementById('loginScreen'); if (__ht) __ht.style.display = 'flex';
 
   document.getElementById('loginPassword').addEventListener('keydown', function (e) { if (e.key === 'Enter') handleLogin(); });
   setInterval(function () { if (state.user) refreshNotifications(); }, 90000);
@@ -3682,7 +3682,7 @@ async function loadCostCenterReport_() {
   const cur = state.settings.currency || 'جنيه';
   try {
     const rows = await api.getCostCenterReport(start, end);
-    document.getElementById('costCenterReportResult').innerHTML = (rows || []).length === 0 ? emptyRow_('📊', 'لا يوجد بيانات في الفترة دي') :
+    var __ht = document.getElementById('costCenterReportResult'); if (__ht) __ht.innerHTML = (rows || []).length === 0 ? emptyRow_('📊', 'لا يوجد بيانات في الفترة دي') :
       rows.map(function (r) {
         return '<div class="list-item" style="display:block; padding:12px 4px;"><b>' + r.costCenter + '</b>' +
           '<div style="margin-top:6px; font-size:12px; color:var(--text-dim);">مبيعات: ' + formatMoney_(r.sales, cur) + ' · مصروفات: ' + formatMoney_(r.expenses, cur) + ' · الصافي: ' + formatMoney_(r.net, cur) + '</div></div>';
@@ -3772,8 +3772,8 @@ function addItemToPrCart_() {
   if (!variantCode && !freeText) { showToast_('لازم كود صنف أو وصف حر', 'error'); return; }
   if (!qty) { showToast_('الكمية مطلوبة', 'error'); return; }
   prItemsCart.push({ variant_code: variantCode, freeText: freeText, qty: qty, estimatedPrice: price });
-  document.getElementById('prVariantCode').value = ''; document.getElementById('prFreeText').value = '';
-  document.getElementById('prQty').value = ''; document.getElementById('prPrice').value = '';
+  var __ht = document.getElementById('prVariantCode'); if (__ht) __ht.value = ''; var __ht = document.getElementById('prFreeText'); if (__ht) __ht.value = '';
+  var __ht = document.getElementById('prQty'); if (__ht) __ht.value = ''; var __ht = document.getElementById('prPrice'); if (__ht) __ht.value = '';
   renderPrCart_();
 }
 
@@ -3821,7 +3821,7 @@ async function loadProfitabilityByProduct_() {
         return '<tr><td>' + r.productName + ' (' + r.variantCode + ')</td><td>' + r.qtySold + '</td><td>' + formatMoney_(r.revenue, cur) + '</td><td>' + formatMoney_(r.cost, cur) + '</td><td><b>' + formatMoney_(r.profit, cur) + '</b></td><td>' + r.marginPercent + '%</td></tr>';
       }).join('');
     html += '</tbody></table></div>';
-    document.getElementById('profitabilityResult').innerHTML = html;
+    var __ht = document.getElementById('profitabilityResult'); if (__ht) __ht.innerHTML = html;
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -3836,7 +3836,7 @@ async function loadProfitabilityByCustomer_() {
         return '<tr><td>' + r.customerName + '</td><td>' + r.ordersCount + '</td><td>' + formatMoney_(r.revenue, cur) + '</td><td>' + formatMoney_(r.cost, cur) + '</td><td><b>' + formatMoney_(r.profit, cur) + '</b></td></tr>';
       }).join('');
     html += '</tbody></table></div>';
-    document.getElementById('profitabilityResult').innerHTML = html;
+    var __ht = document.getElementById('profitabilityResult'); if (__ht) __ht.innerHTML = html;
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -4008,7 +4008,7 @@ async function loadTrialBalance_() {
         : '<div class="hint" style="color:var(--danger); margin-top:10px;">⚠️ الميزان غير متزن! فرق ' + formatMoney_(Math.abs((t.finalDebit||0) - (t.finalCredit||0)), cur) + '</div>';
     }
     html += '</div>';
-    document.getElementById('trialBalanceResult').innerHTML = html;
+    var __ht = document.getElementById('trialBalanceResult'); if (__ht) __ht.innerHTML = html;
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -4051,7 +4051,7 @@ async function loadBalanceSheet_() {
       (Math.abs(assets.total - (liabilities.total + totalEquityWithEarnings)) > 0.5
         ? '<div class="hint" style="color:var(--danger); margin-top:8px;">⚠️ الميزانية مش متوازنة — فرق ' + formatMoney_(Math.abs(assets.total - (liabilities.total + totalEquityWithEarnings)), cur) + '</div>'
         : '<div class="hint" style="color:var(--success); margin-top:8px;">✅ متوازنة</div>') + '</div>';
-    document.getElementById('balanceSheetResult').innerHTML = html;
+    var __ht = document.getElementById('balanceSheetResult'); if (__ht) __ht.innerHTML = html;
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -4193,8 +4193,8 @@ function onGlobalSearchInput_(value) {
 }
 
 function onGlobalSearchResultClick_(page) {
-  document.getElementById('globalSearchDropdown').style.display = 'none';
-  document.getElementById('globalSearchInput').value = '';
+  var __ht = document.getElementById('globalSearchDropdown'); if (__ht) __ht.style.display = 'none';
+  var __ht = document.getElementById('globalSearchInput'); if (__ht) __ht.value = '';
   if (page) navigate(page);
 }
 
@@ -4228,7 +4228,7 @@ async function refreshAttachmentsModal_() {
           '<button class="btn secondary" style="padding:2px 8px; font-size:11px;" onclick="deleteAttachment_(\'' + f.id + '\')">🗑️</button></div>';
       }).join('');
     html += '</div>';
-    document.getElementById('attachmentsModalBody').innerHTML = html;
+    var __ht = document.getElementById('attachmentsModalBody'); if (__ht) __ht.innerHTML = html;
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -4311,7 +4311,7 @@ function showKeyboardShortcutsHelp_() {
 // الذكاء الاصطناعي — أصناف راكدة + توقع مبيعات + تحليل Gemini
 // ============================================================
 async function loadStagnantStock_() {
-  document.getElementById('aiResult').innerHTML = '<div class="empty-state" style="padding:20px;"><span class="emoji">⏳</span></div>';
+  var __ht = document.getElementById('aiResult'); if (__ht) __ht.innerHTML = '<div class="empty-state" style="padding:20px;"><span class="emoji">⏳</span></div>';
   try {
     const rows = await api.getStagnantStock(60);
     let html = '<div class="card-heading" style="font-size:13px; margin-bottom:8px;">📦 أصناف مالهاش حركة بيع من 60 يوم</div>';
@@ -4320,12 +4320,12 @@ async function loadStagnantStock_() {
       rows.map(function (r) {
         return '<tr><td>' + r.productName + ' (' + r.variantCode + ')</td><td>' + r.quantity + '</td><td>' + (r.daysSinceLastSale ? 'من ' + r.daysSinceLastSale + ' يوم' : 'لسه معملهاش بيعة خالص') + '</td></tr>';
       }).join('') + '</tbody></table></div>';
-    document.getElementById('aiResult').innerHTML = html;
+    var __ht = document.getElementById('aiResult'); if (__ht) __ht.innerHTML = html;
   } catch (err) { showErrorToast_(err); }
 }
 
 async function loadSalesForecast_() {
-  document.getElementById('aiResult').innerHTML = '<div class="empty-state" style="padding:20px;"><span class="emoji">⏳</span></div>';
+  var __ht = document.getElementById('aiResult'); if (__ht) __ht.innerHTML = '<div class="empty-state" style="padding:20px;"><span class="emoji">⏳</span></div>';
   try {
     const f = await api.getSalesForecast();
     const cur = state.settings.currency || 'جنيه';
@@ -4333,12 +4333,12 @@ async function loadSalesForecast_() {
     html += rowLine_('متوسط المبيعات الأسبوعي (آخر 8 أسابيع)', formatMoney_(f.averageWeekly, cur));
     html += rowLine_('الاتجاه (فرق آخر أسبوعين)', (f.trend >= 0 ? '↑ +' : '↓ ') + formatMoney_(Math.abs(f.trend), cur));
     html += rowLine_('التوقع للأسبوع الجاي', formatMoney_(f.nextWeekForecast, cur), true);
-    document.getElementById('aiResult').innerHTML = html;
+    var __ht = document.getElementById('aiResult'); if (__ht) __ht.innerHTML = html;
   } catch (err) { showErrorToast_(err); }
 }
 
 async function loadAiInsights_() {
-  document.getElementById('aiResult').innerHTML = '<div class="empty-state" style="padding:20px;"><span class="emoji">✨</span><div class="msg" style="font-size:12px;">بيفكر...</div></div>';
+  var __ht = document.getElementById('aiResult'); if (__ht) __ht.innerHTML = '<div class="empty-state" style="padding:20px;"><span class="emoji">✨</span><div class="msg" style="font-size:12px;">بيفكر...</div></div>';
   try {
     const income = await api.getIncomeStatement(document.getElementById('repStart').value, document.getElementById('repEnd').value);
     const stagnant = await api.getStagnantStock(60);
@@ -4348,6 +4348,6 @@ async function loadAiInsights_() {
       '\nعدد الأصناف الراكدة (60 يوم بدون بيع): ' + stagnant.length +
       '\nمتوسط المبيعات الأسبوعي: ' + formatMoney_(forecast.averageWeekly, cur) + '\nالتوقع للأسبوع الجاي: ' + formatMoney_(forecast.nextWeekForecast, cur);
     const insight = await api.getAiInsights(context);
-    document.getElementById('aiResult').innerHTML = '<div class="card" style="background:var(--surface-2); white-space:pre-wrap; line-height:1.9; font-size:13px;">' + insight + '</div>';
+    var __ht = document.getElementById('aiResult'); if (__ht) __ht.innerHTML = '<div class="card" style="background:var(--surface-2); white-space:pre-wrap; line-height:1.9; font-size:13px;">' + insight + '</div>';
   } catch (err) { showErrorToast_(err); }
 }
