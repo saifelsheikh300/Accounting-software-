@@ -1777,8 +1777,9 @@ function renderSalesPage() {
         '<div class="field" id="salesTreasuryFieldWrap"><label>هتضاف لحساب</label><select id="salesTreasuryAccount"><option value="">جاري التحميل...</option></select></div>' +
         '<div id="salesInvoiceSection" style="display:none;"></div>' +
         '<button class="btn success block" style="margin-top:16px;" onclick="submitSale_()">✅ تسجيل البيعة</button></div>' +
-      '<div class="card"><div class="card-heading">📋 آخر المبيعات</div>' +
-        '<div class="field" style="margin-top:8px;"><input type="text" id="salesHistorySearchInput" oninput="salesHistorySearch_(this.value)" placeholder="🔍 ابحث بكود البيعة أو اسم العميل..."></div>' +
+      '<div class="card">' +
+        '<div class="field"><input type="text" id="salesHistorySearchInput" oninput="salesHistorySearch_(this.value)" placeholder="🔍 ابحث بكود البيعة أو اسم العميل..."></div>' +
+        '<div class="card-heading" style="margin-top:12px;">📋 آخر المبيعات</div>' +
         '<div id="salesHistoryList" style="margin-top:14px;"></div></div></div>'
   );
   salesCart = [];
@@ -3426,10 +3427,10 @@ function scanBarcodeAddToCart_(code) {
 // ============================================================
 async function renderAccountsPage() {
   try {
-    const [accounts, trialBalance] = await Promise.all([api.getAccounts(), api.getTrialBalance(new Date().toISOString().slice(0, 10))]);
+    const [accounts, tbResult] = await Promise.all([api.getAccounts(), api.getTrialBalance(null, new Date().toISOString().slice(0, 10))]);
     const cur = state.settings.currency || 'جنيه';
     const balanceByCode = {};
-    trialBalance.forEach(function (r) { balanceByCode[r.accountCode] = r.balance; });
+    (tbResult.rows || []).forEach(function (r) { balanceByCode[r.accountCode] = r.finalDebit - r.finalCredit; });
 
     let html = '<div class="card"><div class="card-heading">🗂️ حساب جديد</div>' +
       '<div class="form-grid"><div class="field"><label>اسم الحساب <span class="req">*</span></label><input type="text" id="accName"></div>' +
