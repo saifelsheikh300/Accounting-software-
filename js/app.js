@@ -3439,7 +3439,7 @@ async function renderAccountsPage() {
       '<div class="field"><label>حساب تجميعي (Group)؟</label><select id="accIsGroup"><option value="false">لا</option><option value="true">نعم</option></select></div></div>' +
       '<button class="btn success block" style="margin-top:16px;" onclick="submitAccount_()">✅ إضافة الحساب</button></div>';
 
-    html += '<div class="section-title">شجرة الحسابات <span style="font-size:11px; color:var(--text-dim); font-weight:400;">(دوسي على أي مجموعة عشان تتمدد)</span></div><div class="card">';
+    html += '<div class="section-title">شجرة الحسابات <span style="font-size:11px; color:var(--text-dim); font-weight:400;">(دوسي على أي مجموعة عشان تتمدد)</span> <button class="btn secondary" style="padding:4px 10px; font-size:12px; margin-right:8px;" onclick="collapseAllAccountNodes_()">🔼 اقفل كل الفروع</button></div><div class="card" id="accountsTreeWrap">';
     const roots = accounts.filter(function (a) { return !a.parentId; }).sort(function (a, b) { return a.code.localeCompare(b.code, undefined, { numeric: true }); });
     html += roots.length === 0 ? emptyRow_('🗂️', 'لسه مفيش حسابات مضافة') : roots.map(function (a) { return buildAccountNode_(a, accounts, balanceByCode, cur, 0); }).join('');
     html += '</div>';
@@ -3472,7 +3472,7 @@ function buildAccountNode_(account, allAccounts, balanceByCode, cur, depth) {
   if (hasChildren) clickHandler = ' onclick="toggleAccountNode_(\'' + nodeId + '\')"';
   else if (drilldownType) clickHandler = ' onclick=\'toggleAccountDrilldown_("' + nodeId + '", "' + drilldownType + '", ' + JSON.stringify(account.name) + ')\'';
 
-  let html = '<div style="padding-right:' + (depth * 18) + 'px; border-bottom:1px solid var(--border);">' +
+  let html = '<div style="padding-right:' + (depth * 16) + 'px; ' + (depth > 0 ? 'border-right:2px solid var(--border); ' : '') + 'border-bottom:1px solid var(--border);' + (account.isGroup ? ' background:rgba(127,127,127,0.04);' : '') + '">' +
     '<div class="list-item" style="cursor:' + (isExpandable ? 'pointer' : 'default') + ';"' + clickHandler + '>' +
       '<span>' + (isExpandable ? '<span id="' + nodeId + '_arrow" style="display:inline-block; width:14px;">▸</span> ' : '<span style="display:inline-block; width:14px;"></span> ') +
       (account.isGroup ? '📁' : '📄') + ' <b>' + account.code + '</b> — ' + account.name + '</span>' +
@@ -3561,6 +3561,15 @@ function accountTypePillClass_(type) {
   if (type === 'إيرادات') return 'info';
   if (type === 'مصروفات') return 'warning';
   return '';
+}
+
+function collapseAllAccountNodes_() {
+  const wrap = document.getElementById('accountsTreeWrap');
+  if (!wrap) return;
+  wrap.querySelectorAll('[id^="accnode_"]').forEach(function (el) {
+    if (el.id.indexOf('_arrow') === -1) el.style.display = 'none';
+  });
+  wrap.querySelectorAll('[id$="_arrow"]').forEach(function (el) { el.textContent = '▸'; });
 }
 
 function toggleAccountNode_(nodeId) {
