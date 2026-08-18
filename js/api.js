@@ -493,6 +493,8 @@ api.addPartnerOpeningCapital = async function (session, payload) {
   if (error) throw error;
   return { success: true };
 };
+
+api.addTreasuryOpeningBalance = async function (session, payload) {
   const { error } = await supabaseClient.rpc('rpc_add_treasury_opening_balance', {
     p_treasury_account_id: payload.treasuryAccountId, p_amount: payload.amount,
     p_as_of_date: payload.asOfDate, p_description: payload.description || ''
