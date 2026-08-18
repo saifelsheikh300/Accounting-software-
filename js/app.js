@@ -3426,6 +3426,7 @@ function scanBarcodeAddToCart_(code) {
 // شجرة الحسابات
 // ============================================================
 async function renderAccountsPage() {
+  try { localStorage.removeItem('accountsOpenNodes'); } catch (e) { /* صامت */ }
   try {
     const [accounts, tbResult] = await Promise.all([api.getAccounts(), api.getTrialBalance(null, new Date().toISOString().slice(0, 10))]);
     const cur = state.settings.currency || 'جنيه';
@@ -3460,13 +3461,6 @@ function resolveDrilldownType_(name) {
   return null;
 }
 
-function getOpenAccountNodes_() {
-  try { return new Set(JSON.parse(localStorage.getItem('accountsOpenNodes') || '[]')); } catch (e) { return new Set(); }
-}
-function saveOpenAccountNodes_(set) {
-  try { localStorage.setItem('accountsOpenNodes', JSON.stringify(Array.from(set))); } catch (e) { /* صامت */ }
-}
-
 function buildAccountNode_(account, allAccounts, balanceByCode, cur, depth) {
   const children = allAccounts.filter(function (a) { return a.parentId === account.id; }).sort(function (a, b) { return a.code.localeCompare(b.code, undefined, { numeric: true }); });
   const balance = balanceByCode[account.code];
@@ -3474,21 +3468,20 @@ function buildAccountNode_(account, allAccounts, balanceByCode, cur, depth) {
   const hasChildren = children.length > 0;
   const drilldownType = account.isGroup ? null : resolveDrilldownType_(account.name);
   const isExpandable = hasChildren || !!drilldownType;
-  const isOpen = getOpenAccountNodes_().has(account.code);
 
   let clickHandler = '';
-  if (hasChildren) clickHandler = ' onclick="toggleAccountNode_(\'' + nodeId + '\', \'' + account.code + '\')"';
+  if (hasChildren) clickHandler = ' onclick="toggleAccountNode_(\'' + nodeId + '\')"';
   else if (drilldownType) clickHandler = ' onclick=\'toggleAccountDrilldown_("' + nodeId + '", "' + drilldownType + '", ' + JSON.stringify(account.name) + ')\'';
 
   let html = '<div style="padding-right:' + (depth * 16) + 'px; ' + (depth > 0 ? 'border-right:2px solid var(--border); ' : '') + 'border-bottom:1px solid var(--border);' + (account.isGroup ? ' background:rgba(127,127,127,0.04);' : '') + '">' +
     '<div class="list-item" style="cursor:' + (isExpandable ? 'pointer' : 'default') + ';"' + clickHandler + '>' +
-      '<span>' + (isExpandable ? '<span id="' + nodeId + '_arrow" style="display:inline-block; width:14px;">' + (isOpen ? '▾' : '▸') + '</span> ' : '<span style="display:inline-block; width:14px;"></span> ') +
+      '<span>' + (isExpandable ? '<span id="' + nodeId + '_arrow" style="display:inline-block; width:14px;">▸</span> ' : '<span style="display:inline-block; width:14px;"></span> ') +
       (account.isGroup ? '📁' : '📄') + ' <b>' + account.code + '</b> — ' + account.name + '</span>' +
       '<span style="display:flex; align-items:center; gap:8px;">' +
         (account.isGroup ? '<span class="pill">تجميعي</span>' : (balance !== undefined ? '<b>' + formatMoney_(balance, cur) + '</b>' : '')) +
         '<span class="pill ' + accountTypePillClass_(account.type) + '">' + account.type + '</span>' +
       '</span></div>' +
-    (hasChildren ? '<div id="' + nodeId + '" style="display:' + (isOpen ? 'block' : 'none') + ';">' + children.map(function (c) { return buildAccountNode_(c, allAccounts, balanceByCode, cur, depth + 1); }).join('') + '</div>' : '') +
+    (hasChildren ? '<div id="' + nodeId + '" style="display:none;">' + children.map(function (c) { return buildAccountNode_(c, allAccounts, balanceByCode, cur, depth + 1); }).join('') + '</div>' : '') +
     (drilldownType ? '<div id="' + nodeId + '" style="display:none; padding-right:18px;"></div>' : '') +
   '</div>';
   return html;
@@ -3578,21 +3571,15 @@ function collapseAllAccountNodes_() {
     if (el.id.indexOf('_arrow') === -1) el.style.display = 'none';
   });
   wrap.querySelectorAll('[id$="_arrow"]').forEach(function (el) { el.textContent = '▸'; });
-  saveOpenAccountNodes_(new Set());
 }
 
-function toggleAccountNode_(nodeId, accountCode) {
+function toggleAccountNode_(nodeId) {
   const el = document.getElementById(nodeId);
   const arrow = document.getElementById(nodeId + '_arrow');
   if (!el) return;
   const isOpen = el.style.display !== 'none';
   el.style.display = isOpen ? 'none' : 'block';
   if (arrow) arrow.textContent = isOpen ? '▸' : '▾';
-  if (accountCode) {
-    const openSet = getOpenAccountNodes_();
-    if (isOpen) openSet.delete(accountCode); else openSet.add(accountCode);
-    saveOpenAccountNodes_(openSet);
-  }
 }
 
 async function submitAccount_() {
