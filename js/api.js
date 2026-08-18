@@ -486,7 +486,13 @@ api.addCustomerOpeningBalance = async function (session, payload) {
   return { success: true, invoiceNumber: data };
 };
 
-api.addTreasuryOpeningBalance = async function (session, payload) {
+api.addPartnerOpeningCapital = async function (session, payload) {
+  const { error } = await supabaseClient.rpc('rpc_add_partner_opening_capital', {
+    p_partner_name: payload.partnerName, p_amount: payload.amount, p_as_of_date: payload.asOfDate, p_description: payload.description || ''
+  });
+  if (error) throw error;
+  return { success: true };
+};
   const { error } = await supabaseClient.rpc('rpc_add_treasury_opening_balance', {
     p_treasury_account_id: payload.treasuryAccountId, p_amount: payload.amount,
     p_as_of_date: payload.asOfDate, p_description: payload.description || ''

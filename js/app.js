@@ -4166,6 +4166,12 @@ async function renderOpeningBalancesPage() {
 
     html += '</div>';
 
+    html += '<div class="card" style="margin-top:18px;"><div class="card-heading">🤝 توزيع رأس المال الافتتاحي على الشركاء</div>' +
+      '<div class="card-desc">ده بس توضيح إن جزء من الأصول اللي سجلتيها (خزنة/مخزون/عملاء) بتاعة شريك معيّن — <b>مش هيضيف فلوس جديدة في الخزنة</b>، بيتفرق بس من "رصيد افتتاحي" العام لحساب الشريك</div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>اسم الشريك</label><input type="text" id="obPartnerName"></div>' +
+      '<div class="field"><label>المبلغ</label><input type="number" id="obPartnerAmount"></div></div>' +
+      '<button class="btn success block" style="margin-top:14px;" onclick="submitPartnerOpeningCapital_()">➕ توزيع</button></div>';
+
     html += '<div class="card" style="margin-top:18px;"><div class="card-heading">📂 رصيد افتتاحي — أي حساب تاني</div>' +
       '<div class="card-desc">للمخزون، الموردين، الأصول الثابتة، وأي حساب مش خزنة أو عميل</div>' +
       '<div class="field"><label>الحساب</label><select id="obAccount">' + leafAccounts.map(function (a) { return '<option value="' + a.id + '">' + a.code + ' — ' + a.name + ' (' + a.type + ')</option>'; }).join('') + '</select></div>' +
@@ -4195,6 +4201,18 @@ async function submitTreasuryOpeningBalance_() {
       treasuryAccountId: treasuryAccountId, amount: amount, asOfDate: document.getElementById('obTreasuryDate').value
     });
     showToast_('تم الإضافة والترحيل ✅', 'success');
+    renderOpeningBalancesPage();
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function submitPartnerOpeningCapital_() {
+  const name = document.getElementById('obPartnerName').value.trim();
+  const amount = Number(document.getElementById('obPartnerAmount').value);
+  if (!name || !amount) { showToast_('اسم الشريك والمبلغ مطلوبين', 'error'); return; }
+  try {
+    await api.addPartnerOpeningCapital({ username: state.user.username }, { partnerName: name, amount: amount, asOfDate: new Date().toISOString().slice(0, 10) });
+    showToast_('تم التوزيع ✅', 'success');
+    document.getElementById('obPartnerName').value = ''; document.getElementById('obPartnerAmount').value = '';
     renderOpeningBalancesPage();
   } catch (err) { showErrorToast_(err); }
 }
