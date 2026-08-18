@@ -4142,8 +4142,9 @@ async function renderOpeningBalancesPage() {
     const [balances, accounts] = await Promise.all([api.listOpeningBalances(), api.getAccounts()]);
     const cur = state.settings.currency || 'جنيه';
     const today = new Date().toISOString().slice(0, 10);
+    const leafAccounts = accounts.filter(function (a) { return !a.isGroup; }).sort(function (a, b) { return a.code.localeCompare(b.code, undefined, { numeric: true }); });
     let html = '<div class="card"><div class="card-heading">📂 رصيد افتتاحي جديد</div>' +
-      '<div class="field"><label>الحساب</label><select id="obAccount">' + accounts.map(function (a) { return '<option value="' + a.id + '">' + a.code + ' — ' + a.name + '</option>'; }).join('') + '</select></div>' +
+      '<div class="field"><label>الحساب</label><select id="obAccount">' + leafAccounts.map(function (a) { return '<option value="' + a.id + '">' + a.code + ' — ' + a.name + ' (' + a.type + ')</option>'; }).join('') + '</select></div>' +
       '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>المبلغ</label><input type="number" id="obAmount"></div>' +
       '<div class="field"><label>كتاريخ</label><input type="date" id="obDate" value="' + today + '"></div></div>' +
       '<div class="field" style="margin-top:10px;"><label>وصف</label><input type="text" id="obDesc"></div>' +
