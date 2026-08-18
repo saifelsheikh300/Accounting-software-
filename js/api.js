@@ -56,6 +56,10 @@ api.getAppShellData = async function () {
   const settings = {};
   (settingsRows || []).forEach(function (r) { settings[r.key] = r.value; });
 
+  if (profile.role === 'أدمن') {
+    supabaseClient.rpc('rpc_seed_default_chart_of_accounts').then(function () {}).catch(function () {});
+  }
+
   return {
     user: { username: profile.username, fullName: profile.full_name, role: profile.role, isCashier: profile.role === 'كاشير', permissions: profile.permissions || {} },
     settings: {
