@@ -2002,11 +2002,18 @@ async function renderSupplierTabContent_() {
         '<div id="poSearchResults"></div></div>' +
       '<div class="card" style="margin-top:14px;"><div class="card-heading">3️⃣ السلة</div><div id="poCartList" style="margin-top:8px;"></div></div>' +
       '<div class="card" style="margin-top:14px;"><div class="card-heading">4️⃣ الدفع</div>' +
-        '<div class="form-grid" style="margin-top:8px;">' +
+        '<div class="field" style="background:rgba(127,127,127,0.06); padding:10px; border-radius:8px;">' +
+          '<label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" id="poIsOpeningBalance" onchange="onPoOpeningBalanceToggle_()"> ده مخزون قديم عندي بالفعل (رصيد افتتاحي) مش عملية شراء جديدة</label>' +
+        '</div>' +
+        '<div id="poNormalPaymentWrap" class="form-grid" style="margin-top:8px;">' +
           '<div class="field"><label>حالة الدفع</label><select id="poPaymentStatus" onchange="onPoPaymentStatusChange_()"><option>مدفوع بالكامل</option><option>مدفوع جزئيًا</option><option>متأخر/غير مدفوع</option></select></div>' +
           '<div class="field" id="poAmountPaidWrap" style="display:none;"><label>المبلغ المدفوع دلوقتي</label><input type="number" id="poAmountPaid" value="0"></div>' +
         '</div>' +
         '<div class="field" id="poTreasuryWrap"><label>هيتخصم من حساب</label><select id="poTreasuryAccount"><option value="">جاري التحميل...</option></select></div>' +
+        '<div id="poOwedWrap" style="display:none;">' +
+          '<div class="field"><label>المبلغ اللي لسه مديون بيه فعلاً للمورد ده (لو مش مديونة خالص، سيبيه صفر)</label><input type="number" id="poOwedAmount" value="0"></div>' +
+          '<div class="hint">الباقي هيتحسب إنه متغطي من رأس مالك الحالي — والخزنة مش هتتأثر خالص في الحالتين</div>' +
+        '</div>' +
       '</div>' +
       '<button class="btn success block" style="margin-top:16px; font-size:15px; padding:16px;" onclick="submitPurchaseOrder_()">✅ تسجيل أوردر الشراء</button>';
 
@@ -2393,18 +2400,33 @@ function updatePoItemSalePrice_(idx, val) { poCart[idx].salePrice = Number(val);
 function updatePoItemQty_(idx, val) { poCart[idx].qty = Number(val); renderPoCart_(); }
 function removeFromPoCart_(idx) { poCart.splice(idx, 1); renderPoCart_(); }
 
+function onPoOpeningBalanceToggle_() {
+  const isOpening = document.getElementById('poIsOpeningBalance').checked;
+  document.getElementById('poNormalPaymentWrap').style.display = isOpening ? 'none' : '';
+  document.getElementById('poTreasuryWrap').style.display = isOpening ? 'none' : '';
+  document.getElementById('poOwedWrap').style.display = isOpening ? '' : 'none';
+}
+
 async function submitPurchaseOrder_() {
   if (poCart.length === 0) { showToast_('لازم تضيف صنف واحد على الأقل', 'error'); return; }
   const supplierEl = document.getElementById('poSupplierSelect');
   if (!supplierEl || !supplierEl.value) { showToast_('لازم تضيفي مورد وتختاريه الأول', 'error'); return; }
-  const payload = {
-    supplierName: supplierEl.value,
-    items: poCart.map(function (i) { return { variantCode: i.variantCode, qty: i.qty, price: i.price }; }),
-    paymentStatus: document.getElementById('poPaymentStatus').value, amountPaid: Number(document.getElementById('poAmountPaid').value) || 0,
-    treasuryAccountId: document.getElementById('poTreasuryAccount').value || null
-  };
+  const isOpening = document.getElementById('poIsOpeningBalance').checked;
+  const items = poCart.map(function (i) { return { variantCode: i.variantCode, qty: i.qty, price: i.price }; });
   try {
-    const res = await api.createPurchaseOrder({ username: state.user.username }, payload);
+    let res;
+    if (isOpening) {
+      res = await api.addOpeningInventory({ username: state.user.username }, {
+        supplierName: supplierEl.value, items: items, owedAmount: Number(document.getElementById('poOwedAmount').value) || 0
+      });
+    } else {
+      const payload = {
+        supplierName: supplierEl.value, items: items,
+        paymentStatus: document.getElementById('poPaymentStatus').value, amountPaid: Number(document.getElementById('poAmountPaid').value) || 0,
+        treasuryAccountId: document.getElementById('poTreasuryAccount').value || null
+      };
+      res = await api.createPurchaseOrder({ username: state.user.username }, payload);
+    }
     await Promise.all(poCart.map(function (i) {
       return i.salePrice > 0 ? api.setVariantSalePrice({ username: state.user.username }, i.variantCode, i.salePrice).catch(function () { /* صامت */ }) : null;
     }));
@@ -4166,12 +4188,6 @@ async function renderOpeningBalancesPage() {
 
     html += '</div>';
 
-    html += '<div class="card" style="margin-top:18px;"><div class="card-heading">🤝 توزيع رأس المال الافتتاحي على الشركاء</div>' +
-      '<div class="card-desc">ده بس توضيح إن جزء من الأصول اللي سجلتيها (خزنة/مخزون/عملاء) بتاعة شريك معيّن — <b>مش هيضيف فلوس جديدة في الخزنة</b>، بيتفرق بس من "رصيد افتتاحي" العام لحساب الشريك</div>' +
-      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>اسم الشريك</label><input type="text" id="obPartnerName"></div>' +
-      '<div class="field"><label>المبلغ</label><input type="number" id="obPartnerAmount"></div></div>' +
-      '<button class="btn success block" style="margin-top:14px;" onclick="submitPartnerOpeningCapital_()">➕ توزيع</button></div>';
-
     html += '<div class="card" style="margin-top:18px;"><div class="card-heading">📂 رصيد افتتاحي — أي حساب تاني</div>' +
       '<div class="card-desc">للمخزون، الموردين، الأصول الثابتة، وأي حساب مش خزنة أو عميل</div>' +
       '<div class="field"><label>الحساب</label><select id="obAccount">' + leafAccounts.map(function (a) { return '<option value="' + a.id + '">' + a.code + ' — ' + a.name + ' (' + a.type + ')</option>'; }).join('') + '</select></div>' +
@@ -4201,18 +4217,6 @@ async function submitTreasuryOpeningBalance_() {
       treasuryAccountId: treasuryAccountId, amount: amount, asOfDate: document.getElementById('obTreasuryDate').value
     });
     showToast_('تم الإضافة والترحيل ✅', 'success');
-    renderOpeningBalancesPage();
-  } catch (err) { showErrorToast_(err); }
-}
-
-async function submitPartnerOpeningCapital_() {
-  const name = document.getElementById('obPartnerName').value.trim();
-  const amount = Number(document.getElementById('obPartnerAmount').value);
-  if (!name || !amount) { showToast_('اسم الشريك والمبلغ مطلوبين', 'error'); return; }
-  try {
-    await api.addPartnerOpeningCapital({ username: state.user.username }, { partnerName: name, amount: amount, asOfDate: new Date().toISOString().slice(0, 10) });
-    showToast_('تم التوزيع ✅', 'success');
-    document.getElementById('obPartnerName').value = ''; document.getElementById('obPartnerAmount').value = '';
     renderOpeningBalancesPage();
   } catch (err) { showErrorToast_(err); }
 }

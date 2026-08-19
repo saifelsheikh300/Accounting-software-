@@ -486,12 +486,15 @@ api.addCustomerOpeningBalance = async function (session, payload) {
   return { success: true, invoiceNumber: data };
 };
 
-api.addPartnerOpeningCapital = async function (session, payload) {
-  const { error } = await supabaseClient.rpc('rpc_add_partner_opening_capital', {
-    p_partner_name: payload.partnerName, p_amount: payload.amount, p_as_of_date: payload.asOfDate, p_description: payload.description || ''
+api.addOpeningInventory = async function (session, payload) {
+  const { data, error } = await supabaseClient.rpc('rpc_add_opening_inventory', {
+    p_supplier_name: payload.supplierName,
+    p_items: payload.items.map(function (i) { return { variant_code: i.variantCode, qty: i.qty, price: i.price }; }),
+    p_owed_amount: payload.owedAmount || 0
   });
   if (error) throw error;
-  return { success: true };
+  const row = (data && data[0]) || {};
+  return { total: row.total, owed: row.owed, settledFromCapital: row.settled_from_capital, orderNumber: row.order_number };
 };
 
 api.addTreasuryOpeningBalance = async function (session, payload) {
