@@ -3458,7 +3458,10 @@ async function renderAccountsPage() {
     let html = '<div class="card"><div class="card-heading">🗂️ حساب جديد</div>' +
       '<div class="form-grid"><div class="field"><label>اسم الحساب <span class="req">*</span></label><input type="text" id="accName"></div>' +
       '<div class="field"><label>النوع <span class="req">*</span></label><select id="accType"><option>أصول</option><option>خصوم</option><option>حقوق ملكية</option><option>إيرادات</option><option>مصروفات</option></select></div></div>' +
-      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>كود الحساب الأب (اختياري)</label><input type="text" id="accParentCode" placeholder="مثال: 1.1"></div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>الحساب الأب (اختياري — سيبيه فاضي لو مش هيتحط تحت حاجة)</label><select id="accParentCode"><option value="">— بدون حساب أب —</option>' +
+        accounts.filter(function (a) { return a.isGroup; }).sort(function (a, b) { return a.code.localeCompare(b.code, undefined, { numeric: true }); })
+          .map(function (a) { return '<option value="' + a.code + '">' + a.code + ' — ' + a.name + '</option>'; }).join('') +
+      '</select></div>' +
       '<div class="field"><label>حساب تجميعي (Group)؟</label><select id="accIsGroup"><option value="false">لا</option><option value="true">نعم</option></select></div></div>' +
       '<button class="btn success block" style="margin-top:16px;" onclick="submitAccount_()">✅ إضافة الحساب</button></div>';
 
