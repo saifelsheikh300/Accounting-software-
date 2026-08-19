@@ -497,6 +497,12 @@ api.addOpeningInventory = async function (session, payload) {
   return { total: row.total, owed: row.owed, settledFromCapital: row.settled_from_capital, orderNumber: row.order_number };
 };
 
+api.finalizeOpeningBalanceToCapital = async function (session, ownerName) {
+  const { data, error } = await supabaseClient.rpc('rpc_finalize_opening_balance_to_capital', { p_owner_name: ownerName });
+  if (error) throw error;
+  return { amount: data };
+};
+
 api.addTreasuryOpeningBalance = async function (session, payload) {
   const { error } = await supabaseClient.rpc('rpc_add_treasury_opening_balance', {
     p_treasury_account_id: payload.treasuryAccountId, p_amount: payload.amount,

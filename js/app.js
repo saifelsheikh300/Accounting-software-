@@ -4166,7 +4166,12 @@ async function renderOpeningBalancesPage() {
     const today = new Date().toISOString().slice(0, 10);
     const leafAccounts = accounts.filter(function (a) { return !a.isGroup; }).sort(function (a, b) { return a.code.localeCompare(b.code, undefined, { numeric: true }); });
 
-    let html = '<div class="grid grid-2">';
+    let html = '<div class="card" style="border:1px solid var(--accent);"><div class="card-heading">🏁 خلصتِ إدخال كل الأرصدة؟ اقفليها على رأس المال</div>' +
+      '<div class="card-desc">بينقل رصيد "رصيد افتتاحي" كله لحساب رأس مال باسمك — من غير ما يتحرك أي فلوس. اعمليها آخر خطوة بس بعد ما تخلصي كل الأصول والخصوم</div>' +
+      '<div class="field" style="margin-top:10px;"><label>الاسم اللي هيتسجل بيه رأس المال</label><input type="text" id="obCapitalOwnerName" placeholder="سيف / صاحب المحل"></div>' +
+      '<button class="btn success block" style="margin-top:14px;" onclick="submitFinalizeOpeningBalance_()">🏁 قفل واعتماد رأس المال</button></div>';
+
+    html += '<div class="grid grid-2" style="margin-top:18px;">';
 
     html += '<div class="card"><div class="card-heading">🏦 رصيد افتتاحي لخزنة أو بنك</div>' +
       '<div class="card-desc">لو عندك أكتر من خزنة أو حساب بنكي، اختاري بالظبط أنهي واحد فيه الفلوس دي</div>' +
@@ -4205,6 +4210,17 @@ async function renderOpeningBalancesPage() {
       }).join('');
     html += '</div>';
     setContent_(html);
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function submitFinalizeOpeningBalance_() {
+  const name = document.getElementById('obCapitalOwnerName').value.trim();
+  if (!name) { showToast_('اكتبي الاسم الأول', 'error'); return; }
+  if (!confirm('هتقفلي رصيد "رصيد افتتاحي" الحالي وتنقليه لرأس المال باسم "' + name + '". متأكدة إنك خلّصتِ كل الأصول والخصوم؟')) return;
+  try {
+    const res = await api.finalizeOpeningBalanceToCapital({ username: state.user.username }, name);
+    showToast_('تم النقل ✅ رأس المال دلوقتي ' + res.amount, 'success');
+    renderOpeningBalancesPage();
   } catch (err) { showErrorToast_(err); }
 }
 
