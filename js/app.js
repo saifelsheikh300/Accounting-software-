@@ -3459,6 +3459,7 @@ async function renderAccountsPage() {
       '<div class="form-grid"><div class="field"><label>اسم الحساب <span class="req">*</span></label><input type="text" id="accName"></div>' +
       '<div class="field"><label>النوع <span class="req">*</span></label><select id="accType"><option>أصول</option><option>خصوم</option><option>حقوق ملكية</option><option>إيرادات</option><option>مصروفات</option></select></div></div>' +
       '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>كود الحساب الأب (اختياري)</label><input type="text" id="accParentCode" placeholder="مثال: 1.1"></div>' +
+      '<div class="field"><label>كود الحساب نفسه (اختياري — سيبيه فاضي عشان يحسبه لوحده)</label><input type="text" id="accManualCode" placeholder="مثال: 1.1.005"></div>' +
       '<div class="field"><label>حساب تجميعي (Group)؟</label><select id="accIsGroup"><option value="false">لا</option><option value="true">نعم</option></select></div></div>' +
       '<button class="btn success block" style="margin-top:16px;" onclick="submitAccount_()">✅ إضافة الحساب</button></div>';
 
@@ -3608,10 +3609,11 @@ async function submitAccount_() {
   const name = document.getElementById('accName').value.trim();
   const type = document.getElementById('accType').value;
   const parentCode = document.getElementById('accParentCode').value.trim();
+  const manualCode = document.getElementById('accManualCode').value.trim();
   const isGroup = document.getElementById('accIsGroup').value === 'true';
   if (!name) { showToast_('اسم الحساب مطلوب', 'error'); return; }
   try {
-    await api.addAccount({ username: state.user.username }, { name: name, type: type, parentCode: parentCode || null, isGroup: isGroup });
+    await api.addAccount({ username: state.user.username }, { name: name, type: type, parentCode: parentCode || null, manualCode: manualCode || null, isGroup: isGroup });
     showToast_('تم إضافة الحساب ✅', 'success');
     renderAccountsPage();
   } catch (err) { showErrorToast_(err); }

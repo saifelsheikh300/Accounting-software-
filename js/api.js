@@ -776,7 +776,7 @@ api.getAccounts = async function () {
 
 api.addAccount = async function (session, payload) {
   const { data, error } = await supabaseClient.rpc('rpc_add_account', {
-    p_name: payload.name, p_type: payload.type, p_parent_code: payload.parentCode || null, p_is_group: !!payload.isGroup
+    p_name: payload.name, p_type: payload.type, p_parent_code: payload.parentCode || null, p_is_group: !!payload.isGroup, p_manual_code: payload.manualCode || null
   });
   if (error) throw error;
   return { success: true, code: data[0].code };
