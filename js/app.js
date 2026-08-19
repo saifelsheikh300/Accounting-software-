@@ -4237,11 +4237,19 @@ async function submitCustomerOpeningBalance_() {
 }
 
 async function submitOpeningBalance_() {
+  const accountSelect = document.getElementById('obAccount');
+  const accountText = accountSelect.options[accountSelect.selectedIndex] ? accountSelect.options[accountSelect.selectedIndex].text : '';
   const payload = {
-    accountId: document.getElementById('obAccount').value, amount: Number(document.getElementById('obAmount').value),
+    accountId: accountSelect.value, amount: Number(document.getElementById('obAmount').value),
     asOfDate: document.getElementById('obDate').value, description: document.getElementById('obDesc').value
   };
   if (!payload.accountId || !payload.amount) { showToast_('الحساب والمبلغ مطلوبين', 'error'); return; }
+
+  if (accountText.indexOf('المخزون') !== -1) {
+    const confirmed = confirm('⚠️ ده رقم مجرد بس، مش هيسجل منتجات حقيقية ولا يربطها بمورد.\n\nلو نويتي بعد كده تضيفي نفس البضاعة دي كمنتجات من "أوردر شراء → رصيد افتتاحي"، الرقم هيتضاعف (يتحط مرتين).\n\nمتأكدة إنك عايزة تكمّلي بالطريقة دي؟');
+    if (!confirmed) return;
+  }
+
   try { await api.addOpeningBalance({ username: state.user.username }, payload); showToast_('تم الإضافة والترحيل ✅', 'success'); renderOpeningBalancesPage(); }
   catch (err) { showErrorToast_(err); }
 }
