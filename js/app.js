@@ -4140,8 +4140,18 @@ async function renderFixedAssetsPage() {
     let html = '<div class="card"><div class="card-heading">🏗️ الأصول الثابتة</div><div class="card-desc">الإهلاك بيتحسب تلقائيًا خطي على مدة العمر الافتراضي (بالشهور)</div>' +
       '<button class="btn" style="margin-top:6px;" onclick="submitRunDepreciation_()">📉 تشغيل إهلاك الشهر الحالي</button></div>';
 
+    html += '<div class="card" style="margin-top:14px; border:1px solid var(--accent);"><div class="card-heading">➕ أصل ثابت (رصيد افتتاحي)</div>' +
+      '<div class="card-desc">أصل موجود عندك بالفعل من قبل — مش شراء جديد، فمش بيتخصم من الخزنة</div>' +
+      '<div class="field" style="margin-top:10px;"><label>اسم الأصل</label><input type="text" id="faDescription" placeholder="مثال: أجهزة كمبيوتر"></div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>التكلفة الأصلية</label><input type="number" id="faAmount"></div>' +
+      '<div class="field"><label>العمر الافتراضي (بالشهور)</label><input type="number" id="faUsefulLife" value="36"></div></div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>مستحمل قد إيه لحد دلوقتي (بالشهور)</label><input type="number" id="faElapsed" value="0"></div>' +
+      '<div class="field"><label>طريقة الإهلاك</label><select id="faMethod"><option value="شهري">شهري (تلقائي)</option><option value="دفعة نهائية">دفعة واحدة آخر العمر</option></select></div></div>' +
+      '<div class="hint" style="margin-top:8px;">مثال: كمبيوتر بـ50,000 جنيه، عمره الافتراضي 5 سنين (60 شهر)، مستخدم من 3 سنين (36 شهر) — هيحسب مجمع الإهلاك تلقائي عن الـ36 شهر دول</div>' +
+      '<button class="btn success block" style="margin-top:14px;" onclick="submitAddOpeningFixedAsset_()">✅ إضافة الأصل</button></div>';
+
     html += '<div class="section-title">الأصول المسجّلة</div><div class="card">';
-    html += assets.length === 0 ? emptyRow_('🏗️', 'لا يوجد أصول ثابتة مسجّلة (تُضاف تلقائيًا عند تسجيل مصروف كـ"أصل ثابت")') :
+    html += assets.length === 0 ? emptyRow_('🏗️', 'لا يوجد أصول ثابتة مسجّلة') :
       assets.map(function (a) {
         const net = Number(a.amount) - Number(a.accumulatedDepreciation);
         return '<div class="list-item" style="display:block; padding:14px 4px;"><b>' + (a.description || 'أصل') + '</b>' +
@@ -4151,6 +4161,22 @@ async function renderFixedAssetsPage() {
       }).join('');
     html += '</div>';
     setContent_(html);
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function submitAddOpeningFixedAsset_() {
+  const description = document.getElementById('faDescription').value.trim();
+  const amount = Number(document.getElementById('faAmount').value);
+  const usefulLife = Number(document.getElementById('faUsefulLife').value);
+  if (!description || !amount || !usefulLife) { showToast_('اسم الأصل والتكلفة والعمر الافتراضي مطلوبين', 'error'); return; }
+  try {
+    await api.addOpeningFixedAsset({ username: state.user.username }, {
+      description: description, amount: amount, usefulLifeMonths: usefulLife,
+      alreadyElapsedMonths: Number(document.getElementById('faElapsed').value) || 0,
+      depreciationMethod: document.getElementById('faMethod').value
+    });
+    showToast_('تم إضافة الأصل ✅', 'success');
+    renderFixedAssetsPage();
   } catch (err) { showErrorToast_(err); }
 }
 

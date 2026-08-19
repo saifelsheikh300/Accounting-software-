@@ -498,6 +498,15 @@ api.addOpeningInventory = async function (session, payload) {
   return { total: row.total, owed: row.owed, settledFromCapital: row.settled_from_capital, orderNumber: row.order_number };
 };
 
+api.addOpeningFixedAsset = async function (session, payload) {
+  const { data, error } = await supabaseClient.rpc('rpc_add_opening_fixed_asset', {
+    p_description: payload.description, p_amount: payload.amount, p_useful_life_months: payload.usefulLifeMonths,
+    p_already_elapsed_months: payload.alreadyElapsedMonths || 0, p_depreciation_method: payload.depreciationMethod || 'شهري'
+  });
+  if (error) throw error;
+  return { id: data };
+};
+
 api.finalizeOpeningBalanceToCapitalMulti = async function (session, partners) {
   const { data, error } = await supabaseClient.rpc('rpc_finalize_opening_balance_to_capital_multi', { p_partners: partners });
   if (error) throw error;
