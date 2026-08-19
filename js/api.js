@@ -64,6 +64,7 @@ api.getAppShellData = async function () {
     user: { username: profile.username, fullName: profile.full_name, role: profile.role, isCashier: profile.role === 'كاشير', permissions: profile.permissions || {} },
     settings: {
       brandName: settings.brandName, logoUrl: settings.logoUrl, productIcon: settings.productIcon || '📦', primaryColor: settings.primaryColor,
+      defaultTreasuryAccountId: settings.defaultTreasuryAccountId,
       accentColor: settings.accentColor, currency: settings.currency, darkMode: settings.darkMode === 'true',
       operatingMode: settings.operatingMode, taxEnabled: settings.taxEnabled === 'true',
       multiWarehouse: (warehouses || []).length > 1
@@ -497,8 +498,8 @@ api.addOpeningInventory = async function (session, payload) {
   return { total: row.total, owed: row.owed, settledFromCapital: row.settled_from_capital, orderNumber: row.order_number };
 };
 
-api.finalizeOpeningBalanceToCapital = async function (session, ownerName) {
-  const { data, error } = await supabaseClient.rpc('rpc_finalize_opening_balance_to_capital', { p_owner_name: ownerName });
+api.finalizeOpeningBalanceToCapitalMulti = async function (session, partners) {
+  const { data, error } = await supabaseClient.rpc('rpc_finalize_opening_balance_to_capital_multi', { p_partners: partners });
   if (error) throw error;
   return { amount: data };
 };

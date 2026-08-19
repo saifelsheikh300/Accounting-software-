@@ -2002,9 +2002,10 @@ async function renderSupplierTabContent_() {
         '<div id="poSearchResults"></div></div>' +
       '<div class="card" style="margin-top:14px;"><div class="card-heading">3️⃣ السلة</div><div id="poCartList" style="margin-top:8px;"></div></div>' +
       '<div class="card" style="margin-top:14px;"><div class="card-heading">4️⃣ الدفع</div>' +
-        '<div class="field" style="background:rgba(127,127,127,0.06); padding:10px; border-radius:8px;">' +
-          '<label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" id="poIsOpeningBalance" onchange="onPoOpeningBalanceToggle_()"> ده مخزون قديم عندي بالفعل (رصيد افتتاحي) مش عملية شراء جديدة</label>' +
-        '</div>' +
+        '<label id="poOpeningBalanceToggleCard" for="poIsOpeningBalance" style="display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer; background:rgba(127,127,127,0.06); border:1.5px solid var(--border); padding:14px; border-radius:12px; transition:all .15s;">' +
+          '<span style="display:flex; align-items:center; gap:10px;"><span style="font-size:22px;">📂</span><span><b style="display:block;">ده مخزون قديم عندي بالفعل</b><span style="font-size:12px; color:var(--text-dim);">رصيد افتتاحي — مش عملية شراء جديدة</span></span></span>' +
+          '<span class="toggle-switch"><input type="checkbox" id="poIsOpeningBalance" onchange="onPoOpeningBalanceToggle_()"><span class="toggle-slider"></span></span>' +
+        '</label>' +
         '<div id="poNormalPaymentWrap" class="form-grid" style="margin-top:8px;">' +
           '<div class="field"><label>حالة الدفع</label><select id="poPaymentStatus" onchange="onPoPaymentStatusChange_()"><option>مدفوع بالكامل</option><option>مدفوع جزئيًا</option><option>متأخر/غير مدفوع</option></select></div>' +
           '<div class="field" id="poAmountPaidWrap" style="display:none;"><label>المبلغ المدفوع دلوقتي</label><input type="number" id="poAmountPaid" value="0"></div>' +
@@ -4169,8 +4170,9 @@ async function renderOpeningBalancesPage() {
     const leafAccounts = accounts.filter(function (a) { return !a.isGroup; }).sort(function (a, b) { return a.code.localeCompare(b.code, undefined, { numeric: true }); });
 
     let html = '<div class="card" style="border:1px solid var(--accent);"><div class="card-heading">🏁 خلصتِ إدخال كل الأرصدة؟ اقفليها على رأس المال</div>' +
-      '<div class="card-desc">بينقل رصيد "رصيد افتتاحي" كله لحساب رأس مال باسمك — من غير ما يتحرك أي فلوس. اعمليها آخر خطوة بس بعد ما تخلصي كل الأصول والخصوم</div>' +
-      '<div class="field" style="margin-top:10px;"><label>الاسم اللي هيتسجل بيه رأس المال</label><input type="text" id="obCapitalOwnerName" placeholder="سيف / صاحب المحل"></div>' +
+      '<div class="card-desc">بينقل رصيد "رصيد افتتاحي" كله لرأس المال — موزّع على الشركاء حسب نسبة كل واحد — من غير ما يتحرك أي فلوس. اعمليها آخر خطوة بس بعد ما تخلصي كل الأصول والخصوم</div>' +
+      '<div id="obPartnersRows" style="margin-top:12px;"></div>' +
+      '<button class="btn secondary" style="margin-top:8px;" onclick="addObPartnerRow_()">➕ إضافة شريك تاني</button>' +
       '<button class="btn success block" style="margin-top:14px;" onclick="submitFinalizeOpeningBalance_()">🏁 قفل واعتماد رأس المال</button></div>';
 
     html += '<div class="grid grid-2" style="margin-top:18px;">';
@@ -4212,15 +4214,46 @@ async function renderOpeningBalancesPage() {
       }).join('');
     html += '</div>';
     setContent_(html);
+    obPartnerRowCount_ = 0;
+    addObPartnerRow_();
   } catch (err) { showErrorToast_(err); }
 }
 
+let obPartnerRowCount_ = 0;
+function addObPartnerRow_() {
+  obPartnerRowCount_++;
+  const rowId = 'obPartnerRow' + obPartnerRowCount_;
+  const wrap = document.getElementById('obPartnersRows');
+  if (!wrap) return;
+  const isFirst = wrap.children.length === 0;
+  const div = document.createElement('div');
+  div.id = rowId;
+  div.className = 'form-grid';
+  div.style.marginTop = '8px';
+  div.innerHTML =
+    '<div class="field"><label>اسم الشريك' + (isFirst ? ' (أو صاحب المحل لو مفيش شركاء)' : '') + '</label><input type="text" class="obPartnerName" placeholder="سيف / صاحب المحل"></div>' +
+    '<div class="field"><label>النسبة %</label><input type="number" class="obPartnerPercent" value="' + (isFirst ? '100' : '0') + '"></div>';
+  wrap.appendChild(div);
+}
+
+function collectObPartnerRows_() {
+  const rows = [];
+  document.querySelectorAll('#obPartnersRows .form-grid').forEach(function (row) {
+    const name = row.querySelector('.obPartnerName').value.trim();
+    const percent = Number(row.querySelector('.obPartnerPercent').value);
+    if (name && percent) rows.push({ name: name, percent: percent });
+  });
+  return rows;
+}
+
 async function submitFinalizeOpeningBalance_() {
-  const name = document.getElementById('obCapitalOwnerName').value.trim();
-  if (!name) { showToast_('اكتبي الاسم الأول', 'error'); return; }
-  if (!confirm('هتقفلي رصيد "رصيد افتتاحي" الحالي وتنقليه لرأس المال باسم "' + name + '". متأكدة إنك خلّصتِ كل الأصول والخصوم؟')) return;
+  const partners = collectObPartnerRows_();
+  if (partners.length === 0) { showToast_('اكتبي اسم شريك واحد على الأقل ونسبته', 'error'); return; }
+  const totalPct = partners.reduce(function (s, p) { return s + p.percent; }, 0);
+  if (Math.abs(totalPct - 100) > 0.5) { showToast_('مجموع النسب لازم يساوي 100% (دلوقتي ' + totalPct + '%)', 'error'); return; }
+  if (!confirm('هتقفلي رصيد "رصيد افتتاحي" الحالي وتوزّعيه على الشركاء دول. متأكدة إنك خلّصتِ كل الأصول والخصوم؟')) return;
   try {
-    const res = await api.finalizeOpeningBalanceToCapital({ username: state.user.username }, name);
+    const res = await api.finalizeOpeningBalanceToCapitalMulti({ username: state.user.username }, partners);
     showToast_('تم النقل ✅ رأس المال دلوقتي ' + res.amount, 'success');
     renderOpeningBalancesPage();
   } catch (err) { showErrorToast_(err); }
