@@ -700,11 +700,11 @@ api.listSalaries = async function (monthLabel) {
   if (monthLabel) q = q.eq('month_label', monthLabel);
   const { data, error } = await q;
   if (error) throw error;
-  return (data || []).map(function (s) { return { employeeName: s.employees ? s.employees.name : '', monthLabel: s.month_label, net: s.net, netAmount: s.net, paid: s.paid ? 'نعم' : 'لا' }; });
+  return (data || []).map(function (s) { return { employeeName: s.employees ? s.employees.name : '', monthLabel: s.month_label, net: s.net, netAmount: s.net, paidAmount: s.paid_amount || 0, remaining: s.net - (s.paid_amount || 0), paid: s.paid ? 'نعم' : 'لا' }; });
 };
 
-api.paySalary = async function (session, monthLabel, employeeName, treasuryAccountId) {
-  const { error } = await supabaseClient.rpc('rpc_pay_salary', { p_month_label: monthLabel, p_employee_name: employeeName, p_treasury_account_id: treasuryAccountId || null });
+api.paySalary = async function (session, monthLabel, employeeName, treasuryAccountId, amount) {
+  const { error } = await supabaseClient.rpc('rpc_pay_salary', { p_month_label: monthLabel, p_employee_name: employeeName, p_treasury_account_id: treasuryAccountId || null, p_amount: amount || null });
   if (error) throw error;
   return { success: true };
 };

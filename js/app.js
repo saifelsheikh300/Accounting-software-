@@ -3023,21 +3023,16 @@ async function loadSeasons_() {
 async function renderHrPage() {
   setContent_(
     '<div class="section-title">👥 الموظفون</div>' +
-    '<div class="grid grid-2">' +
-      '<div class="card"><div class="card-heading">➕ موظف جديد</div>' +
+    '<div class="card"><div style="display:flex; justify-content:space-between; align-items:center;">' +
+      '<div class="card-heading" style="margin:0;">القائمة الحالية</div>' +
+      '<button class="btn secondary" style="padding:6px 14px; font-size:12.5px;" onclick="toggleAddEmployeeForm_()">➕ موظف جديد</button></div>' +
+      '<div id="employeesList" style="margin-top:14px;"></div>' +
+      '<div id="addEmployeeFormWrap" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">' +
         '<div class="form-grid"><div class="field"><label>الاسم</label><input type="text" id="empName"></div>' +
         '<div class="field"><label>الوظيفة</label><input type="text" id="empJob"></div></div>' +
         '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>الراتب الأساسي</label><input type="number" id="empSalary"></div>' +
         '<div class="field"><label>التليفون</label><input type="text" id="empPhone"></div></div>' +
-        '<button class="btn success block" style="margin-top:14px;" onclick="submitEmployee_()">➕ إضافة</button></div>' +
-      '<div class="card"><div class="card-heading">القائمة الحالية</div><div id="employeesList" style="margin-top:10px;"></div></div>' +
-    '</div>' +
-
-    '<div class="section-title" style="margin-top:24px;">🕒 الحضور والانصراف</div>' +
-    '<div class="card"><div class="form-grid">' +
-      '<div class="field"><label>الموظف</label><select id="attEmployeeSelect"></select></div>' +
-      '<div class="field"><label>الحالة</label><select id="attStatus"><option>حضور</option><option>غياب</option><option>إجازة</option></select></div></div>' +
-      '<button class="btn success block" style="margin-top:14px;" onclick="submitAttendance_()">تسجيل</button></div>' +
+        '<button class="btn success block" style="margin-top:14px;" onclick="submitEmployee_()">✅ إضافة</button></div></div>' +
 
     '<div class="section-title" style="margin-top:24px;">💰 المرتبات</div>' +
     '<div class="card"><div class="card-desc">جهّزي مرتبات الشهر الحالي، وادفعي كل موظف لما يحصله فلوسه (ممكن جزء بس، الباقي فاضل عليه)</div>' +
@@ -3068,6 +3063,11 @@ async function renderHrPage() {
       refreshSelect_(id);
     });
   }).catch(function () { /* صامت */ });
+}
+
+function toggleAddEmployeeForm_() {
+  var el = document.getElementById('addEmployeeFormWrap');
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
 async function loadAdvanceBalances_() {
@@ -3105,23 +3105,19 @@ async function loadEmployees_() {
       employees.map(function (e) { return '<div class="list-item"><span>' + e.name + ' — ' + e.jobTitle + '</span><span>' + formatMoney_(e.baseSalary, cur) + '</span></div>'; }).join('');
     const options = employees.map(function (e) { return '<option>' + e.name + '</option>'; }).join('');
     const optionsWithId = employees.map(function (e) { return '<option value="' + e.id + '">' + e.name + '</option>'; }).join('');
-    var __ht = document.getElementById('attEmployeeSelect'); if (__ht) __ht.innerHTML = options;
     var __ht = document.getElementById('advEmployeeSelect'); if (__ht) __ht.innerHTML = options;
     var __ht = document.getElementById('advSettleEmployeeSelect'); if (__ht) __ht.innerHTML = optionsWithId;
   } catch (err) { showErrorToast_(err); }
-}
-
-async function submitAttendance_() {
-  try { await api.recordAttendance({ username: state.user.username }, document.getElementById('attEmployeeSelect').value, document.getElementById('attStatus').value); showToast_('تم تسجيل الحضور ✅', 'success'); }
-  catch (err) { showErrorToast_(err); }
 }
 
 async function submitAdvance_() {
   const amount = Number(document.getElementById('advAmount').value);
   const treasuryAccountId = document.getElementById('advTreasuryAccount').value || null;
   if (!amount) { showToast_('المبلغ مطلوب', 'error'); return; }
-  try { await api.addEmployeeAdvance({ username: state.user.username }, document.getElementById('advEmployeeSelect').value, amount, treasuryAccountId); showToast_('تم تسجيل السلفة ✅', 'success'); }
-  catch (err) { showErrorToast_(err); }
+  try {
+    await api.addEmployeeAdvance({ username: state.user.username }, document.getElementById('advEmployeeSelect').value, amount, treasuryAccountId);
+    showToast_('تم تسجيل السلفة ✅', 'success'); loadAdvanceBalances_();
+  } catch (err) { showErrorToast_(err); }
 }
 
 async function runSalaries_() {
@@ -3134,24 +3130,31 @@ async function loadSalaries_(monthLabel) {
   try {
     const salaries = await api.listSalaries(monthLabel);
     const cur = state.settings.currency || 'جنيه';
-    var __ht = document.getElementById('salariesList'); if (__ht) __ht.innerHTML = salaries.map(function (s) {
-      return '<div class="list-item"><span>' + s.employeeName + '</span><span>' + formatMoney_(s.net, cur) +
-        (s.paid === 'لا' ? ' <button class="eye-btn" onclick="paySalaryUI_(\'' + monthLabel + '\', \'' + s.employeeName + '\')">💳</button>' : ' <span class="pill success">مدفوع</span>') + '</span></div>';
+    var __ht = document.getElementById('salariesList'); if (__ht) __ht.innerHTML = salaries.length === 0 ? emptyRow_('💰', 'لسه ما جهزتيش مرتبات الشهر ده') : salaries.map(function (s) {
+      const statusPart = s.paid === 'نعم' ? ' <span class="pill success">مدفوع بالكامل ✅</span>' :
+        (s.paidAmount > 0 ? ' <span class="pill warning">مدفوع ' + formatMoney_(s.paidAmount, cur) + ' من ' + formatMoney_(s.net, cur) + '</span>' : '') +
+        ' <button class="eye-btn" onclick="paySalaryUI_(\'' + monthLabel + '\', \'' + s.employeeName + '\', ' + s.remaining + ')">💳</button>';
+      return '<div class="list-item"><span>' + s.employeeName + '</span><span>' + formatMoney_(s.net, cur) + statusPart + '</span></div>';
     }).join('');
   } catch (err) { showErrorToast_(err); }
 }
 
-async function paySalaryUI_(monthLabel, employeeName) {
+async function paySalaryUI_(monthLabel, employeeName, remaining) {
   const accounts = await getTreasuryAccountsCached_().catch(function () { return []; });
-  openModal('صرف مرتب ' + employeeName, monthLabel, '<div class="field"><label>هيتخصم من حساب</label><select id="modalSalaryTreasuryAccount">' + treasuryAccountOptionsHtml_(accounts) + '</select></div>',
+  const cur = state.settings.currency || 'جنيه';
+  openModal('صرف مرتب ' + employeeName, monthLabel + ' — المتبقي: ' + formatMoney_(remaining, cur),
+    '<div class="field"><label>المبلغ اللي هتدفعه دلوقتي (ممكن جزء بس)</label><input type="number" id="modalSalaryPayAmount" value="' + remaining + '"></div>' +
+    '<div class="field" style="margin-top:10px;"><label>هيتخصم من حساب</label><select id="modalSalaryTreasuryAccount">' + treasuryAccountOptionsHtml_(accounts) + '</select></div>',
     '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn success" onclick="confirmPaySalary_(\'' + monthLabel + '\', \'' + employeeName.replace(/'/g, '') + '\')">✅ تأكيد الصرف</button>');
 }
 
 async function confirmPaySalary_(monthLabel, employeeName) {
   const treasuryAccountId = document.getElementById('modalSalaryTreasuryAccount').value || null;
+  const amount = Number(document.getElementById('modalSalaryPayAmount').value);
+  if (!amount) { showToast_('اكتبي المبلغ', 'error'); return; }
   try {
-    await api.paySalary({ username: state.user.username }, monthLabel, employeeName, treasuryAccountId);
-    closeModal(); showToast_('تم صرف الراتب ✅', 'success'); loadSalaries_(monthLabel);
+    await api.paySalary({ username: state.user.username }, monthLabel, employeeName, treasuryAccountId, amount);
+    closeModal(); showToast_('تم صرف المرتب ✅', 'success'); loadSalaries_(monthLabel);
   } catch (err) { showErrorToast_(err); }
 }
 
