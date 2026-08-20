@@ -543,6 +543,12 @@ api.listJournalEntries = async function (startDate, endDate) {
   return (data || []).map(function (e) { return { id: e.id, date: e.entry_date, debitAccount: e.debit_account, creditAccount: e.credit_account, amount: e.amount, description: e.description, reference: e.reference }; });
 };
 
+api.renameAccount = async function (session, accountId, newName) {
+  const { error } = await supabaseClient.rpc('rpc_rename_account', { p_account_id: accountId, p_new_name: newName });
+  if (error) throw error;
+  return { success: true };
+};
+
 api.deleteJournalEntry = async function (session, id) {
   const { error } = await supabaseClient.rpc('rpc_delete_journal_entry', { p_id: id });
   if (error) throw error;

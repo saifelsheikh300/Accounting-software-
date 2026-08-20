@@ -86,6 +86,58 @@ const PAGE_META = {
 // ------------------------------------------------------------
 // نظام المودال العام
 // ------------------------------------------------------------
+// ============================================================
+// قايمة كليك يمين / ضغطة مطولة (Context Menu)
+// ============================================================
+let __ctxMenuEl = null;
+function showContextMenu_(x, y, items) {
+  hideContextMenu_();
+  const menu = document.createElement('div');
+  menu.id = 'globalContextMenu';
+  menu.style.cssText = 'position:fixed; z-index:9999; background:var(--card-bg,#1e1e1e); border:1px solid var(--border); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.35); overflow:hidden; min-width:150px;';
+  menu.innerHTML = items.map(function (it) {
+    return '<div style="padding:12px 16px; cursor:pointer; color:' + (it.danger ? 'var(--danger)' : 'inherit') + '; font-size:14px;" class="ctx-menu-item">' + it.label + '</div>';
+  }).join('');
+  document.body.appendChild(menu);
+  const rect = menu.getBoundingClientRect();
+  const vw = window.innerWidth, vh = window.innerHeight;
+  menu.style.left = Math.min(x, vw - rect.width - 8) + 'px';
+  menu.style.top = Math.min(y, vh - rect.height - 8) + 'px';
+  Array.prototype.forEach.call(menu.querySelectorAll('.ctx-menu-item'), function (el, i) {
+    el.addEventListener('click', function () { hideContextMenu_(); items[i].onClick(); });
+  });
+  __ctxMenuEl = menu;
+  setTimeout(function () {
+    document.addEventListener('click', hideContextMenu_, { once: true });
+    document.addEventListener('touchstart', hideContextMenu_, { once: true });
+  }, 50);
+}
+function hideContextMenu_() {
+  if (__ctxMenuEl) { __ctxMenuEl.remove(); __ctxMenuEl = null; }
+}
+
+// بتضاف لأي عنصر: كليك يمين على الديسكتوب، ضغطة مطولة (500ms) على اللمس
+function attachContextMenu_(el, itemsFn) {
+  if (!el || el.__ctxAttached) return;
+  el.__ctxAttached = true;
+  el.addEventListener('contextmenu', function (e) {
+    e.preventDefault();
+    showContextMenu_(e.clientX, e.clientY, itemsFn());
+  });
+  let pressTimer = null, longPressed = false;
+  el.addEventListener('touchstart', function (e) {
+    longPressed = false;
+    const touch = e.touches[0];
+    pressTimer = setTimeout(function () {
+      longPressed = true;
+      if (navigator.vibrate) navigator.vibrate(15);
+      showContextMenu_(touch.clientX, touch.clientY, itemsFn());
+    }, 500);
+  }, { passive: true });
+  el.addEventListener('touchend', function () { clearTimeout(pressTimer); });
+  el.addEventListener('touchmove', function () { clearTimeout(pressTimer); });
+}
+
 function openModal(title, desc, bodyHtml, actionsHtml, wide) {
   const box = document.getElementById('modalBox');
   box.classList.toggle('wide', !!wide);
@@ -3108,7 +3160,9 @@ async function loadEmployees_() {
     const options = employees.map(function (e) { return '<option>' + e.name + '</option>'; }).join('');
     const optionsWithId = employees.map(function (e) { return '<option value="' + e.id + '">' + e.name + '</option>'; }).join('');
     var __ht = document.getElementById('advEmployeeSelect'); if (__ht) __ht.innerHTML = options;
+    refreshSelect_('advEmployeeSelect');
     var __ht = document.getElementById('advSettleEmployeeSelect'); if (__ht) __ht.innerHTML = optionsWithId;
+    refreshSelect_('advSettleEmployeeSelect');
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -3519,6 +3573,29 @@ async function renderAccountsPage() {
     html += roots.length === 0 ? emptyRow_('🗂️', 'لسه مفيش حسابات مضافة') : roots.map(function (a) { return buildAccountNode_(a, accounts, balanceByCode, cur, 0); }).join('');
     html += '</div>';
     setContent_(html);
+    Array.prototype.forEach.call(document.querySelectorAll('.account-row'), function (row) {
+      attachContextMenu_(row, function () {
+        const id = row.dataset.accountId, name = row.dataset.accountName, isGroup = row.dataset.isGroup === 'true';
+        const items = [{ label: '✏️ تعديل الاسم', onClick: function () { promptRenameAccount_(id, name); } }];
+        if (!isGroup) items.push({ label: '🗑️ حذف الحساب', danger: true, onClick: function () { confirmDeleteAccount_(id, name); } });
+        return items;
+      });
+    });
+  } catch (err) { showErrorToast_(err); }
+}
+
+function promptRenameAccount_(accountId, currentName) {
+  openModal('✏️ تعديل اسم الحساب', '', '<div class="field"><label>الاسم الجديد</label><input type="text" id="modalRenameAccountInput" value="' + currentName.replace(/"/g, '&quot;') + '"></div>',
+    '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn success" onclick="submitRenameAccount_(\'' + accountId + '\')">💾 حفظ</button>');
+}
+
+async function submitRenameAccount_(accountId) {
+  const newName = document.getElementById('modalRenameAccountInput').value.trim();
+  if (!newName) { showToast_('الاسم مطلوب', 'error'); return; }
+  try {
+    await api.renameAccount({ username: state.user.username }, accountId, newName);
+    closeModal(); showToast_('تم التعديل ✅', 'success');
+    renderAccountsPage();
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -3549,13 +3626,12 @@ function buildAccountNode_(account, allAccounts, balanceByCode, cur, depth) {
   else if (drilldownType) clickHandler = ' onclick=\'toggleAccountDrilldown_("' + nodeId + '", "' + drilldownType + '", ' + JSON.stringify(account.name) + ')\'';
 
   let html = '<div style="padding-right:' + (depth * 16) + 'px; ' + (depth > 0 ? 'border-right:2px solid var(--border); ' : '') + 'border-bottom:1px solid var(--border);' + (account.isGroup ? ' background:rgba(127,127,127,0.04);' : '') + '">' +
-    '<div class="list-item" style="cursor:' + (isExpandable ? 'pointer' : 'default') + ';"' + clickHandler + '>' +
+    '<div class="list-item account-row" data-account-id="' + account.id + '" data-account-name="' + account.name.replace(/"/g, '&quot;') + '" data-is-group="' + account.isGroup + '" style="cursor:' + (isExpandable ? 'pointer' : 'default') + ';"' + clickHandler + '>' +
       '<span>' + (isExpandable ? '<span id="' + nodeId + '_arrow" style="display:inline-block; width:14px;">▸</span> ' : '<span style="display:inline-block; width:14px;"></span> ') +
       (account.isGroup ? '📁' : '📄') + ' <b>' + account.code + '</b> — ' + account.name + '</span>' +
       '<span style="display:flex; align-items:center; gap:8px;">' +
         (account.isGroup ? '<span class="pill">تجميعي</span>' : (balance !== undefined ? '<b>' + formatMoney_(balance, cur) + '</b>' : '')) +
         '<span class="pill ' + accountTypePillClass_(account.type) + '">' + account.type + '</span>' +
-        (!hasChildren ? '<span style="color:var(--danger); cursor:pointer;" onclick="event.stopPropagation(); confirmDeleteAccount_(' + JSON.stringify(account.id) + ', ' + JSON.stringify(account.name) + ')">🗑️</span>' : '') +
       '</span></div>' +
     (hasChildren ? '<div id="' + nodeId + '" style="display:none;">' + children.map(function (c) { return buildAccountNode_(c, allAccounts, balanceByCode, cur, depth + 1); }).join('') + '</div>' : '') +
     (drilldownType ? '<div id="' + nodeId + '" style="display:none; padding-right:18px;"></div>' : '') +
@@ -4081,15 +4157,19 @@ async function loadJournal_() {
   try {
     const entries = await api.listJournalEntries(document.getElementById('jrStartDate').value, document.getElementById('jrEndDate').value);
     var __ht = document.getElementById('journalResult'); if (__ht) __ht.innerHTML = entries.length === 0 ? '<div class="card">' + emptyRow_('📔', 'لا يوجد قيود في الفترة دي') + '</div>' :
-      '<div class="card">' + entries.map(function (e) {
-        return '<div class="list-item" style="display:block; padding:14px 4px;">' +
+      '<div class="card"><div class="hint" style="margin-bottom:10px;">دوسي ضغطة مطولة على أي قيد (أو كليك يمين من الماوس) عشان تمسحيه</div>' + entries.map(function (e) {
+        return '<div class="list-item journal-row" data-id="' + e.id + '" style="display:block; padding:14px 4px; cursor:default;">' +
           '<div style="display:flex; justify-content:space-between; align-items:start;">' +
             '<span><b>' + e.debitAccount + '</b> ← <b>' + e.creditAccount + '</b></span>' +
-            '<span style="display:flex; align-items:center; gap:8px;"><b>' + formatMoney_(e.amount, cur) + '</b>' +
-            '<span style="cursor:pointer; color:var(--danger);" onclick="confirmDeleteJournalEntry_(' + JSON.stringify(e.id) + ')">🗑️</span></span>' +
+            '<b>' + formatMoney_(e.amount, cur) + '</b>' +
           '</div>' +
           '<div style="font-size:12px; color:var(--text-dim); margin-top:4px;">' + formatDate_(e.date) + (e.description ? ' — ' + e.description : '') + '</div></div>';
       }).join('') + '</div>';
+    Array.prototype.forEach.call(document.querySelectorAll('.journal-row'), function (row) {
+      attachContextMenu_(row, function () {
+        return [{ label: '🗑️ حذف القيد', danger: true, onClick: function () { confirmDeleteJournalEntry_(row.dataset.id); } }];
+      });
+    });
   } catch (err) { showErrorToast_(err); }
 }
 
