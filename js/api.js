@@ -534,6 +534,27 @@ api.repayLoan = async function (session, payload) {
   return { success: true };
 };
 
+api.listJournalEntries = async function (startDate, endDate) {
+  let q = supabaseClient.from('journal_entries').select('*').order('entry_date', { ascending: false }).limit(200);
+  if (startDate) q = q.gte('entry_date', startDate);
+  if (endDate) q = q.lte('entry_date', endDate + 'T23:59:59');
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data || []).map(function (e) { return { id: e.id, date: e.entry_date, debitAccount: e.debit_account, creditAccount: e.credit_account, amount: e.amount, description: e.description, reference: e.reference }; });
+};
+
+api.deleteJournalEntry = async function (session, id) {
+  const { error } = await supabaseClient.rpc('rpc_delete_journal_entry', { p_id: id });
+  if (error) throw error;
+  return { success: true };
+};
+
+api.deleteAccount = async function (session, id) {
+  const { error } = await supabaseClient.rpc('rpc_delete_account', { p_account_id: id });
+  if (error) throw error;
+  return { success: true };
+};
+
 api.addOpeningFixedAsset = async function (session, payload) {
   const { data, error } = await supabaseClient.rpc('rpc_add_opening_fixed_asset', {
     p_description: payload.description, p_amount: payload.amount, p_useful_life_months: payload.usefulLifeMonths,

@@ -37,6 +37,7 @@ const NAV_GROUPS = [
     { key: 'currencies', label: 'العملات وأسعار الصرف', icon: '💱', module: 'Settings' },
     { key: 'reports', label: 'التقارير', icon: '📈', module: 'Reports' },
     { key: 'trialbalance', label: 'ميزان المراجعة', icon: '⚖️', module: 'Reports' },
+    { key: 'journal', label: 'دفتر اليومية', icon: '📔', module: 'Reports' },
     { key: 'balancesheet', label: 'الميزانية العمومية', icon: '🏛️', module: 'Reports' },
     { key: 'periods', label: 'قفل الفترات المحاسبية', icon: '🔒', module: 'Reports' },
     { key: 'fixedassets', label: 'الأصول الثابتة', icon: '🏗️', module: 'Reports' },
@@ -75,6 +76,7 @@ const PAGE_META = {
   currencies: ['العملات وأسعار الصرف', 'إدارة العملات الإضافية وسعر الصرف اليومي'],
   recyclebin: ['سلة المحذوفات', 'استرجاع أي عنصر اتحذف بالغلط'],
   trialbalance: ['ميزان المراجعة', 'كل الحسابات ومجاميعها المدينة والدائنة من دفتر اليومية'],
+  journal: ['دفتر اليومية', 'كل القيود المحاسبية — تقدري تمسحي أي قيد غلط من هنا'],
   balancesheet: ['الميزانية العمومية', 'الأصول والخصوم وحقوق الملكية حتى تاريخ معيّن'],
   periods: ['قفل الفترات المحاسبية', 'منع التعديل على شهر اتقفل خلاص بعد مراجعته'],
   fixedassets: ['الأصول الثابتة', 'متابعة الأصول والإهلاك الشهري المتراكم'],
@@ -290,7 +292,7 @@ function navigate(pageKey) {
     treasury: renderTreasuryPage, accounts: renderAccountsPage,
     costcenters: renderCostCentersPage, recyclebin: renderRecycleBinPage,
     checks: renderChecksPage, currencies: renderCurrenciesPage,
-    trialbalance: renderTrialBalancePage, balancesheet: renderBalanceSheetPage,
+    trialbalance: renderTrialBalancePage, balancesheet: renderBalanceSheetPage, journal: renderJournalPage,
     periods: renderPeriodsPage, fixedassets: renderFixedAssetsPage,
     openingbalances: renderOpeningBalancesPage
   };
@@ -3553,6 +3555,7 @@ function buildAccountNode_(account, allAccounts, balanceByCode, cur, depth) {
       '<span style="display:flex; align-items:center; gap:8px;">' +
         (account.isGroup ? '<span class="pill">تجميعي</span>' : (balance !== undefined ? '<b>' + formatMoney_(balance, cur) + '</b>' : '')) +
         '<span class="pill ' + accountTypePillClass_(account.type) + '">' + account.type + '</span>' +
+        (!hasChildren ? '<span style="color:var(--danger); cursor:pointer;" onclick="event.stopPropagation(); confirmDeleteAccount_(' + JSON.stringify(account.id) + ', ' + JSON.stringify(account.name) + ')">🗑️</span>' : '') +
       '</span></div>' +
     (hasChildren ? '<div id="' + nodeId + '" style="display:none;">' + children.map(function (c) { return buildAccountNode_(c, allAccounts, balanceByCode, cur, depth + 1); }).join('') + '</div>' : '') +
     (drilldownType ? '<div id="' + nodeId + '" style="display:none; padding-right:18px;"></div>' : '') +
@@ -3640,6 +3643,19 @@ function accountTypePillClass_(type) {
   if (type === 'إيرادات') return 'info';
   if (type === 'مصروفات') return 'warning';
   return '';
+}
+
+function confirmDeleteAccount_(accountId, accountName) {
+  openModal('🗑️ حذف حساب', 'متأكدة إنك عايزة تمسحي "' + accountName + '"؟ البرنامج هيرفض لو فيه فلوس مسجلة عليه.', '',
+    '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn danger" onclick="submitDeleteAccount_(\'' + accountId + '\')">حذف</button>');
+}
+
+async function submitDeleteAccount_(accountId) {
+  try {
+    await api.deleteAccount({ username: state.user.username }, accountId);
+    closeModal(); showToast_('تم حذف الحساب ✅', 'success');
+    renderAccountsPage();
+  } catch (err) { showErrorToast_(err); }
 }
 
 function collapseAllAccountNodes_() {
@@ -4048,6 +4064,48 @@ async function updateCheck_(id, status, treasuryAccountId) {
 // ============================================================
 // ميزان المراجعة
 // ============================================================
+async function renderJournalPage() {
+  const today = new Date().toISOString().slice(0, 10);
+  setContent_(
+    '<div class="card"><div class="card-heading">📔 دفتر اليومية</div><div class="card-desc">آخر القيود المحاسبية — امسحي أي قيد اتسجل غلط</div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>من تاريخ</label><input type="date" id="jrStartDate"></div>' +
+      '<div class="field"><label>إلى تاريخ</label><input type="date" id="jrEndDate" value="' + today + '"></div></div>' +
+      '<button class="btn info-btn" style="margin-top:14px;" onclick="loadJournal_()">📊 عرض</button></div>' +
+    '<div id="journalResult" style="margin-top:18px;"></div>'
+  );
+  loadJournal_();
+}
+
+async function loadJournal_() {
+  const cur = state.settings.currency || 'جنيه';
+  try {
+    const entries = await api.listJournalEntries(document.getElementById('jrStartDate').value, document.getElementById('jrEndDate').value);
+    var __ht = document.getElementById('journalResult'); if (__ht) __ht.innerHTML = entries.length === 0 ? '<div class="card">' + emptyRow_('📔', 'لا يوجد قيود في الفترة دي') + '</div>' :
+      '<div class="card">' + entries.map(function (e) {
+        return '<div class="list-item" style="display:block; padding:14px 4px;">' +
+          '<div style="display:flex; justify-content:space-between; align-items:start;">' +
+            '<span><b>' + e.debitAccount + '</b> ← <b>' + e.creditAccount + '</b></span>' +
+            '<span style="display:flex; align-items:center; gap:8px;"><b>' + formatMoney_(e.amount, cur) + '</b>' +
+            '<span style="cursor:pointer; color:var(--danger);" onclick="confirmDeleteJournalEntry_(' + JSON.stringify(e.id) + ')">🗑️</span></span>' +
+          '</div>' +
+          '<div style="font-size:12px; color:var(--text-dim); margin-top:4px;">' + formatDate_(e.date) + (e.description ? ' — ' + e.description : '') + '</div></div>';
+      }).join('') + '</div>';
+  } catch (err) { showErrorToast_(err); }
+}
+
+function confirmDeleteJournalEntry_(id) {
+  openModal('🗑️ حذف قيد', 'متأكدة إنك عايزة تمسحي القيد ده؟ الحذف نهائي ومش هيتقدر يترجع.', '',
+    '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn danger" onclick="submitDeleteJournalEntry_(\'' + id + '\')">حذف</button>');
+}
+
+async function submitDeleteJournalEntry_(id) {
+  try {
+    await api.deleteJournalEntry({ username: state.user.username }, id);
+    closeModal(); showToast_('تم حذف القيد ✅', 'success');
+    loadJournal_();
+  } catch (err) { showErrorToast_(err); }
+}
+
 async function renderTrialBalancePage() {
   const today = new Date().toISOString().slice(0, 10);
   setContent_(
