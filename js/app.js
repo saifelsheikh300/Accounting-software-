@@ -29,7 +29,7 @@ const NAV_GROUPS = [
   { label: 'المالية', items: [
     { key: 'capital', label: 'رأس المال والشركاء', icon: '🤝', module: 'Capital' },
     { key: 'pettycash', label: 'العهدة', icon: '👛', module: 'PettyCash' },
-    { key: 'advancesloans', label: 'سلف وقروض', icon: '🤲', module: 'Reports' },
+    { key: 'advancesloans', label: 'قروض المحل', icon: '🤲', module: 'Reports' },
     { key: 'treasury', label: 'الخزنة والبنوك', icon: '🏦', module: 'Reports' },
     { key: 'accounts', label: 'شجرة الحسابات', icon: '🗂️', module: 'Reports' },
     { key: 'costcenters', label: 'مراكز التكلفة', icon: '🎯', module: 'Expenses' },
@@ -63,7 +63,7 @@ const PAGE_META = {
   invoices: ['حسابات العملاء', 'الفواتير ومتابعة حالة التحصيل'],
   capital: ['رأس المال والشركاء', 'نسب الملكية والأرباح'],
   pettycash: ['العهدة', 'حركة الكاش اليومي بالمحل'],
-  advancesloans: ['سلف وقروض', 'سلف الموظفين وقروض المحل'],
+  advancesloans: ['قروض المحل', 'استلام وسداد قروض المحل'],
   reports: ['التقارير', 'قائمة الدخل، الضريبة، المواسم'],
   hr: ['الموارد البشرية', 'الموظفون، المرتبات، الحضور، السلف'],
   users: ['المستخدمون والصلاحيات', 'إدارة اليوزرات وصلاحيات كل قسم'],
@@ -3022,31 +3022,72 @@ async function loadSeasons_() {
 // ============================================================
 async function renderHrPage() {
   setContent_(
+    '<div class="section-title">👥 الموظفون</div>' +
     '<div class="grid grid-2">' +
-      '<div class="card"><div class="card-heading">👤 موظف جديد</div>' +
+      '<div class="card"><div class="card-heading">➕ موظف جديد</div>' +
         '<div class="form-grid"><div class="field"><label>الاسم</label><input type="text" id="empName"></div>' +
-        '<div class="field"><label>الوظيفة</label><input type="text" id="empJob"></div>' +
-        '<div class="field"><label>الراتب الأساسي</label><input type="number" id="empSalary"></div>' +
+        '<div class="field"><label>الوظيفة</label><input type="text" id="empJob"></div></div>' +
+        '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>الراتب الأساسي</label><input type="number" id="empSalary"></div>' +
         '<div class="field"><label>التليفون</label><input type="text" id="empPhone"></div></div>' +
-        '<button class="btn success block" style="margin-top:14px;" onclick="submitEmployee_()">➕ إضافة موظف</button>' +
-        '<div class="card-heading" style="margin-top:26px;">🕒 تسجيل حضور</div>' +
-        '<div class="form-grid"><div class="field"><label>الموظف</label><select id="attEmployeeSelect"></select></div>' +
-        '<div class="field"><label>الحالة</label><select id="attStatus"><option>حضور</option><option>غياب</option><option>إجازة</option></select></div></div>' +
-        '<button class="btn success block" style="margin-top:14px;" onclick="submitAttendance_()">تسجيل</button>' +
-        '<div class="card-heading" style="margin-top:26px;">💵 سلفة جديدة</div>' +
-        '<div class="form-grid"><div class="field"><label>الموظف</label><select id="advEmployeeSelect"></select></div>' +
-        '<div class="field"><label>المبلغ</label><input type="number" id="advAmount"></div></div>' +
-        '<div class="field"><label>هتتخصم من حساب</label><select id="advTreasuryAccount"></select></div>' +
+        '<button class="btn success block" style="margin-top:14px;" onclick="submitEmployee_()">➕ إضافة</button></div>' +
+      '<div class="card"><div class="card-heading">القائمة الحالية</div><div id="employeesList" style="margin-top:10px;"></div></div>' +
+    '</div>' +
+
+    '<div class="section-title" style="margin-top:24px;">🕒 الحضور والانصراف</div>' +
+    '<div class="card"><div class="form-grid">' +
+      '<div class="field"><label>الموظف</label><select id="attEmployeeSelect"></select></div>' +
+      '<div class="field"><label>الحالة</label><select id="attStatus"><option>حضور</option><option>غياب</option><option>إجازة</option></select></div></div>' +
+      '<button class="btn success block" style="margin-top:14px;" onclick="submitAttendance_()">تسجيل</button></div>' +
+
+    '<div class="section-title" style="margin-top:24px;">💰 المرتبات</div>' +
+    '<div class="card"><div class="card-desc">جهّزي مرتبات الشهر الحالي، وادفعي كل موظف لما يحصله فلوسه (ممكن جزء بس، الباقي فاضل عليه)</div>' +
+      '<button class="btn secondary" style="margin-top:8px;" onclick="runSalaries_()">🧮 تجهيز مرتبات الشهر ده</button>' +
+      '<div id="salariesList" style="margin-top:14px;"></div></div>' +
+
+    '<div class="section-title" style="margin-top:24px;">💵 السلف</div>' +
+    '<div class="grid grid-2">' +
+      '<div class="card"><div class="card-heading">➕ إعطاء سلفة</div>' +
+        '<div class="field"><label>الموظف</label><select id="advEmployeeSelect"></select></div>' +
+        '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>المبلغ</label><input type="number" id="advAmount"></div>' +
+        '<div class="field"><label>هتتخصم من حساب</label><select id="advTreasuryAccount"></select></div></div>' +
         '<button class="btn success block" style="margin-top:14px;" onclick="submitAdvance_()">تسجيل السلفة</button></div>' +
-      '<div class="card"><div class="card-heading">👥 الموظفون</div><div id="employeesList" style="margin-top:10px;"></div>' +
-        '<div class="card-heading" style="margin-top:26px;">💰 مرتبات الشهر الحالي</div>' +
-        '<button class="btn secondary" style="margin-top:8px;" onclick="runSalaries_()">تشغيل المرتبات</button><div id="salariesList" style="margin-top:14px;"></div></div></div>'
+      '<div class="card"><div class="card-heading">✅ تسوية سلفة (كامل أو جزء)</div>' +
+        '<div class="field"><label>الموظف</label><select id="advSettleEmployeeSelect"></select></div>' +
+        '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>المبلغ المدفوع</label><input type="number" id="advSettleAmount"></div>' +
+        '<div class="field"><label>في حساب</label><select id="advSettleTreasuryAccount"></select></div></div>' +
+        '<div class="hint" style="margin-top:8px;">لو دفع جزء بس، اكتبي المبلغ اللي دفعه فعلاً والباقي هيفضل عليه</div>' +
+        '<button class="btn success block" style="margin-top:14px;" onclick="submitSettleAdvance_()">تسجيل التسوية</button></div>' +
+    '</div>' +
+    '<div class="card" style="margin-top:14px;"><div class="card-heading">أرصدة السلف الحالية</div><div id="advBalancesList" style="margin-top:10px;"></div></div>'
   );
   loadEmployees_();
+  loadAdvanceBalances_();
   getTreasuryAccountsCached_().then(function (accounts) {
-    var __ht = document.getElementById('advTreasuryAccount'); if (__ht) __ht.innerHTML = treasuryAccountOptionsHtml_(accounts);
-    refreshSelect_('advTreasuryAccount');
+    ['advTreasuryAccount', 'advSettleTreasuryAccount'].forEach(function (id) {
+      var el = document.getElementById(id); if (el) el.innerHTML = treasuryAccountOptionsHtml_(accounts);
+      refreshSelect_(id);
+    });
   }).catch(function () { /* صامت */ });
+}
+
+async function loadAdvanceBalances_() {
+  try {
+    const balances = await api.listEmployeeAdvanceBalances();
+    const cur = state.settings.currency || 'جنيه';
+    var __ht = document.getElementById('advBalancesList'); if (__ht) __ht.innerHTML = balances.length === 0 ? emptyRow_('👤', 'مفيش سلف مفتوحة حاليًا') :
+      balances.map(function (b) { return '<div class="list-item"><span>' + b.employeeName + '</span><span class="pill warning">' + formatMoney_(b.balance, cur) + ' متبقي</span></div>'; }).join('');
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function submitSettleAdvance_() {
+  const employeeId = document.getElementById('advSettleEmployeeSelect').value;
+  const amount = Number(document.getElementById('advSettleAmount').value);
+  if (!employeeId || !amount) { showToast_('اختاري الموظف واكتبي المبلغ', 'error'); return; }
+  try {
+    await api.settleEmployeeAdvance({ username: state.user.username }, { employeeId: employeeId, amount: amount, treasuryAccountId: document.getElementById('advSettleTreasuryAccount').value });
+    showToast_('تم تسجيل التسوية ✅', 'success');
+    document.getElementById('advSettleAmount').value = ''; loadAdvanceBalances_();
+  } catch (err) { showErrorToast_(err); }
 }
 
 async function submitEmployee_() {
@@ -3063,8 +3104,10 @@ async function loadEmployees_() {
     var __ht = document.getElementById('employeesList'); if (__ht) __ht.innerHTML = employees.length === 0 ? emptyRow_('👥', 'لا يوجد موظفين بعد') :
       employees.map(function (e) { return '<div class="list-item"><span>' + e.name + ' — ' + e.jobTitle + '</span><span>' + formatMoney_(e.baseSalary, cur) + '</span></div>'; }).join('');
     const options = employees.map(function (e) { return '<option>' + e.name + '</option>'; }).join('');
+    const optionsWithId = employees.map(function (e) { return '<option value="' + e.id + '">' + e.name + '</option>'; }).join('');
     var __ht = document.getElementById('attEmployeeSelect'); if (__ht) __ht.innerHTML = options;
     var __ht = document.getElementById('advEmployeeSelect'); if (__ht) __ht.innerHTML = options;
+    var __ht = document.getElementById('advSettleEmployeeSelect'); if (__ht) __ht.innerHTML = optionsWithId;
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -4137,32 +4180,12 @@ async function submitReopenPeriod_() {
 // ============================================================
 async function renderAdvancesLoansPage() {
   try {
-    const [employees, advanceBalances, loans, treasuryAccounts] = await Promise.all([api.listEmployees(true), api.listEmployeeAdvanceBalances(), api.listLoans(), getTreasuryAccountsCached_()]);
+    const loans = await api.listLoans();
     const cur = state.settings.currency || 'جنيه';
-    const empOptions = employees.map(function (e) { return '<option value="' + e.id + '">' + e.name + '</option>'; }).join('');
+    const treasuryAccounts = await getTreasuryAccountsCached_();
     const treasuryOptions = treasuryAccountOptionsHtml_(treasuryAccounts);
 
-    let html = '<div class="section-title">👤 سلف الموظفين</div>';
-    html += '<div class="grid grid-2">';
-    html += '<div class="card"><div class="card-heading">➕ إعطاء سلفة</div>' +
-      '<div class="field"><label>الموظف</label><select id="advEmployee">' + empOptions + '</select></div>' +
-      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>المبلغ</label><input type="number" id="advGiveAmount"></div>' +
-      '<div class="field"><label>من حساب</label><select id="advGiveTreasury">' + treasuryOptions + '</select></div></div>' +
-      '<button class="btn success block" style="margin-top:14px;" onclick="submitGiveAdvance_()">➕ إعطاء</button></div>';
-    html += '<div class="card"><div class="card-heading">✅ تسوية سلفة (كامل أو جزء)</div>' +
-      '<div class="field"><label>الموظف</label><select id="advSettleEmployee">' + empOptions + '</select></div>' +
-      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>المبلغ المدفوع</label><input type="number" id="advSettleAmount"></div>' +
-      '<div class="field"><label>في حساب</label><select id="advSettleTreasury">' + treasuryOptions + '</select></div></div>' +
-      '<div class="hint" style="margin-top:8px;">لو دفع جزء من السلفة بس، اكتبي المبلغ اللي دفعه فعلاً والباقي هيفضل عليه</div>' +
-      '<button class="btn success block" style="margin-top:14px;" onclick="submitSettleAdvance_()">✅ تسجيل التسوية</button></div>';
-    html += '</div>';
-
-    html += '<div class="card" style="margin-top:14px;"><div class="card-heading">أرصدة السلف الحالية</div>';
-    html += advanceBalances.length === 0 ? emptyRow_('👤', 'مفيش سلف مفتوحة حاليًا') :
-      advanceBalances.map(function (b) { return '<div class="list-item"><span>' + b.employeeName + '</span><span class="pill warning">' + formatMoney_(b.balance, cur) + ' متبقي</span></div>'; }).join('');
-    html += '</div>';
-
-    html += '<div class="section-title" style="margin-top:22px;">🏦 قروض المحل</div>';
+    let html = '<div class="hint" style="margin-bottom:14px;">سلف الموظفين موجودة في "الموارد البشرية" — الشاشة دي بس لقروض المحل</div>';
     html += '<div class="card"><div class="card-heading">➕ قرض جديد</div>' +
       '<div class="field"><label>اسم القرض / الجهة</label><input type="text" id="loanName" placeholder="مثال: قرض بنك مصر"></div>' +
       '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>المبلغ</label><input type="number" id="loanAmount"></div>' +
@@ -4189,17 +4212,6 @@ async function renderAdvancesLoansPage() {
 
 function onLoanOpeningToggle_() {
   var __ht = document.getElementById('loanTreasury'); if (__ht) __ht.parentElement.style.display = document.getElementById('loanIsOpening').checked ? 'none' : '';
-}
-
-async function submitGiveAdvance_() {
-  const employeeId = document.getElementById('advEmployee').value;
-  const amount = Number(document.getElementById('advGiveAmount').value);
-  if (!employeeId || !amount) { showToast_('اختاري الموظف واكتبي المبلغ', 'error'); return; }
-  try {
-    const empName = document.getElementById('advEmployee').selectedOptions[0].textContent;
-    await api.addEmployeeAdvance({ username: state.user.username }, empName, amount, document.getElementById('advGiveTreasury').value);
-    showToast_('تم إعطاء السلفة ✅', 'success'); renderAdvancesLoansPage();
-  } catch (err) { showErrorToast_(err); }
 }
 
 async function submitSettleAdvance_() {
