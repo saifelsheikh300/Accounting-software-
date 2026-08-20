@@ -498,6 +498,42 @@ api.addOpeningInventory = async function (session, payload) {
   return { total: row.total, owed: row.owed, settledFromCapital: row.settled_from_capital, orderNumber: row.order_number };
 };
 
+api.settleEmployeeAdvance = async function (session, payload) {
+  const { error } = await supabaseClient.rpc('rpc_settle_employee_advance', {
+    p_employee_id: payload.employeeId, p_amount: payload.amount, p_treasury_account_id: payload.treasuryAccountId || null, p_note: payload.note || ''
+  });
+  if (error) throw error;
+  return { success: true };
+};
+
+api.listEmployeeAdvanceBalances = async function () {
+  const { data, error } = await supabaseClient.rpc('rpc_list_employee_advance_balances');
+  if (error) throw error;
+  return (data || []).map(function (r) { return { employeeId: r.employee_id, employeeName: r.employee_name, balance: r.balance }; });
+};
+
+api.listLoans = async function () {
+  const { data, error } = await supabaseClient.from('loans').select('*').order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(function (l) { return { id: l.id, name: l.name, principal: l.principal, remainingBalance: l.remaining_balance }; });
+};
+
+api.addLoan = async function (session, payload) {
+  const { data, error } = await supabaseClient.rpc('rpc_add_loan', {
+    p_name: payload.name, p_principal: payload.amount, p_treasury_account_id: payload.treasuryAccountId || null, p_is_opening: !!payload.isOpening
+  });
+  if (error) throw error;
+  return { id: data };
+};
+
+api.repayLoan = async function (session, payload) {
+  const { error } = await supabaseClient.rpc('rpc_repay_loan', {
+    p_loan_id: payload.loanId, p_amount: payload.amount, p_treasury_account_id: payload.treasuryAccountId || null
+  });
+  if (error) throw error;
+  return { success: true };
+};
+
 api.addOpeningFixedAsset = async function (session, payload) {
   const { data, error } = await supabaseClient.rpc('rpc_add_opening_fixed_asset', {
     p_description: payload.description, p_amount: payload.amount, p_useful_life_months: payload.usefulLifeMonths,

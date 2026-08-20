@@ -29,6 +29,7 @@ const NAV_GROUPS = [
   { label: 'المالية', items: [
     { key: 'capital', label: 'رأس المال والشركاء', icon: '🤝', module: 'Capital' },
     { key: 'pettycash', label: 'العهدة', icon: '👛', module: 'PettyCash' },
+    { key: 'advancesloans', label: 'سلف وقروض', icon: '🤲', module: 'Reports' },
     { key: 'treasury', label: 'الخزنة والبنوك', icon: '🏦', module: 'Reports' },
     { key: 'accounts', label: 'شجرة الحسابات', icon: '🗂️', module: 'Reports' },
     { key: 'costcenters', label: 'مراكز التكلفة', icon: '🎯', module: 'Expenses' },
@@ -62,6 +63,7 @@ const PAGE_META = {
   invoices: ['حسابات العملاء', 'الفواتير ومتابعة حالة التحصيل'],
   capital: ['رأس المال والشركاء', 'نسب الملكية والأرباح'],
   pettycash: ['العهدة', 'حركة الكاش اليومي بالمحل'],
+  advancesloans: ['سلف وقروض', 'سلف الموظفين وقروض المحل'],
   reports: ['التقارير', 'قائمة الدخل، الضريبة، المواسم'],
   hr: ['الموارد البشرية', 'الموظفون، المرتبات، الحضور، السلف'],
   users: ['المستخدمون والصلاحيات', 'إدارة اليوزرات وصلاحيات كل قسم'],
@@ -283,7 +285,7 @@ function navigate(pageKey) {
     inventory: renderInventoryPage, warehouses: renderWarehousesPage, expenses: renderExpensesPage, suppliers: renderSuppliersPage,
     purchaserequests: renderPurchaseRequestsPage,
     orders: renderOrdersPage, invoices: renderInvoicesPage, capital: renderCapitalPage,
-    pettycash: renderPettyCashPage, reports: renderReportsPage, hr: renderHrPage,
+    pettycash: renderPettyCashPage, advancesloans: renderAdvancesLoansPage, reports: renderReportsPage, hr: renderHrPage,
     users: renderUsersPage, settings: renderSettingsPage,
     treasury: renderTreasuryPage, accounts: renderAccountsPage,
     costcenters: renderCostCentersPage, recyclebin: renderRecycleBinPage,
@@ -4133,6 +4135,104 @@ async function submitReopenPeriod_() {
 // ============================================================
 // الأصول الثابتة والإهلاك
 // ============================================================
+async function renderAdvancesLoansPage() {
+  try {
+    const [employees, advanceBalances, loans, treasuryAccounts] = await Promise.all([api.listEmployees(true), api.listEmployeeAdvanceBalances(), api.listLoans(), getTreasuryAccountsCached_()]);
+    const cur = state.settings.currency || 'جنيه';
+    const empOptions = employees.map(function (e) { return '<option value="' + e.id + '">' + e.name + '</option>'; }).join('');
+    const treasuryOptions = treasuryAccountOptionsHtml_(treasuryAccounts);
+
+    let html = '<div class="section-title">👤 سلف الموظفين</div>';
+    html += '<div class="grid grid-2">';
+    html += '<div class="card"><div class="card-heading">➕ إعطاء سلفة</div>' +
+      '<div class="field"><label>الموظف</label><select id="advEmployee">' + empOptions + '</select></div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>المبلغ</label><input type="number" id="advGiveAmount"></div>' +
+      '<div class="field"><label>من حساب</label><select id="advGiveTreasury">' + treasuryOptions + '</select></div></div>' +
+      '<button class="btn success block" style="margin-top:14px;" onclick="submitGiveAdvance_()">➕ إعطاء</button></div>';
+    html += '<div class="card"><div class="card-heading">✅ تسوية سلفة (كامل أو جزء)</div>' +
+      '<div class="field"><label>الموظف</label><select id="advSettleEmployee">' + empOptions + '</select></div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>المبلغ المدفوع</label><input type="number" id="advSettleAmount"></div>' +
+      '<div class="field"><label>في حساب</label><select id="advSettleTreasury">' + treasuryOptions + '</select></div></div>' +
+      '<div class="hint" style="margin-top:8px;">لو دفع جزء من السلفة بس، اكتبي المبلغ اللي دفعه فعلاً والباقي هيفضل عليه</div>' +
+      '<button class="btn success block" style="margin-top:14px;" onclick="submitSettleAdvance_()">✅ تسجيل التسوية</button></div>';
+    html += '</div>';
+
+    html += '<div class="card" style="margin-top:14px;"><div class="card-heading">أرصدة السلف الحالية</div>';
+    html += advanceBalances.length === 0 ? emptyRow_('👤', 'مفيش سلف مفتوحة حاليًا') :
+      advanceBalances.map(function (b) { return '<div class="list-item"><span>' + b.employeeName + '</span><span class="pill warning">' + formatMoney_(b.balance, cur) + ' متبقي</span></div>'; }).join('');
+    html += '</div>';
+
+    html += '<div class="section-title" style="margin-top:22px;">🏦 قروض المحل</div>';
+    html += '<div class="card"><div class="card-heading">➕ قرض جديد</div>' +
+      '<div class="field"><label>اسم القرض / الجهة</label><input type="text" id="loanName" placeholder="مثال: قرض بنك مصر"></div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>المبلغ</label><input type="number" id="loanAmount"></div>' +
+      '<div class="field"><label>هيدخل في حساب</label><select id="loanTreasury">' + treasuryOptions + '</select></div></div>' +
+      '<label style="display:flex; align-items:center; gap:8px; margin-top:10px; cursor:pointer;"><input type="checkbox" id="loanIsOpening" onchange="onLoanOpeningToggle_()"> قرض قديم عندي بالفعل (رصيد افتتاحي) مش استلام فلوس دلوقتي</label>' +
+      '<button class="btn success block" style="margin-top:14px;" onclick="submitAddLoan_()">➕ إضافة القرض</button></div>';
+
+    html += '<div class="card" style="margin-top:14px;"><div class="card-heading">القروض الحالية</div>';
+    html += loans.length === 0 ? emptyRow_('🏦', 'مفيش قروض مسجّلة') :
+      loans.map(function (l) {
+        return '<div class="list-item" style="display:block; padding:14px 4px;"><b>' + l.name + '</b>' +
+          '<div style="margin-top:6px; font-size:12px; color:var(--text-dim);">الأصلي: ' + formatMoney_(l.principal, cur) + ' · المتبقي: ' + formatMoney_(l.remainingBalance, cur) + '</div>' +
+          (l.remainingBalance > 0 ? '<div class="form-grid" style="margin-top:8px;"><div class="field"><input type="number" id="loanRepayAmount_' + l.id + '" placeholder="مبلغ السداد"></div>' +
+            '<div class="field"><select id="loanRepayTreasury_' + l.id + '">' + treasuryOptions + '</select></div></div>' +
+            '<button class="btn" style="margin-top:6px;" onclick="submitRepayLoan_(\'' + l.id + '\')">💰 تسجيل سداد</button>' : '<span class="pill success">مسدد بالكامل ✅</span>') +
+          '</div>';
+      }).join('');
+    html += '</div>';
+
+    setContent_(html);
+    enhanceSelects_(document.getElementById('page-content'));
+  } catch (err) { showErrorToast_(err); }
+}
+
+function onLoanOpeningToggle_() {
+  var __ht = document.getElementById('loanTreasury'); if (__ht) __ht.parentElement.style.display = document.getElementById('loanIsOpening').checked ? 'none' : '';
+}
+
+async function submitGiveAdvance_() {
+  const employeeId = document.getElementById('advEmployee').value;
+  const amount = Number(document.getElementById('advGiveAmount').value);
+  if (!employeeId || !amount) { showToast_('اختاري الموظف واكتبي المبلغ', 'error'); return; }
+  try {
+    const empName = document.getElementById('advEmployee').selectedOptions[0].textContent;
+    await api.addEmployeeAdvance({ username: state.user.username }, empName, amount, document.getElementById('advGiveTreasury').value);
+    showToast_('تم إعطاء السلفة ✅', 'success'); renderAdvancesLoansPage();
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function submitSettleAdvance_() {
+  const employeeId = document.getElementById('advSettleEmployee').value;
+  const amount = Number(document.getElementById('advSettleAmount').value);
+  if (!employeeId || !amount) { showToast_('اختاري الموظف واكتبي المبلغ', 'error'); return; }
+  try {
+    await api.settleEmployeeAdvance({ username: state.user.username }, { employeeId: employeeId, amount: amount, treasuryAccountId: document.getElementById('advSettleTreasury').value });
+    showToast_('تم تسجيل التسوية ✅', 'success'); renderAdvancesLoansPage();
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function submitAddLoan_() {
+  const name = document.getElementById('loanName').value.trim();
+  const amount = Number(document.getElementById('loanAmount').value);
+  const isOpening = document.getElementById('loanIsOpening').checked;
+  if (!name || !amount) { showToast_('اسم القرض والمبلغ مطلوبين', 'error'); return; }
+  try {
+    await api.addLoan({ username: state.user.username }, { name: name, amount: amount, treasuryAccountId: document.getElementById('loanTreasury').value, isOpening: isOpening });
+    showToast_('تم إضافة القرض ✅', 'success'); renderAdvancesLoansPage();
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function submitRepayLoan_(loanId) {
+  const amount = Number(document.getElementById('loanRepayAmount_' + loanId).value);
+  const treasuryAccountId = document.getElementById('loanRepayTreasury_' + loanId).value;
+  if (!amount) { showToast_('اكتبي مبلغ السداد', 'error'); return; }
+  try {
+    await api.repayLoan({ username: state.user.username }, { loanId: loanId, amount: amount, treasuryAccountId: treasuryAccountId });
+    showToast_('تم تسجيل السداد ✅', 'success'); renderAdvancesLoansPage();
+  } catch (err) { showErrorToast_(err); }
+}
+
 async function renderFixedAssetsPage() {
   try {
     const assets = await api.listFixedAssets();
