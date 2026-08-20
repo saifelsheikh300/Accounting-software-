@@ -3524,6 +3524,7 @@ function resolveDrilldownType_(name) {
   if (name === 'العهدة') return 'pettyCash';
   if (name === 'الموردون') return 'suppliers';
   if (name === 'المرتبات') return 'salaries';
+  if (name === 'سلف الموظفين') return 'employeeAdvances';
   if (name.indexOf('رأس المال') === 0) return 'partnerCapital';
   if (name.indexOf('مستحقات إدارة') === 0) return 'partnerAdminRights';
   if (name.indexOf('المصروفات:') === 0 && name !== 'المصروفات: إهلاك') return 'expenseCategory';
@@ -3594,6 +3595,11 @@ async function toggleAccountDrilldown_(nodeId, drilldownType, accountName) {
       const suppliers = (await getSuppliersCached_()).filter(function (s) { return Number(s.totalRemaining) > 0; });
       el.innerHTML = suppliers.length === 0 ? emptyRow_('🏭', 'مفيش مستحقات لموردين حاليًا') :
         suppliers.map(function (s) { return '<div class="list-item"><span>' + s.name + '</span><b class="money-negative">' + formatMoney_(s.totalRemaining, cur) + '</b></div>'; }).join('');
+
+    } else if (drilldownType === 'employeeAdvances') {
+      const balances = await api.listEmployeeAdvanceBalances();
+      el.innerHTML = balances.length === 0 ? emptyRow_('👤', 'مفيش سلف مفتوحة حاليًا') :
+        balances.map(function (b) { return '<div class="list-item"><span>👤 ' + b.employeeName + '</span><b>' + formatMoney_(b.balance, cur) + '</b></div>'; }).join('');
 
     } else if (drilldownType === 'salaries') {
       const salaries = await api.listSalaries();
