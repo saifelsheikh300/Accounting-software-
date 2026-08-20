@@ -4173,14 +4173,23 @@ async function loadJournal_() {
   } catch (err) { showErrorToast_(err); }
 }
 
-function confirmDeleteJournalEntry_(id) {
-  openModal('🗑️ حذف قيد', 'متأكدة إنك عايزة تمسحي القيد ده؟ الحذف نهائي ومش هيتقدر يترجع.', '',
+async function confirmDeleteJournalEntry_(id) {
+  const entries = await api.listJournalEntries(null, new Date().toISOString().slice(0, 10)).catch(function () { return []; });
+  const entry = entries.find(function (e) { return e.id === id; });
+  const involvesTreasury = entry && (entry.debitAccount === 'الخزينة' || entry.creditAccount === 'الخزينة');
+  let treasurySelectHtml = '';
+  if (involvesTreasury) {
+    const accounts = await getTreasuryAccountsCached_().catch(function () { return []; });
+    treasurySelectHtml = '<div class="field" style="margin-top:10px;"><label>القيد ده فيه فلوس — ترجع/تتخصم من أنهي حساب؟</label><select id="modalDeleteJournalTreasury">' + treasuryAccountOptionsHtml_(accounts) + '</select></div>';
+  }
+  openModal('🗑️ حذف قيد', 'متأكدة إنك عايزة تمسحي القيد ده؟ الحذف نهائي ومش هيتقدر يترجع.', treasurySelectHtml,
     '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn danger" onclick="submitDeleteJournalEntry_(\'' + id + '\')">حذف</button>');
 }
 
 async function submitDeleteJournalEntry_(id) {
   try {
-    await api.deleteJournalEntry({ username: state.user.username }, id);
+    const treasuryEl = document.getElementById('modalDeleteJournalTreasury');
+    await api.deleteJournalEntry({ username: state.user.username }, id, treasuryEl ? treasuryEl.value : null);
     closeModal(); showToast_('تم حذف القيد ✅', 'success');
     loadJournal_();
   } catch (err) { showErrorToast_(err); }

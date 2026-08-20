@@ -549,8 +549,8 @@ api.renameAccount = async function (session, accountId, newName) {
   return { success: true };
 };
 
-api.deleteJournalEntry = async function (session, id) {
-  const { error } = await supabaseClient.rpc('rpc_delete_journal_entry', { p_id: id });
+api.deleteJournalEntry = async function (session, id, treasuryAccountId) {
+  const { error } = await supabaseClient.rpc('rpc_delete_journal_entry', { p_id: id, p_treasury_account_id: treasuryAccountId || null });
   if (error) throw error;
   return { success: true };
 };
