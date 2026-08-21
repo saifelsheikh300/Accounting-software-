@@ -28,6 +28,7 @@ const NAV_GROUPS = [
   ]},
   { label: 'المالية', items: [
     { key: 'capital', label: 'رأس المال والشركاء', icon: '🤝', module: 'Capital' },
+    { key: 'otherrevenue', label: 'الإيرادات الأخرى', icon: '💵', module: 'Reports' },
     { key: 'pettycash', label: 'العهدة', icon: '👛', module: 'PettyCash' },
     { key: 'advancesloans', label: 'قروض المحل', icon: '🤲', module: 'Reports' },
     { key: 'treasury', label: 'الخزنة والبنوك', icon: '🏦', module: 'Reports' },
@@ -63,6 +64,7 @@ const PAGE_META = {
   orders: ['الأوردرات والعملاء', 'طلبات الأونلاين وسجل العملاء'],
   invoices: ['حسابات العملاء', 'الفواتير ومتابعة حالة التحصيل'],
   capital: ['رأس المال والشركاء', 'نسب الملكية والأرباح'],
+  otherrevenue: ['الإيرادات الأخرى', 'أي إيراد مش من المبيعات العادية'],
   pettycash: ['العهدة', 'حركة الكاش اليومي بالمحل'],
   advancesloans: ['قروض المحل', 'استلام وسداد قروض المحل'],
   reports: ['التقارير', 'قائمة الدخل، الضريبة، المواسم'],
@@ -338,7 +340,7 @@ function navigate(pageKey) {
     dashboard: renderDashboardPage, pos: renderPosPage, sales: renderSalesPage,
     inventory: renderInventoryPage, warehouses: renderWarehousesPage, expenses: renderExpensesPage, suppliers: renderSuppliersPage,
     purchaserequests: renderPurchaseRequestsPage,
-    orders: renderOrdersPage, invoices: renderInvoicesPage, capital: renderCapitalPage,
+    orders: renderOrdersPage, invoices: renderInvoicesPage, capital: renderCapitalPage, otherrevenue: renderOtherRevenuePage,
     pettycash: renderPettyCashPage, advancesloans: renderAdvancesLoansPage, reports: renderReportsPage, hr: renderHrPage,
     users: renderUsersPage, settings: renderSettingsPage,
     treasury: renderTreasuryPage, accounts: renderAccountsPage,
@@ -2976,14 +2978,6 @@ function renderReportsPage() {
       '<button class="btn info-btn" onclick="loadSalesForecast_()">📈 توقع المبيعات</button>' +
       '<button class="btn" onclick="loadAiInsights_()">✨ تحليل ذكي (Gemini)</button></div>' +
       '<div id="aiResult" style="margin-top:14px;"></div></div>' +
-    '<div class="section-title">💵 الإيرادات الأخرى</div>' +
-    '<div class="card"><div class="form-grid">' +
-      '<div class="field"><label>المصدر</label><input type="text" id="orSource" placeholder="مثال: بيع كرتونة فاضية"></div>' +
-      '<div class="field"><label>المبلغ</label><input type="number" id="orAmount"></div></div>' +
-      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>الوصف</label><input type="text" id="orDesc"></div>' +
-      '<div class="field"><label>هتضاف لحساب</label><select id="orTreasuryAccount"></select></div></div>' +
-      '<button class="btn success block" style="margin-top:14px;" onclick="submitOtherRevenue_()">➕ تسجيل الإيراد</button>' +
-      '<div id="otherRevenueList" style="margin-top:14px;"></div></div>' +
     '<div class="section-title">المواسم</div>' +
     '<div class="card"><div class="form-grid">' +
       '<div class="field"><label>اسم الموسم</label><input type="text" id="seasonName"></div>' +
@@ -2992,6 +2986,19 @@ function renderReportsPage() {
       '<button class="btn" style="margin-top:14px;" onclick="submitSeason_()">➕ إضافة موسم</button><div id="seasonsList" style="margin-top:14px;"></div></div>'
   );
   loadSeasons_();
+}
+
+async function renderOtherRevenuePage() {
+  setContent_(
+    '<div class="card"><div class="card-heading">💵 تسجيل إيراد آخر</div><div class="card-desc">أي فلوس دخلت غير من المبيعات العادية — زي بيع كرتونة فاضية، عمولة، إلخ</div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>المصدر</label><input type="text" id="orSource" placeholder="مثال: بيع كرتونة فاضية"></div>' +
+      '<div class="field"><label>المبلغ</label><input type="number" id="orAmount"></div></div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>الوصف</label><input type="text" id="orDesc"></div>' +
+      '<div class="field"><label>هتضاف لحساب</label><select id="orTreasuryAccount"></select></div></div>' +
+      '<button class="btn success block" style="margin-top:14px;" onclick="submitOtherRevenue_()">➕ تسجيل الإيراد</button></div>' +
+    '<div class="section-title">آخر الإيرادات المسجلة</div>' +
+    '<div class="card"><div id="otherRevenueList"></div></div>'
+  );
   loadOtherRevenue_();
   getTreasuryAccountsCached_().then(function (accounts) {
     var __ht = document.getElementById('orTreasuryAccount'); if (__ht) __ht.innerHTML = treasuryAccountOptionsHtml_(accounts);
@@ -3005,8 +3012,12 @@ async function submitOtherRevenue_() {
     description: document.getElementById('orDesc').value, treasuryAccountId: document.getElementById('orTreasuryAccount').value || null
   };
   if (!payload.source || !payload.amount) { showToast_('المصدر والمبلغ مطلوبين', 'error'); return; }
-  try { await api.addOtherRevenue({ username: state.user.username }, payload); showToast_('تم تسجيل الإيراد ✅', 'success'); renderReportsPage(); }
-  catch (err) { showErrorToast_(err); }
+  try {
+    await api.addOtherRevenue({ username: state.user.username }, payload);
+    showToast_('تم تسجيل الإيراد ✅', 'success');
+    document.getElementById('orSource').value = ''; document.getElementById('orAmount').value = ''; document.getElementById('orDesc').value = '';
+    loadOtherRevenue_();
+  } catch (err) { showErrorToast_(err); }
 }
 
 async function loadOtherRevenue_() {
