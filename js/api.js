@@ -717,11 +717,9 @@ api.addEmployeeAdvance = async function (session, employeeName, amount, treasury
 };
 
 api.runMonthlySalaries = async function (session, monthLabel) {
-  const { data: employees } = await supabaseClient.from('employees').select('*').eq('status', 'نشط');
-  const rows = (employees || []).map(function (e) { return { month_label: monthLabel, employee_id: e.id, base_salary: e.base_salary, net: e.base_salary }; });
-  const { error } = await supabaseClient.from('salaries').upsert(rows, { onConflict: 'month_label,employee_id' });
+  const { data, error } = await supabaseClient.rpc('rpc_run_monthly_salaries', { p_month_label: monthLabel });
   if (error) throw error;
-  return { success: true, count: rows.length };
+  return { success: true, count: data };
 };
 
 api.listSalaries = async function (monthLabel) {

@@ -3626,6 +3626,7 @@ function resolveDrilldownType_(name) {
   if (name === 'الموردون') return 'suppliers';
   if (name === 'المرتبات') return 'salaries';
   if (name === 'سلف الموظفين') return 'employeeAdvances';
+  if (name === 'أجور مستحقة') return 'accruedWages';
   if (name === 'إيرادات أخرى') return 'otherRevenue';
   if (name.indexOf('رأس المال') === 0) return 'partnerCapital';
   if (name.indexOf('مستحقات إدارة') === 0) return 'partnerAdminRights';
@@ -3703,6 +3704,11 @@ async function toggleAccountDrilldown_(nodeId, drilldownType, accountName) {
       el.innerHTML = balances.length === 0 ? emptyRow_('👤', 'مفيش سلف مفتوحة حاليًا') :
         balances.map(function (b) { return '<div class="list-item"><span>👤 ' + b.employeeName + '</span><b>' + formatMoney_(b.balance, cur) + '</b></div>'; }).join('');
 
+    } else if (drilldownType === 'accruedWages') {
+      const salaries = (await api.listSalaries()).filter(function (s) { return s.remaining > 0; });
+      el.innerHTML = salaries.length === 0 ? emptyRow_('👷', 'مفيش مرتبات مستحقة حاليًا') :
+        salaries.map(function (s) { return '<div class="list-item"><span>👷 ' + s.employeeName + '<br><span style="font-size:11px; color:var(--text-dim);">' + s.monthLabel + '</span></span><b>' + formatMoney_(s.remaining, cur) + ' متبقي</b></div>'; }).join('');
+
     } else if (drilldownType === 'otherRevenue') {
       const list = await api.listOtherRevenue();
       el.innerHTML = list.length === 0 ? emptyRow_('💵', 'مفيش إيرادات أخرى مسجلة') :
@@ -3733,7 +3739,10 @@ async function toggleAccountDrilldown_(nodeId, drilldownType, accountName) {
       const wide = await api.getExpensesInRange('2000-01-01', new Date().toISOString().slice(0, 10));
       const mine = wide.filter(function (e) { return e.mainCategory === category; }).slice(0, 15);
       el.innerHTML = mine.length === 0 ? emptyRow_('💸', 'مفيش مصروفات مسجّلة في الفئة دي') :
-        mine.map(function (e) { return '<div class="list-item"><span>' + (e.description || e.mainCategory) + '<br><span style="font-size:11px; color:var(--text-faint);">' + formatDate_(e.date) + '</span></span><b class="money-negative">' + formatMoney_(e.amount, cur) + '</b></div>'; }).join('');
+        mine.map(function (e) {
+          const label = (e.subCategory ? e.subCategory : e.mainCategory) + (e.description ? ' — ' + e.description : '');
+          return '<div class="list-item"><span>' + label + '<br><span style="font-size:11px; color:var(--text-faint);">' + formatDate_(e.date) + '</span></span><b class="money-negative">' + formatMoney_(e.amount, cur) + '</b></div>';
+        }).join('');
     }
   } catch (err) { showErrorToast_(err); }
 }
