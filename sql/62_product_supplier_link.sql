@@ -16,7 +16,7 @@ from (
   from purchase_order_items poi
   join product_variants pv on pv.id = poi.variant_id
   join purchase_orders po on po.id = poi.purchase_order_id
-  order by pv.product_id, po.created_at desc
+  order by pv.product_id, po.order_date desc
 ) as latest
 where p.id = latest.product_id and p.supplier_id is null;
 
