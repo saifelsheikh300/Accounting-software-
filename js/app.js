@@ -4763,7 +4763,7 @@ document.addEventListener('keydown', function (e) {
   }
 
   if (!typing && e.altKey) {
-    const map = { d: 'dashboard', p: 'pos', i: 'inventory', s: 'sales' };
+    const map = { d: 'dashboard', p: 'pos', i: 'inventory', s: 'sales', e: 'expenses', h: 'hr', a: 'accounts' };
     const target = map[e.key.toLowerCase()];
     if (target) { e.preventDefault(); navigate(target); }
     return;
@@ -4771,6 +4771,32 @@ document.addEventListener('keydown', function (e) {
 
   if (!typing && e.key === '?') { e.preventDefault(); showKeyboardShortcutsHelp_(); }
 });
+
+// ✅ Enter في أي خانة إدخال يضغط زرار "الحفظ/الإضافة" بتاع الفورم اللي إنتي فيها،
+// سواء في الصفحة العادية أو جوه أي نافذة منبثقة (Modal)
+document.addEventListener('keydown', function (e) {
+  if (e.key !== 'Enter') return;
+  const el = e.target;
+  const tag = (el.tagName || '').toLowerCase();
+  if (tag !== 'input') return;
+  const type = (el.type || '').toLowerCase();
+  if (['checkbox', 'radio', 'button', 'file', 'submit'].indexOf(type) !== -1) return;
+  const idLower = (el.id || '').toLowerCase();
+  if (idLower.indexOf('search') !== -1) return; // خانات البحث الحي، مش فورم بتتبعت
+
+  const scope = el.closest('#modalBox') || el.closest('.card');
+  if (!scope) return;
+  const btn = scope.querySelector('button.btn.success, button.btn-success, button.success');
+  if (btn && !btn.disabled) { e.preventDefault(); btn.click(); }
+});
+
+const KEYBOARD_SHORTCUTS_HELP_EXTRA = [
+  { keys: 'Enter', desc: 'وانتِ بتملي أي فورم — يضغط زرار الحفظ/الإضافة تلقائي' },
+  { keys: 'Alt + E', desc: 'الذهاب لشاشة المصروفات' },
+  { keys: 'Alt + H', desc: 'الذهاب للموارد البشرية' },
+  { keys: 'Alt + A', desc: 'الذهاب لشجرة الحسابات' }
+];
+Array.prototype.push.apply(KEYBOARD_SHORTCUTS_HELP, KEYBOARD_SHORTCUTS_HELP_EXTRA);
 
 function showKeyboardShortcutsHelp_() {
   const rows = KEYBOARD_SHORTCUTS_HELP.map(function (s) {
