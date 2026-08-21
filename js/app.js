@@ -4772,8 +4772,8 @@ document.addEventListener('keydown', function (e) {
   if (!typing && e.key === '?') { e.preventDefault(); showKeyboardShortcutsHelp_(); }
 });
 
-// ✅ Enter في أي خانة إدخال يضغط زرار "الحفظ/الإضافة" بتاع الفورم اللي إنتي فيها،
-// سواء في الصفحة العادية أو جوه أي نافذة منبثقة (Modal)
+// ✅ Enter في أي خانة يودّي للخانة اللي بعدها في نفس الفورم، ولو
+// إنتِ في آخر خانة يضغط زرار "الحفظ/الإضافة" تلقائي
 document.addEventListener('keydown', function (e) {
   if (e.key !== 'Enter') return;
   const el = e.target;
@@ -4786,12 +4786,25 @@ document.addEventListener('keydown', function (e) {
 
   const scope = el.closest('#modalBox') || el.closest('.card');
   if (!scope) return;
+
+  const focusables = Array.prototype.slice.call(scope.querySelectorAll('input, select, textarea'))
+    .filter(function (f) { return !f.disabled && f.offsetParent !== null; });
+  const idx = focusables.indexOf(el);
+
+  if (idx !== -1 && idx < focusables.length - 1) {
+    e.preventDefault();
+    const next = focusables[idx + 1];
+    next.focus();
+    if (next.select) next.select();
+    return;
+  }
+
   const btn = scope.querySelector('button.btn.success, button.btn-success, button.success');
   if (btn && !btn.disabled) { e.preventDefault(); btn.click(); }
 });
 
 const KEYBOARD_SHORTCUTS_HELP_EXTRA = [
-  { keys: 'Enter', desc: 'وانتِ بتملي أي فورم — يضغط زرار الحفظ/الإضافة تلقائي' },
+  { keys: 'Enter', desc: 'وانتِ بتملي أي فورم — يودّيكِ للخانة اللي بعدها، وفي آخر خانة يحفظ تلقائي' },
   { keys: 'Alt + E', desc: 'الذهاب لشاشة المصروفات' },
   { keys: 'Alt + H', desc: 'الذهاب للموارد البشرية' },
   { keys: 'Alt + A', desc: 'الذهاب لشجرة الحسابات' }
