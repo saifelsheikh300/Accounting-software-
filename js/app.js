@@ -3626,6 +3626,7 @@ function resolveDrilldownType_(name) {
   if (name === 'الموردون') return 'suppliers';
   if (name === 'المرتبات') return 'salaries';
   if (name === 'سلف الموظفين') return 'employeeAdvances';
+  if (name === 'إيرادات أخرى') return 'otherRevenue';
   if (name.indexOf('رأس المال') === 0) return 'partnerCapital';
   if (name.indexOf('مستحقات إدارة') === 0) return 'partnerAdminRights';
   if (name.indexOf('المصروفات:') === 0 && name !== 'المصروفات: إهلاك') return 'expenseCategory';
@@ -3701,6 +3702,11 @@ async function toggleAccountDrilldown_(nodeId, drilldownType, accountName) {
       const balances = await api.listEmployeeAdvanceBalances();
       el.innerHTML = balances.length === 0 ? emptyRow_('👤', 'مفيش سلف مفتوحة حاليًا') :
         balances.map(function (b) { return '<div class="list-item"><span>👤 ' + b.employeeName + '</span><b>' + formatMoney_(b.balance, cur) + '</b></div>'; }).join('');
+
+    } else if (drilldownType === 'otherRevenue') {
+      const list = await api.listOtherRevenue();
+      el.innerHTML = list.length === 0 ? emptyRow_('💵', 'مفيش إيرادات أخرى مسجلة') :
+        list.map(function (r) { return '<div class="list-item"><span>💵 ' + r.source + (r.description ? ' — ' + r.description : '') + '<br><span style="font-size:11px; color:var(--text-dim);">' + formatDate_(r.date) + '</span></span><b>' + formatMoney_(r.amount, cur) + '</b></div>'; }).join('');
 
     } else if (drilldownType === 'salaries') {
       const salaries = await api.listSalaries();
