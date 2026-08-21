@@ -1037,6 +1037,7 @@ let invWarehousesCache = null;
 let invLowStockOnly = false;
 let invCategoryFilter = '';
 let invStatusFilter = '';
+let invSupplierFilter = '';
 let invFiltersOpen = false;
 
 async function goToLowStockInventory_() {
@@ -1057,6 +1058,7 @@ async function loadInventoryBaseData_() {
     const idx = await api.getInventoryIndex();
     invProductsCache = idx.products;
     invWarehousesCache = await api.getWarehouses();
+    await getSuppliersCached_();
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -1067,6 +1069,7 @@ function applyInvFilters_(products) {
   if (invLowStockOnly) list = list.filter(isLowStock_);
   if (invCategoryFilter) list = list.filter(function (p) { return p.mainCategoryName === invCategoryFilter; });
   if (invStatusFilter) list = list.filter(function (p) { return p.status === invStatusFilter; });
+  if (invSupplierFilter) list = list.filter(function (p) { return p.supplierId === invSupplierFilter; });
   return list;
 }
 
@@ -1087,7 +1090,7 @@ function buildInventoryMainHtml_() {
   html += '<div class="card-row" style="margin-top:8px;">' +
     '<button class="btn secondary" style="flex:1;" onclick="toggleInvFilters_()">🔽 فلاتر' + (activeFiltersCount > 0 ? ' (' + activeFiltersCount + ')' : '') + '</button>' +
     '</div>';
-  html += '<div id="invFiltersPanel" style="display:' + (invFiltersOpen ? 'block' : 'none') + ';">' + buildInvFiltersPanel_() + '</div>';
+  html += '<div id="invFiltersPanel" style="display:' + (invFiltersOpen ? 'block' : 'none') + ';">' + buildInvFiltersPanel_(suppliersCache_ || []) + '</div>';
 
   html += '<button class="btn success block" style="margin-top:10px; padding:15px; font-size:15px;" onclick="openAddProductModal_()">➕ منتج جديد</button>' +
     '<div class="hint" style="cursor:pointer; margin-top:8px; text-align:center;" onclick="openCategoriesModal_()">🗂️ إدارة الفئات (' + invTreeCache.mainCategories.length + ')</div>';
@@ -1097,12 +1100,16 @@ function buildInventoryMainHtml_() {
   return html;
 }
 
-function buildInvFiltersPanel_() {
+function buildInvFiltersPanel_(suppliers) {
   const catOptions = invTreeCache.mainCategories.map(function (c) {
     return '<option value="' + c.name + '"' + (invCategoryFilter === c.name ? ' selected' : '') + '>' + c.name + '</option>';
   }).join('');
+  const supplierOptions = (suppliers || []).map(function (s) {
+    return '<option value="' + s.id + '"' + (invSupplierFilter === s.id ? ' selected' : '') + '>' + s.name + '</option>';
+  }).join('');
   return '<div class="card" style="margin-top:6px;">' +
     '<div class="field"><label>الفئة الرئيسية</label><select id="invFilterCategory"><option value="">كل الفئات</option>' + catOptions + '</select></div>' +
+    '<div class="field" style="margin-top:10px;"><label>المورد</label><select id="invFilterSupplier"><option value="">كل الموردين</option>' + supplierOptions + '</select></div>' +
     '<div class="field" style="margin-top:10px;"><label>الحالة</label><select id="invFilterStatus">' +
       '<option value=""' + (invStatusFilter === '' ? ' selected' : '') + '>الكل</option>' +
       '<option value="نشط"' + (invStatusFilter === 'نشط' ? ' selected' : '') + '>نشط</option>' +
@@ -1119,6 +1126,7 @@ function toggleInvFilters_() { invFiltersOpen = !invFiltersOpen; setContent_(bui
 
 function applyInvFiltersFromPanel_() {
   invCategoryFilter = document.getElementById('invFilterCategory').value;
+  invSupplierFilter = document.getElementById('invFilterSupplier').value;
   invStatusFilter = document.getElementById('invFilterStatus').value;
   invLowStockOnly = document.getElementById('invFilterLowStock').checked;
   invFiltersOpen = true;
@@ -1126,7 +1134,7 @@ function applyInvFiltersFromPanel_() {
 }
 
 function clearInvFilters_() {
-  invCategoryFilter = ''; invStatusFilter = ''; invLowStockOnly = false;
+  invCategoryFilter = ''; invStatusFilter = ''; invSupplierFilter = ''; invLowStockOnly = false;
   setContent_(buildInventoryMainHtml_());
 }
 
@@ -1137,7 +1145,7 @@ function buildInventoryCards_(products) {
   return products.map(function (p) {
     const totalQty = p.variants.reduce(function (s, v) { return s + Number(v.quantity); }, 0);
     const anyLow = p.variants.some(function (v) { return v.quantity <= v.lowStockThreshold; });
-    const catLine = (p.mainCategoryName ? p.mainCategoryName + ' ← ' : '') + (p.subCategoryName || 'بدون فئة');
+    const catLine = (p.mainCategoryName ? p.mainCategoryName + ' ← ' : '') + (p.subCategoryName || 'بدون فئة') + (p.supplierName ? ' · 🚚 ' + p.supplierName : '');
     return '<div class="card" style="margin-bottom:10px; padding:14px;">' +
       '<div class="card-row"><b style="font-size:15.5px;">' + p.name + '</b>' +
       '<span style="display:flex; gap:12px;"><span style="font-size:12px; color:var(--text-dim); cursor:pointer; white-space:nowrap;" onclick="openBarcodeModal_(\'' + p.code + '\')">🏷️ باركود</span>' +
