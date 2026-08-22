@@ -2479,7 +2479,7 @@ async function submitPurchaseOrder_() {
   const supplierEl = document.getElementById('poSupplierSelect');
   if (!supplierEl || !supplierEl.value) { showToast_('لازم تضيفي مورد وتختاريه الأول', 'error'); return; }
   const isOpening = document.getElementById('poIsOpeningBalance').checked;
-  const items = poCart.map(function (i) { return { variantCode: i.variantCode, qty: i.qty, price: i.price }; });
+  const items = poCart.map(function (i) { return { variantCode: i.variantCode, qty: i.qty, price: i.price, salePrice: i.salePrice || null }; });
   try {
     let res;
     if (isOpening) {
@@ -2494,9 +2494,6 @@ async function submitPurchaseOrder_() {
       };
       res = await api.createPurchaseOrder({ username: state.user.username }, payload);
     }
-    await Promise.all(poCart.map(function (i) {
-      return i.salePrice > 0 ? api.setVariantSalePrice({ username: state.user.username }, i.variantCode, i.salePrice).catch(function () { /* صامت */ }) : null;
-    }));
     showToast_('تم تسجيل أوردر الشراء ✅ الإجمالي: ' + res.total, 'success'); renderSuppliersPage();
   } catch (err) { showErrorToast_(err); }
 }

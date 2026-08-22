@@ -405,7 +405,7 @@ api.addSupplier = async function (session, payload) {
 
 api.createPurchaseOrder = async function (session, payload) {
   const { data, error } = await supabaseClient.rpc('rpc_create_purchase_order', {
-    p_supplier_name: payload.supplierName, p_items: payload.items.map(function (i) { return { variant_code: i.variantCode, qty: i.qty, price: i.price }; }),
+    p_supplier_name: payload.supplierName, p_items: payload.items.map(function (i) { return { variant_code: i.variantCode, qty: i.qty, price: i.price, sale_price: i.salePrice || null }; }),
     p_payment_status: payload.paymentStatus, p_amount_paid: payload.amountPaid || 0, p_treasury_account_id: payload.treasuryAccountId || null
   });
   if (error) throw error;
@@ -492,7 +492,7 @@ api.addCustomerOpeningBalance = async function (session, payload) {
 api.addOpeningInventory = async function (session, payload) {
   const { data, error } = await supabaseClient.rpc('rpc_add_opening_inventory', {
     p_supplier_name: payload.supplierName,
-    p_items: payload.items.map(function (i) { return { variant_code: i.variantCode, qty: i.qty, price: i.price }; }),
+    p_items: payload.items.map(function (i) { return { variant_code: i.variantCode, qty: i.qty, price: i.price, sale_price: i.salePrice || null }; }),
     p_owed_amount: payload.owedAmount || 0
   });
   if (error) throw error;
