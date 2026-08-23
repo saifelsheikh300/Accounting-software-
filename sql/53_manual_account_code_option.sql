@@ -1,43 +1,40 @@
 -- ============================================================
--- الدفعة 54: قفل رصيد أول مدة كان بينشئ حساب "رأس المال" في
--- شجرة الحسابات بس مش بيضيف صاحبه في جدول الشركاء (partners) —
--- فكان بيظهر في الشجرة بس مش في شاشة "رأس المال والشركاء".
--- دلوقتي بيتأكد إن اسم صاحب المحل موجود في جدول الشركاء برصيده.
+-- الدفعة 53: خانة اختيارية "كود الحساب نفسه" في شاشة إضافة
+-- حساب جديد — لو كتبتيها هيستخدمها بالظبط زي ما هي، ولو
+-- سيبتيها فاضية هيحسب أعلى رقم متاح تلقائي زي ما كان بيعمل.
 -- (قابلة لإعادة التشغيل بأمان)
 -- ============================================================
 
-create or replace function rpc_finalize_opening_balance_to_capital(p_owner_name text)
-returns numeric language plpgsql security definer as $$
-declare v_ob_id uuid; v_balance numeric; v_capital_account text;
+create or replace function rpc_add_account(
+  p_name text, p_type text, p_parent_code text default null, p_is_group boolean default false, p_manual_code text default null
+)
+returns table(code text) language plpgsql security definer as $$
+declare v_code text; v_max int; v_parent_id uuid;
 begin
   if not fn_has_permission('Reports', 'تعديل') then raise exception 'لا تملك صلاحية كافية'; end if;
-  if p_owner_name is null or trim(p_owner_name) = '' then raise exception 'اسم صاحب رأس المال مطلوب'; end if;
 
-  select id into v_ob_id from accounts where name = 'رصيد افتتاحي';
-  if v_ob_id is null then raise exception 'مفيش حساب "رصيد افتتاحي" أصلاً'; end if;
-
-  select coalesce(sum(amount) filter (where credit_account_id = v_ob_id),0) - coalesce(sum(amount) filter (where debit_account_id = v_ob_id),0)
-  into v_balance from journal_entries;
-
-  if v_balance = 0 then raise exception 'رصيد "رصيد افتتاحي" صفر أصلاً — مفيش حاجة تتنقل'; end if;
-
-  v_capital_account := 'رأس المال — ' || p_owner_name;
-
-  if v_balance > 0 then
-    perform fn_journal_entry('رصيد افتتاحي', v_capital_account, v_balance, 'CLOSE-OB-' || extract(epoch from now())::bigint::text, 'قفل رصيد أول مدة لرأس المال — ' || p_owner_name);
-  else
-    perform fn_journal_entry(v_capital_account, 'رصيد افتتاحي', abs(v_balance), 'CLOSE-OB-' || extract(epoch from now())::bigint::text, 'قفل رصيد أول مدة لرأس المال — ' || p_owner_name);
+  if p_parent_code is not null then
+    select id into v_parent_id from accounts where accounts.code = p_parent_code;
+    if v_parent_id is null then raise exception 'الحساب الأب غير موجود'; end if;
   end if;
 
-  -- ✅ 54: يبقى ظاهر في شاشة "رأس المال والشركاء" مش بس في الشجرة
-  if exists (select 1 from partners where name = p_owner_name) then
-    update partners set balance = balance + v_balance where name = p_owner_name;
+  if p_manual_code is not null and trim(p_manual_code) <> '' then
+    if exists (select 1 from accounts where accounts.code = p_manual_code) then
+      raise exception 'الكود ده مستخدم بالفعل — اختاري رقم تاني';
+    end if;
+    v_code := p_manual_code;
+  elsif p_parent_code is null then
+    select coalesce(max(a.code::int), 0) into v_max from accounts a where a.parent_id is null and a.code ~ '^[0-9]+$';
+    v_code := (v_max + 1)::text;
   else
-    insert into partners (name, balance) values (p_owner_name, v_balance);
+    select coalesce(max(substring(a.code from '([0-9]+)$')::int), 0) into v_max
+    from accounts a where a.parent_id = v_parent_id;
+    v_code := p_parent_code || '.' || lpad((v_max + 1)::text, 3, '0');
   end if;
 
-  perform fn_log_operation('FINALIZE_OPENING_BALANCE', jsonb_build_object('owner', p_owner_name, 'amount', v_balance));
-  return v_balance;
+  insert into accounts (code, name, type, parent_id, is_group) values (v_code, p_name, p_type, v_parent_id, p_is_group);
+  perform fn_log_operation('ADD_ACCOUNT', jsonb_build_object('code', v_code, 'name', p_name));
+  return query select v_code;
 end;
 $$;
 
