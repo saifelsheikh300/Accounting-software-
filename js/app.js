@@ -524,6 +524,18 @@ function statCard_(icon, label, value, sub, accent, onclick) {
 }
 function emptyRow_(icon, msg) { return '<div class="empty-state" style="padding:26px;"><span class="emoji" style="font-size:24px;">' + icon + '</span><div class="msg" style="font-size:12.5px;">' + msg + '</div></div>'; }
 
+// بتحول أي نص مستخدم (اسم منتج، اسم عميل، إلخ) لنص آمن قبل حقنه في الـ HTML
+// عشان تمنع XSS لو النص فيه علامات زي < > " ' لكسر الـ HTML أو تنفيذ كود
+function escapeHtml_(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function unifiedTreasuryCardHtml_(treasury, currency) {
   const totalRevealed = state.treasuryRevealed.total;
   const cashRevealed = state.treasuryRevealed.cash;
@@ -809,12 +821,13 @@ function buildProductResultsHtml_(results, addFnName) {
   if (results.length === 0) return emptyRow_('🔎', 'لا يوجد نتائج');
   return results.map(function (p) {
     return p.variants.map(function (v) {
-      const label = (p.name + ' — ' + v.color + ' ' + v.size).replace(/'/g, '');
+      const rawLabel = (p.name + ' — ' + v.color + ' ' + v.size).replace(/'/g, '');
+      const label = escapeHtml_(rawLabel);
       const price = v.specialPrice || p.basePrice;
-      return '<div class="product-tile" onclick="' + addFnName + '(\'' + v.code + '\', \'' + label + '\', ' + price + ')">' +
+      return '<div class="product-tile" onclick="' + addFnName + '(\'' + escapeHtml_(v.code) + '\', \'' + label + '\', ' + price + ')">' +
         '<div class="product-thumb">' + ((state.settings && state.settings.productIcon) || '📦') + '</div>' +
-        '<div class="product-tile-info"><div class="product-tile-name">' + p.name + '</div>' +
-        '<div class="product-tile-meta">' + v.color + ' · ' + v.size + ' · متاح: ' + v.quantity + '</div></div>' +
+        '<div class="product-tile-info"><div class="product-tile-name">' + escapeHtml_(p.name) + '</div>' +
+        '<div class="product-tile-meta">' + escapeHtml_(v.color) + ' · ' + escapeHtml_(v.size) + ' · متاح: ' + v.quantity + '</div></div>' +
         '<b>' + price + '</b></div>';
     }).join('');
   }).join('');
@@ -978,14 +991,15 @@ async function posInvoiceSearch_(query) {
     const matched = invoices.filter(function (i) { return i.status !== 'مدفوعة بالكامل' && i.customerName.toLowerCase().includes(query.toLowerCase()); });
     var __ht = document.getElementById('posInvSearchResults'); if (__ht) __ht.innerHTML = matched.length === 0 ? emptyRow_('🔎', 'لا يوجد فواتير مفتوحة بهذا الاسم') :
       matched.map(function (i) {
-        return '<div class="list-item" style="cursor:pointer;" onclick="selectPosInvoice_(\'' + i.invoiceId + '\', \'' + i.customerName.replace(/'/g, '') + '\')"><span>' + i.customerName + ' — ' + i.invoiceNumber + '</span><span class="pill warning">متبقي ' + i.remaining + '</span></div>';
+        const safeName = escapeHtml_(i.customerName.replace(/'/g, ''));
+        return '<div class="list-item" style="cursor:pointer;" onclick="selectPosInvoice_(\'' + escapeHtml_(i.invoiceId) + '\', \'' + safeName + '\')"><span>' + escapeHtml_(i.customerName) + ' — ' + escapeHtml_(i.invoiceNumber) + '</span><span class="pill warning">متبقي ' + i.remaining + '</span></div>';
       }).join('');
   } catch (err) { showErrorToast_(err); }
 }
 
 function selectPosInvoice_(id, name) {
   var __ht = document.getElementById('posSelectedInvoiceId'); if (__ht) __ht.value = id;
-  var __ht = document.getElementById('posInvSearchResults'); if (__ht) __ht.innerHTML = '<div class="hint">✅ هيتضاف على فاتورة: ' + name + '</div>';
+  var __ht = document.getElementById('posInvSearchResults'); if (__ht) __ht.innerHTML = '<div class="hint">✅ هيتضاف على فاتورة: ' + escapeHtml_(name) + '</div>';
 }
 
 async function submitPosSaleOnInvoice_(discount) {
@@ -3172,9 +3186,9 @@ async function loadEmployees_() {
     const employees = await api.listEmployees(true);
     const cur = state.settings.currency || 'جنيه';
     var __ht = document.getElementById('employeesList'); if (__ht) __ht.innerHTML = employees.length === 0 ? emptyRow_('👥', 'لا يوجد موظفين بعد') :
-      employees.map(function (e) { return '<div class="list-item"><span>' + e.name + ' — ' + e.jobTitle + '</span><span>' + formatMoney_(e.baseSalary, cur) + '</span></div>'; }).join('');
-    const options = employees.map(function (e) { return '<option>' + e.name + '</option>'; }).join('');
-    const optionsWithId = employees.map(function (e) { return '<option value="' + e.id + '">' + e.name + '</option>'; }).join('');
+      employees.map(function (e) { return '<div class="list-item"><span>' + escapeHtml_(e.name) + ' — ' + escapeHtml_(e.jobTitle) + '</span><span>' + formatMoney_(e.baseSalary, cur) + '</span></div>'; }).join('');
+    const options = employees.map(function (e) { return '<option>' + escapeHtml_(e.name) + '</option>'; }).join('');
+    const optionsWithId = employees.map(function (e) { return '<option value="' + escapeHtml_(e.id) + '">' + escapeHtml_(e.name) + '</option>'; }).join('');
     var __ht = document.getElementById('advEmployeeSelect'); if (__ht) __ht.innerHTML = options;
     refreshSelect_('advEmployeeSelect');
     var __ht = document.getElementById('advSettleEmployeeSelect'); if (__ht) __ht.innerHTML = optionsWithId;
@@ -4399,16 +4413,6 @@ async function renderAdvancesLoansPage() {
 
 function onLoanOpeningToggle_() {
   var __ht = document.getElementById('loanTreasury'); if (__ht) __ht.parentElement.style.display = document.getElementById('loanIsOpening').checked ? 'none' : '';
-}
-
-async function submitSettleAdvance_() {
-  const employeeId = document.getElementById('advSettleEmployee').value;
-  const amount = Number(document.getElementById('advSettleAmount').value);
-  if (!employeeId || !amount) { showToast_('اختاري الموظف واكتبي المبلغ', 'error'); return; }
-  try {
-    await api.settleEmployeeAdvance({ username: state.user.username }, { employeeId: employeeId, amount: amount, treasuryAccountId: document.getElementById('advSettleTreasury').value });
-    showToast_('تم تسجيل التسوية ✅', 'success'); renderAdvancesLoansPage();
-  } catch (err) { showErrorToast_(err); }
 }
 
 async function submitAddLoan_() {
