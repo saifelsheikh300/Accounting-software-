@@ -434,6 +434,43 @@ api.getSupplierStatement = async function (supplierName) {
   return data;
 };
 
+// بترجع أصناف أوردر شراء معين + الكمية اللي لسه ممكن ترتجع منها فعليًا
+// (يعني لسه في المخزون من نفس دفعة الشراء دي ومتباعتش)
+api.getPurchaseOrderReturnableItems = async function (orderId) {
+  const { data: order, error: orderErr } = await supabaseClient.from('purchase_orders').select('order_number').eq('id', orderId).single();
+  if (orderErr || !order) throw new Error('أوردر الشراء غير موجود');
+
+  const { data: items, error: itemsErr } = await supabaseClient.from('purchase_order_items')
+    .select('qty, unit_price, product_variants(id, code, color, size, products(name))').eq('purchase_order_id', orderId);
+  if (itemsErr) throw itemsErr;
+
+  const { data: batches } = await supabaseClient.from('inventory_batches')
+    .select('variant_id, quantity_remaining').eq('reference', order.order_number);
+  const remainingByVariant = {};
+  (batches || []).forEach(function (b) { remainingByVariant[b.variant_id] = (remainingByVariant[b.variant_id] || 0) + Number(b.quantity_remaining); });
+
+  return (items || []).map(function (i) {
+    const v = i.product_variants;
+    return {
+      variantId: v.id, variantCode: v.code,
+      label: (v.products ? v.products.name : '') + ' — ' + (v.color || '') + ' ' + (v.size || ''),
+      purchasedQty: i.qty, unitCost: i.unit_price,
+      availableToReturn: Math.max(0, remainingByVariant[v.id] || 0)
+    };
+  }).filter(function (i) { return i.availableToReturn > 0; });
+};
+
+api.recordSupplierReturn = async function (session, payload) {
+  const { data, error } = await supabaseClient.rpc('rpc_record_supplier_return', {
+    p_order_id: payload.orderId,
+    p_items: payload.items.map(function (i) { return { variant_code: i.variantCode, qty: i.qty }; }),
+    p_treasury_account_id: payload.treasuryAccountId || null,
+    p_notes: payload.notes || ''
+  });
+  if (error) throw error;
+  return data;
+};
+
 // ------------------------------------------------------------
 // الأوردرات والعملاء
 // ------------------------------------------------------------

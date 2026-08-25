@@ -2247,6 +2247,7 @@ function buildSupplierDetailHtml_() {
           '<div class="card-value">' + formatMoney_(order.remaining, cur) + '</div>' +
           '<div class="card-sub"><span class="pill ' + pill + '">' + order.paymentStatus + '</span></div></div>' +
       '</div>';
+      html += '<button class="btn secondary" style="margin-top:12px;" onclick="openSupplierReturnModal_(\'' + order.orderId + '\', \'' + order.orderNumber + '\')">↩️ مرتجع للمورد</button>';
     }
     html += '<div class="card-heading" style="margin-top:18px;">🧾 دفعات الأوردر ده بس (كل دفعة بتاريخها)</div>';
     html += '<div class="table-wrap" style="margin-top:8px;"><table><thead><tr><th>#</th><th>التاريخ</th><th>المبلغ المدفوع</th></tr></thead><tbody>';
@@ -2541,6 +2542,70 @@ async function confirmPaySupplier_(orderId) {
   try {
     await api.paySupplierInstallment({ username: state.user.username }, orderId, amount, treasuryAccountId);
     closeModal(); showToast_('تم تسجيل الدفعة ✅', 'success'); loadPurchaseOrders_();
+  } catch (err) { showErrorToast_(err); }
+}
+
+// ------------------------------------------------------------
+// مرتجع مورد (إرجاع بضاعة من أوردر شراء)
+// ------------------------------------------------------------
+async function openSupplierReturnModal_(orderId, orderNumber) {
+  try {
+    const [items, accounts] = await Promise.all([
+      api.getPurchaseOrderReturnableItems(orderId),
+      getTreasuryAccountsCached_().catch(function () { return []; })
+    ]);
+    if (items.length === 0) {
+      showToast_('مفيش أصناف من الأوردر ده متاحة للإرجاع دلوقتي (يمكن اتباعت خلاص)', 'error');
+      return;
+    }
+    const rowsHtml = items.map(function (i, idx) {
+      return '<div class="list-item" style="align-items:center;">' +
+        '<label style="display:flex; align-items:center; gap:8px; flex:1;">' +
+          '<input type="checkbox" id="supRetChk_' + idx + '" data-variant="' + escapeHtml_(i.variantCode) + '" onchange="toggleSupRetRow_(' + idx + ')">' +
+          '<span>' + escapeHtml_(i.label) + '<br><span style="font-size:11px; color:var(--text-faint);">تكلفة الوحدة: ' + i.unitCost + ' · المتاح للإرجاع: ' + i.availableToReturn + '</span></span>' +
+        '</label>' +
+        '<input type="number" id="supRetQty_' + idx + '" min="1" max="' + i.availableToReturn + '" value="' + i.availableToReturn + '" style="width:80px;" disabled>' +
+      '</div>';
+    }).join('');
+
+    openModal('↩️ مرتجع للمورد — ' + orderNumber, 'اختاري الأصناف والكمية اللي هترجع منها', rowsHtml +
+      '<div class="field" style="margin-top:12px;"><label>الفلوس المستردة (لو فيه) هتدخل في حساب</label><select id="supRetTreasuryAccount">' + treasuryAccountOptionsHtml_(accounts) + '</select></div>' +
+      '<div class="field" style="margin-top:8px;"><label>ملاحظات (اختياري)</label><input type="text" id="supRetNotes" placeholder="سبب الإرجاع مثلاً"></div>',
+      '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" onclick="submitSupplierReturn_(\'' + orderId + '\')">تأكيد المرتجع</button>');
+    window.__supRetItems_ = items;
+  } catch (err) { showErrorToast_(err); }
+}
+
+function toggleSupRetRow_(idx) {
+  const chk = document.getElementById('supRetChk_' + idx);
+  const qtyEl = document.getElementById('supRetQty_' + idx);
+  if (qtyEl) qtyEl.disabled = !chk.checked;
+}
+
+async function submitSupplierReturn_(orderId) {
+  const items = window.__supRetItems_ || [];
+  const chosen = [];
+  items.forEach(function (i, idx) {
+    const chk = document.getElementById('supRetChk_' + idx);
+    if (chk && chk.checked) {
+      const qty = Number(document.getElementById('supRetQty_' + idx).value);
+      if (qty > 0) chosen.push({ variantCode: i.variantCode, qty: Math.min(qty, i.availableToReturn) });
+    }
+  });
+  if (chosen.length === 0) { showToast_('اختاري صنف واحد على الأقل وحددي الكمية', 'error'); return; }
+
+  const treasuryAccountId = document.getElementById('supRetTreasuryAccount').value || null;
+  const notes = document.getElementById('supRetNotes').value.trim();
+
+  try {
+    const res = await api.recordSupplierReturn({ username: state.user.username }, { orderId: orderId, items: chosen, treasuryAccountId: treasuryAccountId, notes: notes });
+    closeModal();
+    let msg = 'تم تسجيل المرتجع ✅ بقيمة ' + res.return_total;
+    if (res.cash_refund > 0) msg += ' (منها ' + res.cash_refund + ' كاش مسترد)';
+    showToast_(msg, 'success');
+    const supplierName = supplierDetailCache && supplierDetailCache.supplier ? supplierDetailCache.supplier.name : null;
+    if (supplierName) supplierDetailCache = await api.getSupplierStatement(supplierName);
+    switchSupplierTab_('purchases');
   } catch (err) { showErrorToast_(err); }
 }
 
