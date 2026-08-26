@@ -460,6 +460,14 @@ api.getPurchaseOrderItems = async function (orderId) {
   });
 };
 
+api.getSupplierReturns = async function (supplierName) {
+  const { data, error } = await supabaseClient.from('supplier_returns').select('*').eq('supplier_name', supplierName).order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(function (r) {
+    return { id: r.id, items: r.items, returnTotal: r.return_total, settlement: r.settlement, createdAt: r.created_at };
+  });
+};
+
 // ------------------------------------------------------------
 // الأوردرات والعملاء
 // ------------------------------------------------------------

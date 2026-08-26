@@ -2223,6 +2223,7 @@ function applySupplierDueFilter_() {
 // ------------------------------------------------------------
 let supplierDetailTab = 'data';
 let supplierDetailCache = null;
+let supplierReturnsCache_ = null;
 let selectedOrderNumber_ = null;
 let selectedOrderItems_ = [];
 
@@ -2230,6 +2231,7 @@ async function openSupplierDetailModal_(supplierName) {
   try {
     supplierDetailCache = await api.getSupplierStatement(supplierName);
     supplierDetailTab = 'data';
+    supplierReturnsCache_ = null;
     openModal('📇 ' + supplierName, '', buildSupplierDetailHtml_(), '<button class="btn secondary" onclick="closeModal()">إغلاق</button>', true);
   } catch (err) { showErrorToast_(err); }
 }
@@ -2290,6 +2292,7 @@ function buildSupplierDetailHtml_() {
   let html = '<div class="subtabs">' +
     '<div class="subtab' + (supplierDetailTab === 'data' ? ' active' : '') + '" onclick="switchSupplierTab_(\'data\')">📇 البيانات</div>' +
     '<div class="subtab' + (supplierDetailTab === 'purchases' ? ' active' : '') + '" onclick="switchSupplierTab_(\'purchases\')">📦 المشتريات</div>' +
+    '<div class="subtab' + (supplierDetailTab === 'returns' ? ' active' : '') + '" onclick="switchSupplierTab_(\'returns\')">↩️ المرتجعات</div>' +
     '<div class="subtab' + (supplierDetailTab === 'statement' ? ' active' : '') + '" onclick="switchSupplierTab_(\'statement\')">🧾 كشف الحساب</div>' +
   '</div>';
 
@@ -2304,6 +2307,15 @@ function buildSupplierDetailHtml_() {
       s.purchases.map(function (p) {
         const pill = p.paymentStatus === 'مدفوع بالكامل' ? 'success' : (p.paymentStatus === 'مدفوع جزئيًا' ? 'warning' : 'danger');
         return '<tr style="cursor:pointer;" onclick=\'openOrderPaymentsView_(' + JSON.stringify(p.orderNumber) + ')\'><td>' + p.orderNumber + '</td><td>' + formatDate_(p.date) + '</td><td><b>' + formatMoney_(p.total, cur) + '</b></td><td><span class="pill ' + pill + '">' + p.paymentStatus + '</span></td></tr>';
+      }).join('');
+    html += '</tbody></table></div>';
+  } else if (supplierDetailTab === 'returns') {
+    const returns = supplierReturnsCache_ || [];
+    html += '<div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>الأصناف</th><th>القيمة</th><th>طريقة الاسترداد</th></tr></thead><tbody>';
+    html += returns.length === 0 ? '<tr><td colspan="4">' + emptyRow_('↩️', 'لا يوجد مرتجعات بعد') + '</td></tr>' :
+      returns.map(function (r) {
+        const itemsSummary = (r.items || []).map(function (i) { return escapeHtml_(i.label) + ' × ' + i.qty; }).join('، ');
+        return '<tr><td>' + formatDate_(r.createdAt) + '</td><td style="font-size:12px;">' + itemsSummary + '</td><td><b>' + formatMoney_(r.returnTotal, cur) + '</b></td><td><span class="pill ' + (r.settlement === 'نقدي' ? 'success' : 'warning') + '">' + r.settlement + '</span></td></tr>';
       }).join('');
     html += '</tbody></table></div>';
   } else {
@@ -2327,9 +2339,15 @@ function buildSupplierDetailHtml_() {
   return html;
 }
 
-function switchSupplierTab_(tab) {
+async function switchSupplierTab_(tab) {
   supplierDetailTab = tab;
   var __ht = document.getElementById('modalBody'); if (__ht) __ht.innerHTML = buildSupplierDetailHtml_();
+  if (tab === 'returns' && supplierReturnsCache_ === null) {
+    try {
+      supplierReturnsCache_ = await api.getSupplierReturns(supplierDetailCache.supplier.name);
+      if (supplierDetailTab === 'returns') { var __ht2 = document.getElementById('modalBody'); if (__ht2) __ht2.innerHTML = buildSupplierDetailHtml_(); }
+    } catch (err) { showErrorToast_(err); }
+  }
 }
 
 let poTilesCache_ = []; let poTilesShown_ = 0;
