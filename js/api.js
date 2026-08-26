@@ -101,7 +101,7 @@ api.addSeason = async function (session, payload) {
 
 api.getNotifications = async function () {
   const notifications = [];
-  const { data: lowStock } = await supabaseClient.from('product_variants').select('code,color,size,quantity,low_stock_threshold,products(name)').eq('status', 'نشط').lte('quantity', 999999);
+  const { data: lowStock } = await supabaseClient.from('product_variants').select('color,size,quantity,low_stock_threshold,products(name)').eq('status', 'نشط').lte('quantity', 999999);
   (lowStock || []).filter(function (v) { return v.quantity <= v.low_stock_threshold; }).slice(0, 10).forEach(function (v) {
     notifications.push({ type: 'low_stock', severity: 'warning', message: 'مخزون منخفض: ' + (v.products ? v.products.name : '') + ' (' + v.color + ' ' + v.size + ') — الكمية: ' + v.quantity, time: null });
   });
