@@ -819,7 +819,7 @@ async function submitPartialReturn_() {
 
 function buildProductResultsHtml_(results, addFnName) {
   if (results.length === 0) return emptyRow_('🔎', 'لا يوجد نتائج');
-  return results.map(function (p) {
+  const tilesHtml = results.map(function (p) {
     return p.variants.map(function (v) {
       const rawLabel = (p.name + ' — ' + v.color + ' ' + v.size).replace(/'/g, '');
       const label = escapeHtml_(rawLabel);
@@ -831,6 +831,8 @@ function buildProductResultsHtml_(results, addFnName) {
         '<b>' + price + '</b></div>';
     }).join('');
   }).join('');
+  // حاوية بارتفاع ثابت (زي 5 نتايج تقريبًا) والسكرول بيبقى جواها بس، مش في الصفحة كلها
+  return '<div style="max-height:340px; overflow-y:auto; -webkit-overflow-scrolling:touch;">' + tilesHtml + '</div>';
 }
 
 function addToPosCart_(variantCode, label, price) {

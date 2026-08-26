@@ -379,7 +379,7 @@ api.getSuppliers = async function () {
       else if (totalPaid > 0) dueStatus = 'مدفوع جزئيًا';
       else dueStatus = 'غير مدفوع';
     }
-    return { name: s.name, contact: s.contact, notes: s.notes, totalRemaining: totalRemaining, dueStatus: dueStatus };
+    return { id: s.id, name: s.name, contact: s.contact, notes: s.notes, totalRemaining: totalRemaining, dueStatus: dueStatus };
   });
 };
 
