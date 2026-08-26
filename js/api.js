@@ -445,6 +445,21 @@ api.recordStandaloneSupplierReturn = async function (session, payload) {
   return data;
 };
 
+// بترجع كل أصناف أوردر شراء معين بالتفصيل (الكود، الاسم، اللون، المقاس، الكمية، سعر الوحدة)
+api.getPurchaseOrderItems = async function (orderId) {
+  const { data, error } = await supabaseClient.from('purchase_order_items')
+    .select('qty, unit_price, product_variants(code, color, size, products(name))').eq('purchase_order_id', orderId);
+  if (error) throw error;
+  return (data || []).map(function (i) {
+    const v = i.product_variants;
+    return {
+      code: v ? v.code : '—',
+      label: (v && v.products ? v.products.name : '') + (v ? ' — ' + (v.color || '') + ' ' + (v.size || '') : ''),
+      qty: i.qty, unitPrice: i.unit_price
+    };
+  });
+};
+
 // ------------------------------------------------------------
 // الأوردرات والعملاء
 // ------------------------------------------------------------

@@ -488,16 +488,16 @@ function buildDashboardHtml_(d) {
   if (d.partnersShares && d.partnersShares.length > 0) {
     html += '<div class="section-title">حصص الشركاء</div><div class="card">';
     d.partnersShares.forEach(function (p) {
-      html += '<div class="list-item"><span>' + p.name + ' <span class="pill info">' + (p.ownershipPercent || 0) + '% ملكية</span></span><b>' + formatMoney_(p.share, cur) + '</b></div>';
+      html += '<div class="list-item"><span>' + p.name + ' <span class="pill info">' + roundPct_(p.ownershipPercent || 0) + '% ملكية</span></span><b>' + formatMoney_(p.share, cur) + '</b></div>';
     });
     html += '</div>';
   }
 
   html += '<div class="section-title">مؤشرات الربحية</div><div class="grid grid-4">';
-  html += statCard_('📈', 'صافي الربح', '<span class="' + (d.profit.netProfit >= 0 ? 'money-positive' : 'money-negative') + '">' + formatMoney_(d.profit.netProfit, cur) + '</span>', 'هامش ' + d.profit.npMargin + '%', true);
+  html += statCard_('📈', 'صافي الربح', '<span class="' + (d.profit.netProfit >= 0 ? 'money-positive' : 'money-negative') + '">' + formatMoney_(d.profit.netProfit, cur) + '</span>', 'هامش ' + roundPct_(d.profit.npMargin) + '%', true);
   html += statCard_('🧾', 'عدد عمليات البيع', d.sales.count, '', false);
-  html += statCard_('📐', 'GP / Sales', d.profit.gpMargin + '%', '', false);
-  html += statCard_('📐', 'NP / Sales', d.profit.npMargin + '%', '', false);
+  html += statCard_('📐', 'GP / Sales', roundPct_(d.profit.gpMargin) + '%', '', false);
+  html += statCard_('📐', 'NP / Sales', roundPct_(d.profit.npMargin) + '%', '', false);
   html += '</div>';
 
   html += '<div class="section-title">تنبيهات مخزون منخفض <span class="count-chip">' + d.lowStockCount + '</span></div><div class="card" style="cursor:pointer;" onclick="goToLowStockInventory_()">';
@@ -2222,6 +2222,7 @@ function applySupplierDueFilter_() {
 let supplierDetailTab = 'data';
 let supplierDetailCache = null;
 let selectedOrderNumber_ = null;
+let selectedOrderItems_ = [];
 
 async function openSupplierDetailModal_(supplierName) {
   try {
@@ -2231,10 +2232,18 @@ async function openSupplierDetailModal_(supplierName) {
   } catch (err) { showErrorToast_(err); }
 }
 
-function openOrderPaymentsView_(orderNumber) {
+async function openOrderPaymentsView_(orderNumber) {
   selectedOrderNumber_ = orderNumber;
   supplierDetailTab = 'orderPayments';
+  selectedOrderItems_ = [];
   var __ht = document.getElementById('modalBody'); if (__ht) __ht.innerHTML = buildSupplierDetailHtml_();
+  const order = supplierDetailCache.purchases.find(function (p) { return p.orderNumber === orderNumber; });
+  if (order && order.orderId) {
+    try {
+      selectedOrderItems_ = await api.getPurchaseOrderItems(order.orderId);
+      if (selectedOrderNumber_ === orderNumber) { var __ht2 = document.getElementById('modalBody'); if (__ht2) __ht2.innerHTML = buildSupplierDetailHtml_(); }
+    } catch (err) { showErrorToast_(err); }
+  }
 }
 
 function buildSupplierDetailHtml_() {
@@ -2256,6 +2265,16 @@ function buildSupplierDetailHtml_() {
           '<div class="card-sub"><span class="pill ' + pill + '">' + order.paymentStatus + '</span></div></div>' +
       '</div>';
     }
+    html += '<div class="card-heading" style="margin-top:18px;">📦 الأصناف اللي اتشترت في الأوردر ده</div>';
+    html += '<div class="table-wrap" style="margin-top:8px;"><table><thead><tr><th>الكود</th><th>الصنف</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead><tbody>';
+    if (selectedOrderItems_.length === 0) {
+      html += '<tr><td colspan="5">' + emptyRow_('📦', 'جاري التحميل أو لا يوجد أصناف') + '</td></tr>';
+    } else {
+      html += selectedOrderItems_.map(function (i) {
+        return '<tr><td><code>' + escapeHtml_(i.code) + '</code></td><td>' + escapeHtml_(i.label) + '</td><td>' + i.qty + '</td><td>' + formatMoney_(i.unitPrice, cur) + '</td><td><b>' + formatMoney_(i.qty * i.unitPrice, cur) + '</b></td></tr>';
+      }).join('');
+    }
+    html += '</tbody></table></div>';
     html += '<div class="card-heading" style="margin-top:18px;">🧾 دفعات الأوردر ده بس (كل دفعة بتاريخها)</div>';
     html += '<div class="table-wrap" style="margin-top:8px;"><table><thead><tr><th>#</th><th>التاريخ</th><th>المبلغ المدفوع</th></tr></thead><tbody>';
     html += orderPayments.length === 0 ? '<tr><td colspan="3">' + emptyRow_('🧾', 'لا يوجد دفعات على الأوردر ده لسه') + '</td></tr>' :
@@ -2905,9 +2924,9 @@ async function renderCapitalPage() {
     const activePartners = summary.partners.filter(function (p) { return p.active; });
     const formerPartners = summary.partners.filter(function (p) { return !p.active; });
     function partnerRow_(p) {
-      return '<div class="list-item" style="display:block; padding:14px 4px;"><div class="card-row"><b>' + p.name + '</b><span class="pill info">' + p.ownershipPercent + '% ملكية</span></div>' +
+      return '<div class="list-item" style="display:block; padding:14px 4px;"><div class="card-row"><b>' + p.name + '</b><span class="pill info">' + roundPct_(p.ownershipPercent) + '% ملكية</span></div>' +
         '<div style="margin-top:6px; font-size:12px; color:var(--text-dim);">الرصيد: ' + formatMoney_(p.balance, cur) +
-        ' · توزيع أرباح: ' + (p.profitSharePercent !== null ? p.profitSharePercent + '%' : '—') +
+        ' · توزيع أرباح: ' + (p.profitSharePercent !== null ? roundPct_(p.profitSharePercent) + '%' : '—') +
         ' · إدارة: ' + (p.adminRate !== null ? p.adminRate + (p.adminRateType === 'نسبة %' ? '%' : ' ' + cur) : '—') + '</div>' +
         '<button class="btn sm secondary" style="margin-top:8px;" onclick=\'togglePartnerActive_(' + JSON.stringify(p.name) + ', ' + (!p.active) + ')\'>' + (p.active ? '🔒 تعطيل (شريك مشى)' : '✅ إعادة تفعيل') + '</button></div>';
     }
@@ -3558,6 +3577,9 @@ document.addEventListener('click', function (e) {
 });
 
 function formatMoney_(amount, currency) { const n = Number(amount) || 0; return n.toLocaleString('ar-EG', { maximumFractionDigits: 2 }) + ' ' + (currency || ''); }
+// بتقرب أي نسبة مئوية لأقرب رقم صحيح للعرض بس (زي نسب الشراكة وهوامش الربح)
+// عشان متظهرش كسور طويلة زي 33.333333333336% على الشاشة
+function roundPct_(n) { return Math.round(Number(n) || 0); }
 function formatDate_(d) { try { return new Date(d).toLocaleString('ar-EG'); } catch (e) { return ''; } }
 
 function showToast_(message, type) {
@@ -3794,7 +3816,7 @@ async function toggleAccountDrilldown_(nodeId, drilldownType, accountName) {
       const partner = summary.partners.find(function (p) { return p.name === partnerName; });
       el.innerHTML = !partner ? emptyRow_('🤝', 'مفيش بيانات لهذا الشريك') :
         '<div class="list-item"><span>الرصيد الحالي</span><b>' + formatMoney_(partner.balance, cur) + '</b></div>' +
-        '<div class="list-item"><span>نسبة الملكية</span><b>' + partner.ownershipPercent + '%</b></div>';
+        '<div class="list-item"><span>نسبة الملكية</span><b>' + roundPct_(partner.ownershipPercent) + '%</b></div>';
 
     } else if (drilldownType === 'partnerAdminRights') {
       const rights = await api.getAdminRights();
