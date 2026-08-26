@@ -2086,6 +2086,10 @@ async function renderSupplierTabContent_() {
           '<span style="display:flex; align-items:center; gap:10px;"><span style="font-size:22px;">📂</span><span><b style="display:block;">ده مخزون قديم عندي بالفعل</b><span style="font-size:12px; color:var(--text-dim);">رصيد افتتاحي — مش عملية شراء جديدة</span></span></span>' +
           '<span class="toggle-switch"><input type="checkbox" id="poIsOpeningBalance" onchange="onPoOpeningBalanceToggle_()"><span class="toggle-slider"></span></span>' +
         '</label>' +
+        '<label id="poReturnToggleCard" for="poIsSupplierReturn" style="display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer; background:rgba(127,127,127,0.06); border:1.5px solid var(--border); padding:14px; border-radius:12px; transition:all .15s; margin-top:10px;">' +
+          '<span style="display:flex; align-items:center; gap:10px;"><span style="font-size:22px;">↩️</span><span><b style="display:block;">ده مرتجع للمورد</b><span style="font-size:12px; color:var(--text-dim);">بترجعي بضاعة، مش بتشتري</span></span></span>' +
+          '<span class="toggle-switch"><input type="checkbox" id="poIsSupplierReturn" onchange="onPoReturnToggle_()"><span class="toggle-slider"></span></span>' +
+        '</label>' +
         '<div id="poNormalPaymentWrap" class="form-grid" style="margin-top:8px;">' +
           '<div class="field"><label>حالة الدفع</label><select id="poPaymentStatus" onchange="onPoPaymentStatusChange_()"><option>مدفوع بالكامل</option><option>مدفوع جزئيًا</option><option>متأخر/غير مدفوع</option></select></div>' +
           '<div class="field" id="poAmountPaidWrap" style="display:none;"><label>المبلغ المدفوع دلوقتي</label><input type="number" id="poAmountPaid" value="0"></div>' +
@@ -2095,8 +2099,12 @@ async function renderSupplierTabContent_() {
           '<div class="field"><label>المبلغ اللي لسه مديون بيه فعلاً للمورد ده (لو مش مديونة خالص، سيبيه صفر)</label><input type="number" id="poOwedAmount" value="0"></div>' +
           '<div class="hint">الباقي هيتحسب إنه متغطي من رأس مالك الحالي — والخزنة مش هتتأثر خالص في الحالتين</div>' +
         '</div>' +
+        '<div id="poReturnWrap" style="display:none;">' +
+          '<div class="field"><label>الفلوس هترجع إزاي</label><select id="poReturnSettlement" onchange="onPoReturnSettlementChange_()"><option value="نقدي">نقدي — هرجعلي فلوس دلوقتي</option><option value="خصم">خصم — هينقص من اللي أنا مديون بيه للمورد</option></select></div>' +
+          '<div class="hint">قيمة المرتجع بتتحسب تلقائيًا بمتوسط سعر الشراء الفعلي لكل صنف (FIFO) — مش بسعر البيع</div>' +
+        '</div>' +
       '</div>' +
-      '<button class="btn success block" style="margin-top:16px; font-size:15px; padding:16px;" onclick="submitPurchaseOrder_()">✅ تسجيل أوردر الشراء</button>';
+      '<button id="poSubmitBtn" class="btn success block" style="margin-top:16px; font-size:15px; padding:16px;" onclick="submitPurchaseOrder_()">✅ تسجيل أوردر الشراء</button>';
 
     renderPoCart_();
     poSearch_('');
@@ -2247,7 +2255,6 @@ function buildSupplierDetailHtml_() {
           '<div class="card-value">' + formatMoney_(order.remaining, cur) + '</div>' +
           '<div class="card-sub"><span class="pill ' + pill + '">' + order.paymentStatus + '</span></div></div>' +
       '</div>';
-      html += '<button class="btn secondary" style="margin-top:12px;" onclick="openSupplierReturnModal_(\'' + order.orderId + '\', \'' + order.orderNumber + '\')">↩️ مرتجع للمورد</button>';
     }
     html += '<div class="card-heading" style="margin-top:18px;">🧾 دفعات الأوردر ده بس (كل دفعة بتاريخها)</div>';
     html += '<div class="table-wrap" style="margin-top:8px;"><table><thead><tr><th>#</th><th>التاريخ</th><th>المبلغ المدفوع</th></tr></thead><tbody>';
@@ -2465,14 +2472,19 @@ function addToPoCart_(variantCode, label, cost, salePrice, qty) {
 function renderPoCart_() {
   const el = document.getElementById('poCartList');
   if (poCart.length === 0) { el.innerHTML = emptyRow_('📦', 'لسه محددتش أصناف'); return; }
+  const returnToggle = document.getElementById('poIsSupplierReturn');
+  const isReturn = !!(returnToggle && returnToggle.checked);
   let total = 0;
   el.innerHTML = poCart.map(function (i, idx) {
     total += i.price * i.qty;
+    const pricingHtml = isReturn
+      ? '<span style="color:var(--text-dim);">💡 التكلفة بتتحسب تلقائيًا بمتوسط سعر الشراء الفعلي</span>'
+      : '<span>شراء <input type="number" value="' + i.price + '" style="width:65px; padding:5px;" onchange="updatePoItemPrice_(' + idx + ', this.value)"></span>' +
+        '<span>بيع <input type="number" value="' + i.salePrice + '" style="width:65px; padding:5px;" onchange="updatePoItemSalePrice_(' + idx + ', this.value)"></span>';
     return '<div class="list-item" style="display:block; padding:12px 4px;"><div class="card-row"><b>' + i.label + '</b>' +
       '<span class="del-x" onclick="removeFromPoCart_(' + idx + ')" style="cursor:pointer;">✕</span></div>' +
-      '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; font-size:12.5px;">' +
-      '<span>شراء <input type="number" value="' + i.price + '" style="width:65px; padding:5px;" onchange="updatePoItemPrice_(' + idx + ', this.value)"></span>' +
-      '<span>بيع <input type="number" value="' + i.salePrice + '" style="width:65px; padding:5px;" onchange="updatePoItemSalePrice_(' + idx + ', this.value)"></span>' +
+      '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; font-size:12.5px; align-items:center;">' +
+      pricingHtml +
       '<span>كمية <input type="number" value="' + i.qty + '" style="width:50px; padding:5px;" onchange="updatePoItemQty_(' + idx + ', this.value)"></span>' +
       '</div></div>';
   }).join('') + '<div class="list-item" style="font-weight:900;"><b>الإجمالي (شراء)</b><b>' + total + '</b></div>';
@@ -2487,6 +2499,36 @@ function onPoOpeningBalanceToggle_() {
   document.getElementById('poNormalPaymentWrap').style.display = isOpening ? 'none' : '';
   document.getElementById('poTreasuryWrap').style.display = isOpening ? 'none' : '';
   document.getElementById('poOwedWrap').style.display = isOpening ? '' : 'none';
+  if (isOpening) {
+    document.getElementById('poIsSupplierReturn').checked = false;
+    document.getElementById('poReturnToggleCard').style.display = 'none';
+    document.getElementById('poReturnWrap').style.display = 'none';
+  } else {
+    document.getElementById('poReturnToggleCard').style.display = '';
+  }
+}
+
+function onPoReturnToggle_() {
+  const isReturn = document.getElementById('poIsSupplierReturn').checked;
+  document.getElementById('poNormalPaymentWrap').style.display = isReturn ? 'none' : '';
+  document.getElementById('poReturnWrap').style.display = isReturn ? '' : 'none';
+  document.getElementById('poOpeningBalanceToggleCard').style.display = isReturn ? 'none' : '';
+  const btn = document.getElementById('poSubmitBtn');
+  if (isReturn) {
+    document.getElementById('poIsOpeningBalance').checked = false;
+    document.getElementById('poOwedWrap').style.display = 'none';
+    onPoReturnSettlementChange_();
+    btn.textContent = '↩️ تسجيل المرتجع';
+  } else {
+    document.getElementById('poTreasuryWrap').style.display = '';
+    btn.textContent = '✅ تسجيل أوردر الشراء';
+  }
+  renderPoCart_();
+}
+
+function onPoReturnSettlementChange_() {
+  const isCash = document.getElementById('poReturnSettlement').value === 'نقدي';
+  document.getElementById('poTreasuryWrap').style.display = isCash ? '' : 'none';
 }
 
 async function submitPurchaseOrder_() {
@@ -2494,9 +2536,21 @@ async function submitPurchaseOrder_() {
   const supplierEl = document.getElementById('poSupplierSelect');
   if (!supplierEl || !supplierEl.value) { showToast_('لازم تضيفي مورد وتختاريه الأول', 'error'); return; }
   const isOpening = document.getElementById('poIsOpeningBalance').checked;
+  const isReturn = document.getElementById('poIsSupplierReturn').checked;
   const items = poCart.map(function (i) { return { variantCode: i.variantCode, qty: i.qty, price: i.price, salePrice: i.salePrice || null }; });
   try {
     let res;
+    if (isReturn) {
+      const settlement = document.getElementById('poReturnSettlement').value;
+      const returnItems = poCart.map(function (i) { return { variantCode: i.variantCode, qty: i.qty }; });
+      res = await api.recordStandaloneSupplierReturn({ username: state.user.username }, {
+        supplierName: supplierEl.value, items: returnItems, settlement: settlement,
+        treasuryAccountId: document.getElementById('poTreasuryAccount').value || null
+      });
+      let msg = 'تم تسجيل المرتجع ✅ بقيمة ' + res.return_total;
+      showToast_(msg, 'success'); renderSuppliersPage();
+      return;
+    }
     if (isOpening) {
       res = await api.addOpeningInventory({ username: state.user.username }, {
         supplierName: supplierEl.value, items: items, owedAmount: Number(document.getElementById('poOwedAmount').value) || 0
@@ -2546,69 +2600,8 @@ async function confirmPaySupplier_(orderId) {
 }
 
 // ------------------------------------------------------------
-// مرتجع مورد (إرجاع بضاعة من أوردر شراء)
+// مرتجع مورد (هيتضاف في شاشة "أوردر شراء جديد" كخيار مباشر)
 // ------------------------------------------------------------
-async function openSupplierReturnModal_(orderId, orderNumber) {
-  try {
-    const [items, accounts] = await Promise.all([
-      api.getPurchaseOrderReturnableItems(orderId),
-      getTreasuryAccountsCached_().catch(function () { return []; })
-    ]);
-    if (items.length === 0) {
-      showToast_('مفيش أصناف من الأوردر ده متاحة للإرجاع دلوقتي (يمكن اتباعت خلاص)', 'error');
-      return;
-    }
-    const rowsHtml = items.map(function (i, idx) {
-      return '<div class="list-item" style="align-items:center;">' +
-        '<label style="display:flex; align-items:center; gap:8px; flex:1;">' +
-          '<input type="checkbox" id="supRetChk_' + idx + '" data-variant="' + escapeHtml_(i.variantCode) + '" onchange="toggleSupRetRow_(' + idx + ')">' +
-          '<span>' + escapeHtml_(i.label) + '<br><span style="font-size:11px; color:var(--text-faint);">تكلفة الوحدة: ' + i.unitCost + ' · المتاح للإرجاع: ' + i.availableToReturn + '</span></span>' +
-        '</label>' +
-        '<input type="number" id="supRetQty_' + idx + '" min="1" max="' + i.availableToReturn + '" value="' + i.availableToReturn + '" style="width:80px;" disabled>' +
-      '</div>';
-    }).join('');
-
-    openModal('↩️ مرتجع للمورد — ' + orderNumber, 'اختاري الأصناف والكمية اللي هترجع منها', rowsHtml +
-      '<div class="field" style="margin-top:12px;"><label>الفلوس المستردة (لو فيه) هتدخل في حساب</label><select id="supRetTreasuryAccount">' + treasuryAccountOptionsHtml_(accounts) + '</select></div>' +
-      '<div class="field" style="margin-top:8px;"><label>ملاحظات (اختياري)</label><input type="text" id="supRetNotes" placeholder="سبب الإرجاع مثلاً"></div>',
-      '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" onclick="submitSupplierReturn_(\'' + orderId + '\')">تأكيد المرتجع</button>');
-    window.__supRetItems_ = items;
-  } catch (err) { showErrorToast_(err); }
-}
-
-function toggleSupRetRow_(idx) {
-  const chk = document.getElementById('supRetChk_' + idx);
-  const qtyEl = document.getElementById('supRetQty_' + idx);
-  if (qtyEl) qtyEl.disabled = !chk.checked;
-}
-
-async function submitSupplierReturn_(orderId) {
-  const items = window.__supRetItems_ || [];
-  const chosen = [];
-  items.forEach(function (i, idx) {
-    const chk = document.getElementById('supRetChk_' + idx);
-    if (chk && chk.checked) {
-      const qty = Number(document.getElementById('supRetQty_' + idx).value);
-      if (qty > 0) chosen.push({ variantCode: i.variantCode, qty: Math.min(qty, i.availableToReturn) });
-    }
-  });
-  if (chosen.length === 0) { showToast_('اختاري صنف واحد على الأقل وحددي الكمية', 'error'); return; }
-
-  const treasuryAccountId = document.getElementById('supRetTreasuryAccount').value || null;
-  const notes = document.getElementById('supRetNotes').value.trim();
-
-  try {
-    const res = await api.recordSupplierReturn({ username: state.user.username }, { orderId: orderId, items: chosen, treasuryAccountId: treasuryAccountId, notes: notes });
-    closeModal();
-    let msg = 'تم تسجيل المرتجع ✅ بقيمة ' + res.return_total;
-    if (res.cash_refund > 0) msg += ' (منها ' + res.cash_refund + ' كاش مسترد)';
-    showToast_(msg, 'success');
-    const supplierName = supplierDetailCache && supplierDetailCache.supplier ? supplierDetailCache.supplier.name : null;
-    if (supplierName) supplierDetailCache = await api.getSupplierStatement(supplierName);
-    switchSupplierTab_('purchases');
-  } catch (err) { showErrorToast_(err); }
-}
-
 // ============================================================
 // الأوردرات والعملاء + الفواتير
 // ============================================================
