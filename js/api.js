@@ -838,8 +838,8 @@ api.updateSettingsBulk = async function (session, settingsObject) {
 // ------------------------------------------------------------
 const BACKUP_TABLES_ORDER = [
   'settings', 'accounts', 'cost_centers', 'currencies', 'exchange_rates', 'seasons', 'accounting_periods',
-  'warehouses', 'product_tree', 'products', 'product_variants', 'cost_history',
-  'suppliers', 'purchase_orders', 'purchase_order_items', 'supplier_payments', 'purchase_requests', 'purchase_request_items',
+  'warehouses', 'product_tree', 'suppliers', 'products', 'product_variants', 'cost_history', 'inventory_batches',
+  'purchase_orders', 'purchase_order_items', 'supplier_payments', 'purchase_requests', 'purchase_request_items', 'supplier_returns',
   'customers', 'orders', 'order_items', 'sales', 'sale_items', 'invoices',
   'treasury_accounts', 'cash_flow', 'checks', 'petty_cash',
   'partners', 'capital_movements', 'admin_rights', 'profits_distribution',
@@ -860,6 +860,9 @@ api.exportFullBackup = async function () {
   return result;
 };
 
+// بترحّل كل جدول عن طريق فنكشن آمنة في السيرفر (مش كتابة مباشرة في الجدول من المتصفح)
+// عشان تتجاوز قيود الحماية (RLS) بأمان، وبتحاول أكتر من مرة لو صف اتأخر
+// بسبب ترتيب (زي صف بيشاور على صف تاني لسه مترحّلش)
 api.restoreFromBackup = async function (backupData) {
   const report = [];
   for (const t of BACKUP_TABLES_ORDER) {
@@ -867,8 +870,13 @@ api.restoreFromBackup = async function (backupData) {
     const rows = (backupData.tables && backupData.tables[t]) || [];
     if (rows.length === 0) { report.push({ table: t, status: 'تخطي (فاضي)' }); continue; }
     try {
-      const { error } = await supabaseClient.from(t).upsert(rows);
-      report.push({ table: t, status: error ? ('خطأ: ' + error.message) : ('تم (' + rows.length + ' صف)') });
+      const { data, error } = await supabaseClient.rpc('rpc_admin_restore_table', { p_table: t, p_rows: rows });
+      if (error) { report.push({ table: t, status: 'خطأ: ' + error.message }); continue; }
+      const failed = data && data.failed ? data.failed : 0;
+      const status = failed > 0
+        ? 'تم جزئيًا (' + data.inserted + '/' + rows.length + ' — فشل ' + failed + (data.lastError ? ': ' + data.lastError : '') + ')'
+        : 'تم (' + data.inserted + ' صف)';
+      report.push({ table: t, status: status });
     } catch (e) { report.push({ table: t, status: 'خطأ: ' + e.message }); }
   }
   return report;
