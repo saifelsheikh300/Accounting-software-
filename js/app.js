@@ -831,8 +831,8 @@ function buildProductResultsHtml_(results, addFnName) {
         '<b>' + price + '</b></div>';
     }).join('');
   }).join('');
-  // حاوية بارتفاع ثابت (زي 5 نتايج تقريبًا) والسكرول بيبقى جواها بس، مش في الصفحة كلها
-  return '<div style="max-height:340px; overflow-y:auto; -webkit-overflow-scrolling:touch;">' + tilesHtml + '</div>';
+  // حاوية بارتفاع ثابت (بتوري حوالي 8 نتايج قبل ما يبدأ السكرول) والسكرول بيبقى جواها بس، مش في الصفحة كلها
+  return '<div style="max-height:620px; overflow-y:auto; -webkit-overflow-scrolling:touch;">' + tilesHtml + '</div>';
 }
 
 function addToPosCart_(variantCode, label, price) {
