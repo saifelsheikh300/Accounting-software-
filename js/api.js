@@ -412,11 +412,11 @@ api.createPurchaseOrder = async function (session, payload) {
   return { success: true, orderId: data[0].order_id, total: data[0].total };
 };
 
-api.listPurchaseOrders = async function () {
-  const { data, error } = await supabaseClient.from('purchase_orders').select('*, suppliers(name)').order('order_date', { ascending: false }).limit(30);
+api.listPurchaseOrders = async function (limit) {
+  const { data, error } = await supabaseClient.from('purchase_orders').select('*, suppliers(name)').order('order_date', { ascending: false }).limit(limit || 30);
   if (error) throw error;
   return (data || []).map(function (o) {
-    return { orderId: o.id, supplierName: o.suppliers ? o.suppliers.name : '', total: o.total, paymentStatus: o.payment_status, amountPaid: o.amount_paid, remaining: o.remaining };
+    return { orderId: o.id, orderNumber: o.order_number, date: o.order_date, supplierName: o.suppliers ? o.suppliers.name : '', total: o.total, paymentStatus: o.payment_status, amountPaid: o.amount_paid, remaining: o.remaining };
   });
 };
 
@@ -486,8 +486,8 @@ api.confirmOrder = async function (session, orderId) {
   return { success: true };
 };
 
-api.listCustomers = async function () {
-  const { data, error } = await supabaseClient.from('customers').select('*').order('total_purchases', { ascending: false }).limit(50);
+api.listCustomers = async function (limit) {
+  const { data, error } = await supabaseClient.from('customers').select('*').order('total_purchases', { ascending: false }).limit(limit || 50);
   if (error) throw error;
   return (data || []).map(function (c) { return { phone: c.phone, name: c.name, orderCount: c.order_count, totalPurchases: c.total_purchases }; });
 };
@@ -570,8 +570,8 @@ api.repayLoan = async function (session, payload) {
   return { success: true };
 };
 
-api.listJournalEntries = async function (startDate, endDate) {
-  let q = supabaseClient.from('journal_entries').select('*').order('entry_date', { ascending: false }).limit(200);
+api.listJournalEntries = async function (startDate, endDate, limit) {
+  let q = supabaseClient.from('journal_entries').select('*').order('entry_date', { ascending: false }).limit(limit || 200);
   if (startDate) q = q.gte('entry_date', startDate);
   if (endDate) q = q.lte('entry_date', endDate + 'T23:59:59');
   const { data, error } = await q;
@@ -1006,6 +1006,68 @@ api.getBalanceSheet = async function (asOfDate) {
   const { data, error } = await supabaseClient.rpc('rpc_balance_sheet', { p_as_of: asOfDate });
   if (error) throw error;
   return data;
+};
+
+// قائمة التدفقات النقدية — إجمالي الداخل والخارج للخزنة كلها خلال فترة
+api.getCashFlowStatement = async function (start, end) {
+  const { data: opening } = await supabaseClient.from('cash_flow').select('balance_after').lt('flow_date', start).order('flow_date', { ascending: false }).limit(1);
+  const { data: rows, error } = await supabaseClient.from('cash_flow').select('*').gte('flow_date', start).lte('flow_date', end + 'T23:59:59').order('flow_date', { ascending: true });
+  if (error) throw error;
+  let totalIn = 0, totalOut = 0;
+  const bySource = {};
+  (rows || []).forEach(function (r) {
+    const amt = Number(r.amount);
+    if (r.direction === 'داخل') totalIn += amt; else totalOut += amt;
+    const key = r.source || 'غير محدد';
+    bySource[key] = (bySource[key] || 0) + (r.direction === 'داخل' ? amt : -amt);
+  });
+  const openingBalance = opening && opening[0] ? Number(opening[0].balance_after) : 0;
+  return {
+    openingBalance: openingBalance, totalIn: totalIn, totalOut: totalOut, netChange: totalIn - totalOut,
+    closingBalance: openingBalance + totalIn - totalOut,
+    bySource: Object.keys(bySource).map(function (k) { return { source: k, netAmount: bySource[k] }; }).sort(function (a, b) { return Math.abs(b.netAmount) - Math.abs(a.netAmount); })
+  };
+};
+
+// أعمار الديون — لسه العميل/المورد مديون بيه، مقسّم حسب عدد الأيام
+api.getAgingReport = async function (kind) {
+  const todayMs = Date.now();
+  if (kind === 'receivable') {
+    const { data, error } = await supabaseClient.from('invoices').select('invoice_number, customer_name, invoice_date, remaining').gt('remaining', 0);
+    if (error) throw error;
+    return (data || []).map(function (i) {
+      const days = Math.floor((todayMs - new Date(i.invoice_date).getTime()) / 86400000);
+      return { ref: i.invoice_number, name: i.customer_name, date: i.invoice_date, remaining: i.remaining, days: days, bucket: agingBucket_(days) };
+    });
+  } else {
+    const { data, error } = await supabaseClient.from('purchase_orders').select('order_number, order_date, remaining, suppliers(name)').gt('remaining', 0);
+    if (error) throw error;
+    return (data || []).map(function (o) {
+      const days = Math.floor((todayMs - new Date(o.order_date).getTime()) / 86400000);
+      return { ref: o.order_number, name: o.suppliers ? o.suppliers.name : '', date: o.order_date, remaining: o.remaining, days: days, bucket: agingBucket_(days) };
+    });
+  }
+};
+function agingBucket_(days) {
+  if (days <= 30) return '0-30 يوم'; if (days <= 60) return '31-60 يوم'; if (days <= 90) return '61-90 يوم'; return 'أكتر من 90 يوم';
+}
+
+// تقييم المخزون الحالي — الكمية × تكلفة الوحدة الفعلية (FIFO) لكل دفعة لسه موجودة
+api.getInventoryValuation = async function () {
+  const { data, error } = await supabaseClient.from('inventory_batches')
+    .select('quantity_remaining, unit_cost, product_variants(code, color, size, products(name))').gt('quantity_remaining', 0);
+  if (error) throw error;
+  const byVariant = {};
+  (data || []).forEach(function (b) {
+    const v = b.product_variants; if (!v) return;
+    const key = v.code;
+    if (!byVariant[key]) byVariant[key] = { code: v.code, name: (v.products ? v.products.name : '') + ' — ' + (v.color || '') + ' ' + (v.size || ''), quantity: 0, value: 0 };
+    byVariant[key].quantity += Number(b.quantity_remaining);
+    byVariant[key].value += Number(b.quantity_remaining) * Number(b.unit_cost);
+  });
+  const rows = Object.values(byVariant).sort(function (a, b) { return b.value - a.value; });
+  const total = rows.reduce(function (s, r) { return s + r.value; }, 0);
+  return { rows: rows, total: total };
 };
 
 // ------------------------------------------------------------

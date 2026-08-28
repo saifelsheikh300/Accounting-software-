@@ -3065,11 +3065,40 @@ function renderReportsPage() {
   const firstOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
   const today = new Date().toISOString().slice(0, 10);
   setContent_(
+    '<div class="card"><div class="card-heading">📥 تصدير بيانات لإكسل</div><div class="card-desc">اختاري أي بيانات في البرنامج ونزّليها ملف إكسل (CSV) على طول</div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>البيانات</label><select id="exportDatasetSelect">' +
+        '<option value="inventory">📦 المنتجات والمخزون</option>' +
+        '<option value="customers">👤 العملاء</option>' +
+        '<option value="suppliers">🚚 الموردون</option>' +
+        '<option value="sales">💰 المبيعات</option>' +
+        '<option value="purchases">📦 أوردرات الشراء</option>' +
+        '<option value="employees">👥 الموظفون</option>' +
+        '<option value="expenses">💸 المصروفات</option>' +
+        '<option value="journal">📔 دفتر اليومية (كل القيود)</option>' +
+        '<option value="invoices">📄 فواتير العملاء</option>' +
+        '<option value="fixedassets">🏗️ الأصول الثابتة</option>' +
+        '<option value="treasury">🏦 حسابات الخزنة والبنوك</option>' +
+        '<option value="accounts">🗂️ شجرة الحسابات</option>' +
+      '</select></div></div>' +
+      '<button class="btn success" style="margin-top:14px;" onclick="exportDataset_()">📥 تصدير</button></div>' +
     '<div class="card"><div class="card-heading">📈 قائمة الدخل</div>' +
       '<div class="form-grid"><div class="field"><label>من تاريخ</label><input type="date" id="repStart" value="' + firstOfMonth + '"></div>' +
       '<div class="field"><label>إلى تاريخ</label><input type="date" id="repEnd" value="' + today + '"></div></div>' +
       '<button class="btn info-btn" style="margin-top:16px;" onclick="loadIncomeStatement_()">📊 عرض</button></div>' +
     '<div id="incomeStatementResult" style="margin-top:18px;"></div>' +
+    '<div class="section-title">💧 قائمة التدفقات النقدية</div>' +
+    '<div class="card"><div class="form-grid"><div class="field"><label>من تاريخ</label><input type="date" id="cfRepStart" value="' + firstOfMonth + '"></div>' +
+      '<div class="field"><label>إلى تاريخ</label><input type="date" id="cfRepEnd" value="' + today + '"></div></div>' +
+      '<button class="btn info-btn" style="margin-top:16px;" onclick="loadCashFlowStatement_()">💧 عرض</button>' +
+      '<div id="cashFlowResult" style="margin-top:14px;"></div></div>' +
+    '<div class="section-title">⏳ أعمار الديون</div>' +
+    '<div class="card"><div class="card-row" style="gap:10px; flex-wrap:wrap;">' +
+      '<button class="btn info-btn" onclick="loadAgingReport_(\'receivable\')">👤 مستحقات على العملاء</button>' +
+      '<button class="btn info-btn" onclick="loadAgingReport_(\'payable\')">🚚 مستحقات للموردين</button></div>' +
+      '<div id="agingResult" style="margin-top:14px;"></div></div>' +
+    '<div class="section-title">📦 تقييم المخزون</div>' +
+    '<div class="card"><button class="btn info-btn" onclick="loadInventoryValuation_()">📦 عرض قيمة المخزون الحالية</button>' +
+      '<div id="inventoryValuationResult" style="margin-top:14px;"></div></div>' +
     '<div class="section-title">📋 كل المصروفات (تفصيلي)</div>' +
     '<div class="card"><div class="form-grid"><div class="field"><label>من تاريخ</label><input type="date" id="expRepStart" value="' + firstOfMonth + '"></div>' +
       '<div class="field"><label>إلى تاريخ</label><input type="date" id="expRepEnd" value="' + today + '"></div></div>' +
@@ -3095,6 +3124,90 @@ function renderReportsPage() {
   );
   loadSeasons_();
 }
+
+async function exportDataset_() {
+  const which = document.getElementById('exportDatasetSelect').value;
+  const cur = state.settings.currency || 'جنيه';
+  try {
+    if (which === 'inventory') {
+      const data = await api.getInventoryIndex();
+      const rows = [];
+      Object.values(data.products || {}).forEach(function (p) {
+        (p.variants || []).forEach(function (v) {
+          rows.push({ code: v.code, name: p.name, category: p.mainCategoryName || p.subCategoryName || '', color: v.color, size: v.size, quantity: v.quantity, cost: v.cost, salePrice: v.specialPrice || p.basePrice, status: v.status });
+        });
+      });
+      exportToExcel_('المنتجات والمخزون', [
+        { key: 'code', label: 'الكود' }, { key: 'name', label: 'الاسم' }, { key: 'category', label: 'الفئة' },
+        { key: 'color', label: 'اللون' }, { key: 'size', label: 'المقاس' }, { key: 'quantity', label: 'الكمية' },
+        { key: 'cost', label: 'تكلفة الشراء' }, { key: 'salePrice', label: 'سعر البيع' }, { key: 'status', label: 'الحالة' }
+      ], rows);
+    } else if (which === 'customers') {
+      const rows = await api.listCustomers(20000);
+      exportToExcel_('العملاء', [
+        { key: 'phone', label: 'التليفون' }, { key: 'name', label: 'الاسم' }, { key: 'orderCount', label: 'عدد الأوردرات' }, { key: 'totalPurchases', label: 'إجمالي المشتريات' }
+      ], rows);
+    } else if (which === 'suppliers') {
+      const rows = await api.getSuppliers();
+      exportToExcel_('الموردون', [
+        { key: 'name', label: 'الاسم' }, { key: 'contact', label: 'رقم التواصل' }, { key: 'totalRemaining', label: 'المتبقي عليّ' }, { key: 'dueStatus', label: 'حالة السداد' }
+      ], rows);
+    } else if (which === 'sales') {
+      const rows = await api.listSales({ limit: 5000 });
+      exportToExcel_('المبيعات', [
+        { key: 'saleId', label: 'رقم الفاتورة' }, { key: 'date', label: 'التاريخ' }, { key: 'customerName', label: 'العميل' },
+        { key: 'total', label: 'الإجمالي' }, { key: 'paymentMethod', label: 'طريقة الدفع' }, { key: 'status', label: 'الحالة' }, { key: 'source', label: 'المصدر' }
+      ], rows);
+    } else if (which === 'purchases') {
+      const rows = await api.listPurchaseOrders(5000);
+      exportToExcel_('أوردرات الشراء', [
+        { key: 'orderNumber', label: 'رقم الأوردر' }, { key: 'date', label: 'التاريخ' }, { key: 'supplierName', label: 'المورد' },
+        { key: 'total', label: 'الإجمالي' }, { key: 'amountPaid', label: 'المدفوع' }, { key: 'remaining', label: 'المتبقي' }, { key: 'paymentStatus', label: 'الحالة' }
+      ], rows);
+    } else if (which === 'employees') {
+      const rows = await api.listEmployees(false);
+      exportToExcel_('الموظفون', [
+        { key: 'name', label: 'الاسم' }, { key: 'jobTitle', label: 'الوظيفة' }, { key: 'baseSalary', label: 'المرتب الأساسي' },
+        { key: 'phone', label: 'التليفون' }, { key: 'status', label: 'الحالة' }
+      ], rows);
+    } else if (which === 'expenses') {
+      const rows = await api.getExpenses(5000);
+      exportToExcel_('المصروفات', [
+        { key: 'date', label: 'التاريخ' }, { key: 'mainCategory', label: 'التصنيف' }, { key: 'subCategory', label: 'التصنيف الفرعي' },
+        { key: 'description', label: 'الوصف' }, { key: 'amount', label: 'المبلغ' }, { key: 'paymentMethod', label: 'طريقة الدفع' }, { key: 'treasuryAccountName', label: 'الحساب' }
+      ], rows);
+    } else if (which === 'journal') {
+      const rows = await api.listJournalEntries('2000-01-01', today_(), 20000);
+      exportToExcel_('دفتر اليومية', [
+        { key: 'date', label: 'التاريخ' }, { key: 'debitAccount', label: 'مدين' }, { key: 'creditAccount', label: 'دائن' },
+        { key: 'amount', label: 'المبلغ' }, { key: 'reference', label: 'المرجع' }, { key: 'description', label: 'الوصف' }
+      ], rows);
+    } else if (which === 'invoices') {
+      const rows = await api.listInvoices({});
+      exportToExcel_('فواتير العملاء', [
+        { key: 'invoiceNumber', label: 'رقم الفاتورة' }, { key: 'customerName', label: 'العميل' }, { key: 'total', label: 'الإجمالي' },
+        { key: 'paid', label: 'المدفوع' }, { key: 'remaining', label: 'المتبقي' }, { key: 'status', label: 'الحالة' }
+      ], rows);
+    } else if (which === 'fixedassets') {
+      const rows = await api.listFixedAssets();
+      exportToExcel_('الأصول الثابتة', [
+        { key: 'description', label: 'الوصف' }, { key: 'amount', label: 'التكلفة' }, { key: 'acquiredAt', label: 'تاريخ الشراء' },
+        { key: 'usefulLifeMonths', label: 'العمر الافتراضي (شهر)' }, { key: 'accumulatedDepreciation', label: 'مجمع الإهلاك' }, { key: 'depreciationMethod', label: 'طريقة الإهلاك' }
+      ], rows);
+    } else if (which === 'treasury') {
+      const rows = await api.listTreasuryAccounts();
+      exportToExcel_('حسابات الخزنة والبنوك', [
+        { key: 'name', label: 'اسم الحساب' }, { key: 'type', label: 'النوع' }, { key: 'currentBalance', label: 'الرصيد الحالي' }
+      ], rows);
+    } else if (which === 'accounts') {
+      const rows = await api.getAccounts();
+      exportToExcel_('شجرة الحسابات', [
+        { key: 'code', label: 'الكود' }, { key: 'name', label: 'اسم الحساب' }, { key: 'type', label: 'النوع' }, { key: 'isGroup', label: 'حساب تجميعي؟' }
+      ], rows);
+    }
+  } catch (err) { showErrorToast_(err); }
+}
+function today_() { return new Date().toISOString().slice(0, 10); }
 
 async function renderOtherRevenuePage() {
   setContent_(
@@ -3155,6 +3268,63 @@ async function loadIncomeStatement_() {
   } catch (err) { showErrorToast_(err); }
 }
 function rowLine_(label, value, bold) { return '<div class="list-item"><span' + (bold ? ' style="font-weight:900;"' : '') + '>' + label + '</span><b>' + value + '</b></div>'; }
+
+async function loadCashFlowStatement_() {
+  const start = document.getElementById('cfRepStart').value, end = document.getElementById('cfRepEnd').value;
+  try {
+    const cf = await api.getCashFlowStatement(start, end);
+    const cur = state.settings.currency || 'جنيه';
+    let html = '<div class="card">';
+    html += rowLine_('الرصيد الافتتاحي', formatMoney_(cf.openingBalance, cur));
+    html += rowLine_('إجمالي الداخل', '<span class="money-positive">+' + formatMoney_(cf.totalIn, cur) + '</span>');
+    html += rowLine_('إجمالي الخارج', '<span class="money-negative">-' + formatMoney_(cf.totalOut, cur) + '</span>');
+    html += rowLine_('صافي التغيير', formatMoney_(cf.netChange, cur), true);
+    html += rowLine_('الرصيد الختامي', formatMoney_(cf.closingBalance, cur), true);
+    html += '</div>';
+    if (cf.bySource.length > 0) {
+      html += '<div class="card" style="margin-top:10px;"><div class="card-heading" style="font-size:13px;">حسب المصدر</div>';
+      html += cf.bySource.slice(0, 15).map(function (s) { return rowLine_(s.source, (s.netAmount >= 0 ? '<span class="money-positive">+' : '<span class="money-negative">') + formatMoney_(Math.abs(s.netAmount), cur) + '</span>'); }).join('');
+      html += '</div>';
+    }
+    html += '<button class="btn secondary" style="margin-top:10px;" onclick="exportToExcel_(\'قائمة التدفقات النقدية\', [{key:\'source\',label:\'المصدر\'},{key:\'netAmount\',label:\'صافي المبلغ\'}], window.__cfExportData_)">📥 تصدير إكسل</button>';
+    window.__cfExportData_ = cf.bySource;
+    var __ht = document.getElementById('cashFlowResult'); if (__ht) __ht.innerHTML = html;
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function loadAgingReport_(kind) {
+  try {
+    const rows = await api.getAgingReport(kind);
+    const cur = state.settings.currency || 'جنيه';
+    let html = '<div class="table-wrap"><table><thead><tr><th>' + (kind === 'receivable' ? 'العميل' : 'المورد') + '</th><th>المرجع</th><th>عدد الأيام</th><th>الفئة</th><th>المتبقي</th></tr></thead><tbody>';
+    html += rows.length === 0 ? '<tr><td colspan="5">' + emptyRow_('✅', 'مفيش مستحقات متأخرة') + '</td></tr>' :
+      rows.sort(function (a, b) { return b.days - a.days; }).map(function (r) {
+        const pill = r.days > 90 ? 'danger' : (r.days > 30 ? 'warning' : 'success');
+        return '<tr><td>' + escapeHtml_(r.name) + '</td><td>' + escapeHtml_(r.ref) + '</td><td>' + r.days + '</td><td><span class="pill ' + pill + '">' + r.bucket + '</span></td><td><b>' + formatMoney_(r.remaining, cur) + '</b></td></tr>';
+      }).join('');
+    html += '</tbody></table></div>';
+    const total = rows.reduce(function (s, r) { return s + Number(r.remaining); }, 0);
+    html += '<div class="card" style="margin-top:8px;">' + rowLine_('الإجمالي', formatMoney_(total, cur), true) + '</div>';
+    html += '<button class="btn secondary" style="margin-top:10px;" onclick="exportToExcel_(\'أعمار الديون\', [{key:\'name\',label:\'الاسم\'},{key:\'ref\',label:\'المرجع\'},{key:\'date\',label:\'التاريخ\'},{key:\'days\',label:\'عدد الأيام\'},{key:\'bucket\',label:\'الفئة\'},{key:\'remaining\',label:\'المتبقي\'}], window.__agingExportData_)">📥 تصدير إكسل</button>';
+    window.__agingExportData_ = rows;
+    var __ht = document.getElementById('agingResult'); if (__ht) __ht.innerHTML = html;
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function loadInventoryValuation_() {
+  try {
+    const v = await api.getInventoryValuation();
+    const cur = state.settings.currency || 'جنيه';
+    let html = '<div class="table-wrap"><table><thead><tr><th>الصنف</th><th>الكمية</th><th>القيمة (بالتكلفة)</th></tr></thead><tbody>';
+    html += v.rows.length === 0 ? '<tr><td colspan="3">' + emptyRow_('📦', 'المخزون فاضي') + '</td></tr>' :
+      v.rows.map(function (r) { return '<tr><td>' + escapeHtml_(r.name) + '</td><td>' + r.quantity + '</td><td><b>' + formatMoney_(r.value, cur) + '</b></td></tr>'; }).join('');
+    html += '</tbody></table></div>';
+    html += '<div class="card" style="margin-top:8px;">' + rowLine_('إجمالي قيمة المخزون', formatMoney_(v.total, cur), true) + '</div>';
+    html += '<button class="btn secondary" style="margin-top:10px;" onclick="exportToExcel_(\'تقييم المخزون\', [{key:\'code\',label:\'الكود\'},{key:\'name\',label:\'الصنف\'},{key:\'quantity\',label:\'الكمية\'},{key:\'value\',label:\'القيمة\'}], window.__invValExportData_)">📥 تصدير إكسل</button>';
+    window.__invValExportData_ = v.rows;
+    var __ht = document.getElementById('inventoryValuationResult'); if (__ht) __ht.innerHTML = html;
+  } catch (err) { showErrorToast_(err); }
+}
 
 async function loadExpensesReport_() {
   const start = document.getElementById('expRepStart').value, end = document.getElementById('expRepEnd').value;
@@ -3600,6 +3770,30 @@ function formatMoney_(amount, currency) { const n = Number(amount) || 0; return 
 // بتقرب أي نسبة مئوية لأقرب رقم صحيح للعرض بس (زي نسب الشراكة وهوامش الربح)
 // عشان متظهرش كسور طويلة زي 33.333333333336% على الشاشة
 function roundPct_(n) { return Math.round(Number(n) || 0); }
+
+// ------------------------------------------------------------
+// تصدير أي بيانات لملف Excel (CSV بترميز UTF-8، بيتفتح في إكسل عادي
+// مع دعم العربي كامل). rows: مصفوفة أوبچكتات، headers: [{key,label}]
+// ------------------------------------------------------------
+function exportToExcel_(filename, headers, rows) {
+  if (!rows || rows.length === 0) { showToast_('مفيش بيانات تتصدّر', 'error'); return; }
+  const esc = function (v) {
+    if (v === null || v === undefined) return '';
+    const s = String(v).replace(/"/g, '""');
+    return /[",\n]/.test(s) ? '"' + s + '"' : s;
+  };
+  let csv = headers.map(function (h) { return esc(h.label); }).join(',') + '\r\n';
+  rows.forEach(function (row) {
+    csv += headers.map(function (h) { return esc(row[h.key]); }).join(',') + '\r\n';
+  });
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename.endsWith('.csv') ? filename : filename + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast_('تم تصدير الملف ✅', 'success');
+}
 function formatDate_(d) { try { return new Date(d).toLocaleString('ar-EG'); } catch (e) { return ''; } }
 
 function showToast_(message, type) {
