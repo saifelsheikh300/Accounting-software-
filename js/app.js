@@ -3772,26 +3772,21 @@ function formatMoney_(amount, currency) { const n = Number(amount) || 0; return 
 function roundPct_(n) { return Math.round(Number(n) || 0); }
 
 // ------------------------------------------------------------
-// تصدير أي بيانات لملف Excel (CSV بترميز UTF-8، بيتفتح في إكسل عادي
-// مع دعم العربي كامل). rows: مصفوفة أوبچكتات، headers: [{key,label}]
+// تصدير أي بيانات لملف Excel حقيقي (.xlsx). rows: مصفوفة أوبچكتات،
+// headers: [{key,label}]
 // ------------------------------------------------------------
 function exportToExcel_(filename, headers, rows) {
   if (!rows || rows.length === 0) { showToast_('مفيش بيانات تتصدّر', 'error'); return; }
-  const esc = function (v) {
-    if (v === null || v === undefined) return '';
-    const s = String(v).replace(/"/g, '""');
-    return /[",\n]/.test(s) ? '"' + s + '"' : s;
-  };
-  let csv = headers.map(function (h) { return esc(h.label); }).join(',') + '\r\n';
+  if (typeof XLSX === 'undefined') { showToast_('مكتبة تصدير الإكسل لسه بتحمّل، جرب تاني بعد شوية', 'error'); return; }
+  const aoa = [headers.map(function (h) { return h.label; })];
   rows.forEach(function (row) {
-    csv += headers.map(function (h) { return esc(row[h.key]); }).join(',') + '\r\n';
+    aoa.push(headers.map(function (h) { const v = row[h.key]; return v === null || v === undefined ? '' : v; }));
   });
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename.endsWith('.csv') ? filename : filename + '.csv';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = headers.map(function (h) { return { wch: Math.max(12, h.label.length + 4) }; });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+  XLSX.writeFile(wb, filename.endsWith('.xlsx') ? filename : filename + '.xlsx');
   showToast_('تم تصدير الملف ✅', 'success');
 }
 function formatDate_(d) { try { return new Date(d).toLocaleString('ar-EG'); } catch (e) { return ''; } }
