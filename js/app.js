@@ -330,6 +330,9 @@ function navigate(pageKey) {
   state.currentPage = pageKey;
   document.querySelectorAll('.nav-item').forEach(function (el) { el.classList.toggle('active', el.dataset.key === pageKey); });
 
+  // على الموبايل الدرج بيتقفل تلقائيًا بعد ما تختار صفحة (سلوك الدروار المعتاد)
+  if (window.innerWidth <= 860) { document.getElementById('sidebar').classList.remove('collapsed'); }
+
   const meta = PAGE_META[pageKey] || ['', ''];
   var __ht = document.getElementById('pageTitle'); if (__ht) __ht.textContent = meta[0];
   var __ht = document.getElementById('pageSubtitle'); if (__ht) __ht.textContent = meta[1];

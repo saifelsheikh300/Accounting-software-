@@ -463,3 +463,45 @@
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+
+  #sidebarBackdrop { display: none; }
+
+  /* ============================================================
+     الاستجابة للموبايل (Responsive) — الشريط الجانبي بيبقى "درج"
+     بيتفتح فوق المحتوى بدل ما ياخد مساحة ثابتة من الشاشة
+     ============================================================ */
+  @media (max-width: 860px) {
+    #sidebar {
+      position: fixed; top: 0; right: 0; height: 100vh; width: 78vw; max-width: 300px;
+      transform: translateX(100%); transition: transform .28s var(--ease); z-index: 90;
+      box-shadow: -8px 0 30px rgba(0,0,0,.35);
+    }
+    /* على الموبايل، كلاس collapsed معناه معكوس عن الديسكتوب: هنا معناه "مفتوح" */
+    #sidebar.collapsed { width: 78vw; max-width: 300px; transform: translateX(0); }
+    #sidebar.collapsed .brand span, #sidebar.collapsed .nav-item span:last-child, #sidebar.collapsed .nav-section-label { opacity: 1; width: auto; }
+
+    #sidebarBackdrop {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 85;
+      animation: fadeIn .2s var(--ease);
+    }
+    #sidebar.collapsed ~ #sidebarBackdrop { display: block; }
+
+    #header { padding: 12px 14px; }
+    #pageTitle { font-size: 16.5px; }
+    #pageSubtitle { font-size: 11px; }
+    .header-right { gap: 8px; }
+    #globalSearchInput { display: none; } /* البحث الشامل متاح جوه كل صفحة، مش لازم ياخد مساحة في الهيدر الضيق */
+    .user-chip .uname, .user-chip .urole { display: none; } /* الصورة الرمزية بس كافية على الشاشة الضيقة */
+    .user-chip { padding: 6px; }
+    .icon-btn { width: 36px; height: 36px; font-size: 14px; }
+
+    #content { padding: 16px 14px 50px; }
+    .grid { gap: 12px; }
+    .card { padding: 14px; }
+    .section-title { margin: 24px 0 12px; }
+
+    .modal-box { padding: 18px; width: 94vw; }
+    .modal-box.wide { width: 94vw; }
+
+    th, td { padding: 8px 10px; font-size: 12px; }
+  }
