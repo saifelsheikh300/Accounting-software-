@@ -152,11 +152,7 @@
     transition: background var(--transition), color var(--transition); margin-bottom: 3px; position: relative;
   }
   .nav-item:hover { background: var(--surface-2); color: var(--text); }
-  .nav-item.active { background: linear-gradient(90deg, rgba(76,139,245,.18), transparent); color: var(--accent); font-weight: 800; }
-  .nav-item.active::before {
-    content: ''; position: absolute; right: -10px; top: 50%; transform: translateY(-50%);
-    width: 3px; height: 20px; background: var(--accent); border-radius: 4px 0 0 4px;
-  }
+  .nav-item.active { background: var(--accent); color: #ffffff; font-weight: 800; }
   .nav-icon { font-size: 16.5px; width: 21px; text-align: center; flex-shrink: 0; }
 
   /* ============================================================ المحتوى الرئيسي ============================================================ */
