@@ -153,6 +153,7 @@
   }
   .nav-item:hover { background: var(--surface-2); color: var(--text); }
   .nav-item.active { background: linear-gradient(90deg, rgba(76,139,245,.35), transparent); color: #ffffff; font-weight: 800; }
+  [data-theme="light"] .nav-item.active { color: #14141f; }
   .nav-icon { font-size: 16.5px; width: 21px; text-align: center; flex-shrink: 0; }
 
   /* ============================================================ المحتوى الرئيسي ============================================================ */
