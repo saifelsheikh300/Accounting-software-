@@ -206,7 +206,7 @@ async function applyPublicBranding() {
 }
 
 function applyBrandingValues_(s) {
-  if (s.accentColor) document.documentElement.style.setProperty('--accent', s.accentColor);
+  // لون الهوية بقى ثابت ومش قابل للتغيير من الإعدادات
   if (s.brandName) {
     const el = document.getElementById('loginBrandName');
     if (el) el.textContent = s.brandName;
@@ -273,7 +273,7 @@ function applySettingsToUI() {
   const s = state.settings;
   document.body.setAttribute('data-theme', s.darkMode ? 'dark' : 'light');
   var __ht = document.getElementById('themeToggleBtn'); if (__ht) __ht.textContent = s.darkMode ? '🌙' : '☀️';
-  document.documentElement.style.setProperty('--accent', s.accentColor || '#4c8bf5');
+  // لون الهوية ثابت من CSS، مش قابل للتخصيص
   var __ht = document.getElementById('sidebarBrandName'); if (__ht) __ht.textContent = s.brandName || 'براندي';
   if (s.logoUrl) {
     const logo = document.getElementById('sidebarLogo');
@@ -3691,7 +3691,6 @@ async function renderSettingsPage() {
           return '<option value="' + ic + '"' + ((s.productIcon || '📦') === ic ? ' selected' : '') + '>' + ic + '</option>';
         }).join('') +
       '</select></div>' +
-      field_('اللون الأساسي', 'setPrimaryColor', s.primaryColor, 'color') + field_('لون التمييز', 'setAccentColor', s.accentColor, 'color') +
       field_('العملة', 'setCurrency', s.currency) +
       '<div class="field"><label>الحساب الافتراضي (كاش/بنك)</label><select id="setDefaultTreasuryAccount"><option value="">بدون افتراضي</option>' +
         treasuryAccounts.map(function (t) { return '<option value="' + t.id + '"' + (t.id === s.defaultTreasuryAccountId ? ' selected' : '') + '>' + t.name + ' (' + t.type + ')</option>'; }).join('') +
@@ -3754,7 +3753,6 @@ async function saveSettings_() {
   const payload = {
     brandName: document.getElementById('setBrandName').value, logoUrl: document.getElementById('setLogoUrl').value,
     productIcon: document.getElementById('setProductIcon').value,
-    primaryColor: document.getElementById('setPrimaryColor').value, accentColor: document.getElementById('setAccentColor').value,
     currency: document.getElementById('setCurrency').value,
     defaultTreasuryAccountId: document.getElementById('setDefaultTreasuryAccount').value,
     easyOrdersApiKey: document.getElementById('setEasyOrdersApiKey').value, easyOrdersSecret: document.getElementById('setEasyOrdersSecret').value,
