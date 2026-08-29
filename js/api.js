@@ -249,13 +249,16 @@ api.recordReturn = async function (session, saleId, items, isFull, treasuryAccou
 
 api.listSales = async function (filters) {
   filters = filters || {};
-  const { data, error } = await supabaseClient.from('sales').select('*, sale_items(*, product_variants(code))').order('sale_date', { ascending: false }).limit(filters.limit || 50);
+  const { data, error } = await supabaseClient.from('sales').select('*, sale_items(*, product_variants(code, color, size, products(name)))').order('sale_date', { ascending: false }).limit(filters.limit || 50);
   if (error) throw error;
   return (data || []).map(function (s) {
     return {
-      saleId: s.sale_number, date: s.sale_date, source: s.source, total: s.total, status: s.status,
-      paymentMethod: s.payment_method, customerName: s.customer_name,
-      items: (s.sale_items || []).map(function (it) { return { variantCode: it.product_variants ? it.product_variants.code : '', qty: it.qty, price: it.unit_price }; })
+      saleId: s.sale_number, date: s.sale_date, source: s.source, total: s.total, subtotal: s.subtotal, discount: s.discount, status: s.status,
+      paymentMethod: s.payment_method, customerName: s.customer_name, customerPhone: s.customer_phone,
+      items: (s.sale_items || []).map(function (it) {
+        const v = it.product_variants;
+        return { variantCode: v ? v.code : '', label: v ? ((v.products ? v.products.name : '') + ' — ' + (v.color || '') + ' ' + (v.size || '')) : '', qty: it.qty, price: it.unit_price };
+      })
     };
   });
 };
@@ -989,15 +992,18 @@ api.bulkMoveCategoryProducts = async function (session, oldCode, newCode) {
 };
 
 api.searchSalesByCode = async function (query) {
-  const { data, error } = await supabaseClient.from('sales').select('*, sale_items(*, product_variants(code))')
+  const { data, error } = await supabaseClient.from('sales').select('*, sale_items(*, product_variants(code, color, size, products(name)))')
     .or('sale_number.ilike.%' + query + '%,customer_name.ilike.%' + query + '%')
     .order('sale_date', { ascending: false }).limit(20);
   if (error) throw error;
   return (data || []).map(function (s) {
     return {
-      saleId: s.sale_number, date: s.sale_date, source: s.source, total: s.total, status: s.status,
-      paymentMethod: s.payment_method, customerName: s.customer_name,
-      items: (s.sale_items || []).map(function (it) { return { variantCode: it.product_variants ? it.product_variants.code : '', qty: it.qty, price: it.unit_price }; })
+      saleId: s.sale_number, date: s.sale_date, source: s.source, total: s.total, subtotal: s.subtotal, discount: s.discount, status: s.status,
+      paymentMethod: s.payment_method, customerName: s.customer_name, customerPhone: s.customer_phone,
+      items: (s.sale_items || []).map(function (it) {
+        const v = it.product_variants;
+        return { variantCode: v ? v.code : '', label: v ? ((v.products ? v.products.name : '') + ' — ' + (v.color || '') + ' ' + (v.size || '')) : '', qty: it.qty, price: it.unit_price };
+      })
     };
   });
 };
@@ -1386,4 +1392,13 @@ api.getAiInsights = async function (contextText) {
   const data = await res.json();
   if (data.error) throw new Error(data.error);
   return data.text || 'مفيش رد من الـAI حاليًا، جربي تاني.';
+};
+
+// سجل النشاطات — كل عملية مهمة حصلت في النظام (أدمن بس)
+api.getOperationsLog = async function (limit) {
+  const { data, error } = await supabaseClient.from('operations_log').select('*').order('logged_at', { ascending: false }).limit(limit || 200);
+  if (error) throw error;
+  return (data || []).map(function (r) {
+    return { id: r.id, loggedAt: r.logged_at, actor: r.actor, operation: r.operation, details: r.details };
+  });
 };

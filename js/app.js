@@ -47,6 +47,7 @@ const NAV_GROUPS = [
   { label: 'الإدارة', items: [
     { key: 'hr', label: 'الموارد البشرية', icon: '👥', module: 'HR' },
     { key: 'users', label: 'المستخدمون والصلاحيات', icon: '🔐', module: 'Users' },
+    { key: 'auditlog', label: 'سجل النشاطات', icon: '🕵️', module: 'Users' },
     { key: 'recyclebin', label: 'سلة المحذوفات', icon: '🗑️', module: 'Inventory' },
     { key: 'settings', label: 'الإعدادات', icon: '⚙️', module: 'Settings' }
   ]}
@@ -82,7 +83,8 @@ const PAGE_META = {
   balancesheet: ['الميزانية العمومية', 'الأصول والخصوم وحقوق الملكية حتى تاريخ معيّن'],
   periods: ['قفل الفترات المحاسبية', 'منع التعديل على شهر اتقفل خلاص بعد مراجعته'],
   fixedassets: ['الأصول الثابتة', 'متابعة الأصول والإهلاك الشهري المتراكم'],
-  openingbalances: ['أرصدة أول مدة', 'رصيد بداية التشغيل لكل حساب، وترحيله لدفتر اليومية']
+  openingbalances: ['أرصدة أول مدة', 'رصيد بداية التشغيل لكل حساب، وترحيله لدفتر اليومية'],
+  auditlog: ['سجل النشاطات', 'كل عملية مهمة حصلت في النظام، مين عملها وإمتى']
 };
 
 // ------------------------------------------------------------
@@ -270,7 +272,7 @@ function applySettingsToUI() {
   const s = state.settings;
   document.body.setAttribute('data-theme', s.darkMode ? 'dark' : 'light');
   var __ht = document.getElementById('themeToggleBtn'); if (__ht) __ht.textContent = s.darkMode ? '🌙' : '☀️';
-  document.documentElement.style.setProperty('--accent', s.accentColor || '#e94560');
+  document.documentElement.style.setProperty('--accent', s.accentColor || '#17b8ab');
   var __ht = document.getElementById('sidebarBrandName'); if (__ht) __ht.textContent = s.brandName || 'براندي';
   if (s.logoUrl) {
     const logo = document.getElementById('sidebarLogo');
@@ -351,7 +353,7 @@ function navigate(pageKey) {
     checks: renderChecksPage, currencies: renderCurrenciesPage,
     trialbalance: renderTrialBalancePage, balancesheet: renderBalanceSheetPage, journal: renderJournalPage,
     periods: renderPeriodsPage, fixedassets: renderFixedAssetsPage,
-    openingbalances: renderOpeningBalancesPage
+    openingbalances: renderOpeningBalancesPage, auditlog: renderAuditLogPage
   };
   (renderers[pageKey] || renderComingSoon_)();
 }
@@ -1993,27 +1995,65 @@ async function submitSaleOnInvoice_(discount) {
   } catch (err) { showErrorToast_(err); }
 }
 
+let salesHistoryCache_ = [];
+
 async function loadSalesHistory_() {
   try {
     const sales = await api.listSales({ limit: 30 });
+    salesHistoryCache_ = sales;
     renderSalesHistoryRows_(sales);
   } catch (err) { showErrorToast_(err); }
 }
 
 function renderSalesHistoryRows_(sales) {
+  salesHistoryCache_ = sales;
   const el = document.getElementById('salesHistoryList');
   if (!el) return;
   const cur = state.settings.currency || 'جنيه';
   if (sales.length === 0) { el.innerHTML = emptyRow_('🧾', 'لا يوجد مبيعات'); return; }
   let html = '<div class="table-wrap"><table><thead><tr><th>رقم البيعة</th><th>المصدر</th><th>التاريخ</th><th>الإجمالي</th><th>الحالة</th><th></th></tr></thead><tbody>';
-  html += sales.map(function (s) {
+  html += sales.map(function (s, idx) {
     const statusPill = s.status === 'مكتملة' ? 'success' : 'warning';
-    return '<tr><td>' + s.saleId + '</td><td>' + s.source + '</td><td>' + formatDate_(s.date) + '</td>' +
+    return '<tr style="cursor:pointer;" onclick="openSaleDetail_(' + idx + ')"><td>' + escapeHtml_(s.saleId) + '</td><td>' + escapeHtml_(s.source) + '</td><td>' + formatDate_(s.date) + '</td>' +
       '<td class="money-positive">' + formatMoney_(s.total, cur) + '</td><td><span class="pill ' + statusPill + '">' + s.status + '</span></td>' +
-      '<td>' + (s.status === 'مكتملة' ? '<button class="eye-btn" onclick="quickReturnSale_(\'' + s.saleId + '\')">↩️</button>' : '') + '</td></tr>';
+      '<td>' + (s.status === 'مكتملة' ? '<button class="eye-btn" onclick="event.stopPropagation(); quickReturnSale_(\'' + s.saleId + '\')">↩️</button>' : '') + '</td></tr>';
   }).join('');
   html += '</tbody></table></div>';
   el.innerHTML = html;
+}
+
+// تفاصيل بيعة كاملة — الأصناف، العميل، الدفع، وإمكانية إعادة الطباعة
+function openSaleDetail_(idx) {
+  const s = salesHistoryCache_[idx];
+  if (!s) return;
+  const cur = state.settings.currency || 'جنيه';
+  const itemsHtml = s.items.map(function (i) {
+    return '<tr><td>' + escapeHtml_(i.label) + '</td><td>' + i.qty + '</td><td>' + formatMoney_(i.price, cur) + '</td><td><b>' + formatMoney_(i.price * i.qty, cur) + '</b></td></tr>';
+  }).join('');
+  const body =
+    '<div class="grid grid-2" style="margin-bottom:14px;">' +
+      '<div class="list-item"><span>التاريخ</span><b>' + formatDate_(s.date) + '</b></div>' +
+      '<div class="list-item"><span>المصدر</span><b>' + escapeHtml_(s.source) + '</b></div>' +
+      '<div class="list-item"><span>العميل</span><b>' + (s.customerName ? escapeHtml_(s.customerName) : '—') + '</b></div>' +
+      '<div class="list-item"><span>تليفون العميل</span><b>' + (s.customerPhone ? escapeHtml_(s.customerPhone) : '—') + '</b></div>' +
+      '<div class="list-item"><span>طريقة الدفع</span><b>' + escapeHtml_(s.paymentMethod || '—') + '</b></div>' +
+      '<div class="list-item"><span>الحالة</span><b><span class="pill ' + (s.status === 'مكتملة' ? 'success' : 'warning') + '">' + s.status + '</span></b></div>' +
+    '</div>' +
+    '<div class="table-wrap"><table><thead><tr><th>الصنف</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead><tbody>' + itemsHtml + '</tbody></table></div>' +
+    '<div class="card" style="margin-top:10px;">' +
+      '<div class="list-item"><span>الإجمالي الفرعي</span><b>' + formatMoney_(s.subtotal, cur) + '</b></div>' +
+      (s.discount > 0 ? '<div class="list-item"><span>الخصم</span><b class="money-negative">-' + formatMoney_(s.discount, cur) + '</b></div>' : '') +
+      '<div class="list-item"><span style="font-weight:900;">الإجمالي</span><b style="font-size:16px;">' + formatMoney_(s.total, cur) + '</b></div>' +
+    '</div>';
+  openModal('🧾 تفاصيل البيعة ' + s.saleId, '', body,
+    '<button class="btn secondary" onclick="closeModal()">إغلاق</button>' +
+    '<button class="btn success" onclick="reprintSale_(' + idx + ')">🖨️ إعادة طباعة الفاتورة</button>', true);
+}
+
+function reprintSale_(idx) {
+  const s = salesHistoryCache_[idx];
+  if (!s) return;
+  printReceipt_({ saleNumber: s.saleId, total: s.total }, s.items, s.discount || 0, s.paymentMethod, s.customerName, s.customerPhone);
 }
 
 let salesHistorySearchTimer_ = null;
@@ -5154,4 +5194,80 @@ async function loadAiInsights_() {
     const insight = await api.getAiInsights(context);
     var __ht = document.getElementById('aiResult'); if (__ht) __ht.innerHTML = '<div class="card" style="background:var(--surface-2); white-space:pre-wrap; line-height:1.9; font-size:13px;">' + insight + '</div>';
   } catch (err) { showErrorToast_(err); }
+}
+
+// ------------------------------------------------------------
+// سجل النشاطات (Audit Log)
+// ------------------------------------------------------------
+const OPERATION_LABELS_ = {
+  ADD_ACCOUNT: 'إضافة حساب', DELETE_ACCOUNT: 'حذف حساب', RENAME_ACCOUNT: 'تعديل حساب',
+  ADD_CAPITAL_MOVEMENT: 'حركة رأس مال', ADD_PARTNER_OPENING_CAPITAL: 'رصيد افتتاحي شريك', SET_PARTNER_ACTIVE: 'تفعيل/تعطيل شريك', SET_PARTNER_RATES: 'تعديل نسب شريك', WITHDRAW_ADMIN_RIGHT: 'سحب نسبة إدارة',
+  ADD_CUSTOMER_OPENING_BALANCE: 'رصيد افتتاحي عميل', ADD_EMPLOYEE_ADVANCE: 'سلفة موظف', SETTLE_EMPLOYEE_ADVANCE: 'تسوية سلفة موظف',
+  ADD_EXPENSE: 'تسجيل مصروف', ADD_ITEMS_TO_INVOICE: 'إضافة أصناف لفاتورة', ADD_LOAN: 'قرض جديد', REPAY_LOAN: 'سداد قرض',
+  ADD_OPENING_BALANCE: 'رصيد افتتاحي', ADD_OPENING_FIXED_ASSET: 'أصل ثابت (رصيد سابق)', ADD_OPENING_INVENTORY: 'مخزون افتتاحي', ADD_TREASURY_OPENING_BALANCE: 'رصيد افتتاحي خزنة',
+  ADD_OTHER_REVENUE: 'إيراد آخر', ADD_PRODUCT: 'إضافة منتج', ADD_PRODUCT_WITH_VARIANTS: 'إضافة منتج بمتغيرات', ADD_VARIANT: 'إضافة متغير',
+  ADMIN_RESTORE_TABLE: 'استرجاع نسخة احتياطية', APPROVE_PURCHASE_REQUEST: 'اعتماد طلب شراء',
+  BULK_MOVE_CATEGORY_PRODUCTS: 'نقل منتجات لفئة', CLOSE_PERIOD: 'قفل فترة محاسبية', REOPEN_PERIOD: 'إعادة فتح فترة',
+  CONVERT_CATEGORY: 'تحويل فئة', CREATE_CATEGORY: 'إضافة فئة', UPDATE_CATEGORY: 'تعديل فئة', REPARENT_SUBCATEGORY: 'نقل فئة فرعية',
+  CREATE_PURCHASE_ORDER: 'أوردر شراء جديد', CREATE_PURCHASE_REQUEST: 'طلب شراء جديد', CREATE_QUICK_INVOICE: 'فاتورة سريعة', OPEN_INVOICE: 'فتح فاتورة',
+  DELETE_JOURNAL_ENTRY: 'حذف قيد يومية', FINALIZE_OPENING_BALANCE: 'اعتماد رصيد افتتاحي', FINALIZE_OPENING_BALANCE_MULTI: 'اعتماد أرصدة افتتاحية',
+  LOCK_OPENING_BALANCES: 'قفل الأرصدة الافتتاحية', POST_OPENING_BALANCES: 'ترحيل أرصدة افتتاحية',
+  PAY_INVOICE_INSTALLMENT: 'تحصيل من فاتورة', PAY_SALARY: 'صرف مرتب', PAY_SUPPLIER_INSTALLMENT: 'دفع لمورد',
+  PETTY_CASH_MOVEMENT: 'حركة عهدة', RECORD_RETURN: 'مرتجع بيع', RECORD_SALE: 'بيعة جديدة',
+  RESTORE_DELETED: 'استرجاع من سلة المحذوفات', RUN_MONTHLY_ADMIN_FEE: 'ترحيل نسبة إدارة شهرية', RUN_MONTHLY_DEPRECIATION: 'ترحيل إهلاك شهري', RUN_MONTHLY_SALARIES: 'ترحيل مرتبات الشهر',
+  SET_EXCHANGE_RATE: 'تحديث سعر صرف', SOFT_DELETE: 'حذف (لسلة المحذوفات)', STANDALONE_RETURN: 'مرتجع مباشر',
+  SUPPLIER_RETURN: 'مرتجع مورد', SUPPLIER_RETURN_STANDALONE: 'مرتجع مورد مباشر', TRANSFER_STOCK: 'نقل مخزون بين مخازن', TRANSFER_TREASURY: 'تحويل بين حسابات الخزنة',
+  UPDATE_CHECK_STATUS: 'تحديث حالة شيك', UPDATE_PRODUCT: 'تعديل منتج'
+};
+function operationLabel_(code) { return OPERATION_LABELS_[code] || code.replace(/_/g, ' '); }
+
+let auditLogCache_ = [];
+function renderAuditLogPage() {
+  setContent_(
+    '<div class="card"><div class="field"><input type="text" id="auditLogSearch" oninput="filterAuditLog_(this.value)" placeholder="🔍 دوّري باسم المستخدم أو نوع العملية..."></div></div>' +
+    '<div id="auditLogList" style="margin-top:14px;"></div>'
+  );
+  loadAuditLog_();
+}
+
+async function loadAuditLog_() {
+  try {
+    auditLogCache_ = await api.getOperationsLog(300);
+    renderAuditLogRows_(auditLogCache_);
+  } catch (err) { showErrorToast_(err); }
+}
+
+function filterAuditLog_(q) {
+  q = (q || '').trim().toLowerCase();
+  if (!q) { renderAuditLogRows_(auditLogCache_); return; }
+  renderAuditLogRows_(auditLogCache_.filter(function (r) {
+    return (r.actor || '').toLowerCase().includes(q) || operationLabel_(r.operation).toLowerCase().includes(q) || r.operation.toLowerCase().includes(q);
+  }));
+}
+
+function renderAuditLogRows_(rows) {
+  const el = document.getElementById('auditLogList');
+  if (!el) return;
+  if (rows.length === 0) { el.innerHTML = emptyRow_('🕵️', 'لا يوجد نشاطات'); return; }
+  let html = '<div class="table-wrap"><table><thead><tr><th>الوقت</th><th>المستخدم</th><th>العملية</th><th>تفاصيل</th></tr></thead><tbody>';
+  html += rows.map(function (r) {
+    let detailsSummary = '';
+    try {
+      const d = r.details || {};
+      detailsSummary = Object.keys(d).slice(0, 3).map(function (k) { return k + ': ' + escapeHtml_(String(d[k])); }).join(' · ');
+    } catch (e) { /* تجاهل */ }
+    return '<tr><td style="white-space:nowrap; font-size:11.5px;">' + formatDate_(r.loggedAt) + '</td><td>' + escapeHtml_(r.actor) + '</td>' +
+      '<td><span class="pill info">' + escapeHtml_(operationLabel_(r.operation)) + '</span></td><td style="font-size:11.5px; color:var(--text-dim);">' + detailsSummary + '</td></tr>';
+  }).join('');
+  html += '</tbody></table></div>';
+  html += '<button class="btn secondary" style="margin-top:12px;" onclick="exportAuditLog_()">📥 تصدير إكسل</button>';
+  el.innerHTML = html;
+}
+
+function exportAuditLog_() {
+  exportToExcel_('سجل النشاطات', [
+    { key: 'loggedAt', label: 'الوقت' }, { key: 'actor', label: 'المستخدم' }, { key: 'operationLabel', label: 'العملية' }, { key: 'detailsText', label: 'تفاصيل' }
+  ], auditLogCache_.map(function (r) {
+    return { loggedAt: formatDate_(r.loggedAt), actor: r.actor, operationLabel: operationLabel_(r.operation), detailsText: JSON.stringify(r.details || {}) };
+  }));
 }

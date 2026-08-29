@@ -1,19 +1,19 @@
   @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&display=swap');
 
   :root {
-    --primary: #14141f;
-    --accent: #e94560;
-    --accent-2: #ff6b81;
-    --bg: #0b0b12;
-    --surface: #15151f;
-    --surface-2: #1c1c29;
-    --text: #f2f2f7;
-    --text-dim: #8d8da3;
-    --text-faint: #5c5c72;
-    --border: #2a2a3a;
+    --primary: #121a22;
+    --accent: #17b8ab;
+    --accent-2: #5eead4;
+    --bg: #0c1117;
+    --surface: #151d26;
+    --surface-2: #1c2732;
+    --text: #f0f4f6;
+    --text-dim: #8b98a5;
+    --text-faint: #55626f;
+    --border: #263241;
     --success: #2ecc71;
-    --warning: #f1c40f;
-    --danger: #ff5470;
+    --warning: #f2b632;
+    --danger: #ef4d5e;
     --info: #4ea1ff;
     --radius: 16px;
     --radius-sm: 10px;
