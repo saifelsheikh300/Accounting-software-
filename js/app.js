@@ -214,7 +214,8 @@ function applyBrandingValues_(s) {
   if (s.logoUrl) {
     const loginLogo = document.getElementById('loginLogo');
     if (loginLogo) { loginLogo.classList.add('has-img'); loginLogo.innerHTML = '<img src="' + s.logoUrl + '" alt="logo">'; }
-    setCircularFavicon_(s.logoUrl);
+    // ملحوظة: الفيفيكون (أيقونة تبويب المتصفح) وأيقونة التثبيت بتفضل ثابتة على شعار البرنامج الأصلي دايمًا،
+    // اللوجو المخصص بيظهر بس في تسجيل الدخول والسايدبار
   }
 }
 
@@ -272,7 +273,7 @@ function applySettingsToUI() {
   const s = state.settings;
   document.body.setAttribute('data-theme', s.darkMode ? 'dark' : 'light');
   var __ht = document.getElementById('themeToggleBtn'); if (__ht) __ht.textContent = s.darkMode ? '🌙' : '☀️';
-  document.documentElement.style.setProperty('--accent', s.accentColor || '#17b8ab');
+  document.documentElement.style.setProperty('--accent', s.accentColor || '#4c8bf5');
   var __ht = document.getElementById('sidebarBrandName'); if (__ht) __ht.textContent = s.brandName || 'براندي';
   if (s.logoUrl) {
     const logo = document.getElementById('sidebarLogo');
