@@ -332,7 +332,7 @@
     border: 1.5px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 9px; transition: all .18s var(--ease);
     cursor: pointer; background: var(--surface-2);
   }
-  .product-tile:hover { border-color: var(--accent); transform: translateX(-2px); }
+  .product-tile:hover { border-color: var(--accent); }
   .product-tile.selected { border-color: var(--accent); background: rgba(76,139,245,.06); }
   .product-thumb {
     width: 42px; height: 42px; border-radius: 10px; object-fit: cover; background: var(--surface); flex-shrink: 0;
