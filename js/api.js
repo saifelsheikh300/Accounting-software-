@@ -1402,3 +1402,33 @@ api.getOperationsLog = async function (limit) {
     return { id: r.id, loggedAt: r.logged_at, actor: r.actor, operation: r.operation, details: r.details };
   });
 };
+
+// ------------------------------------------------------------
+// المصروفات المدفوعة مقدمًا (استهلاك تلقائي شهري زي الإهلاك)
+// ------------------------------------------------------------
+api.listPrepaidExpenses = async function () {
+  const { data, error } = await supabaseClient.from('prepaid_expenses').select('*').order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(function (p) {
+    return {
+      id: p.id, description: p.description, totalAmount: p.total_amount, amortizedSoFar: p.amortized_so_far,
+      monthlyAmount: p.monthly_amount, startMonth: p.start_month, assetAccount: p.asset_account,
+      expenseAccount: p.expense_account, lastAmortizedMonth: p.last_amortized_month, active: p.active
+    };
+  });
+};
+
+api.registerPrepaidExpense = async function (session, payload) {
+  const { data, error } = await supabaseClient.rpc('rpc_register_prepaid_expense', {
+    p_description: payload.description, p_total_amount: payload.totalAmount, p_monthly_amount: payload.monthlyAmount,
+    p_start_month: payload.startMonth, p_expense_account: payload.expenseAccount,
+    p_asset_account: payload.assetAccount || 'مصروفات مدفوعة مقدماً', p_already_amortized: payload.alreadyAmortized || 0
+  });
+  if (error) throw error;
+  return data;
+};
+
+api.runPrepaidAmortization = async function (session) {
+  const { error } = await supabaseClient.rpc('rpc_run_prepaid_amortization');
+  if (error) throw error;
+};

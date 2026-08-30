@@ -1692,6 +1692,7 @@ async function renderExpensesPage() {
     onExpSubCatChange_();
     loadExpTreasuryOptions_();
     loadExpensesHistory_();
+    loadPrepaidExpenses_();
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -1740,7 +1741,28 @@ function buildExpensesPageHtml_() {
       '</div></div>' +
       '<div id="expRecurrenceDaysWrap" style="display:none; margin-top:12px;"><div class="field"><label>يتكرر كل (يوم)</label><input type="number" id="expRecurrenceDays" value="30"></div></div>' +
       '<button class="btn success block" style="margin-top:18px;" onclick="submitExpense_()">✅ تسجيل المصروف</button></div>' +
-    '<div class="card"><div class="card-heading">📋 آخر المصروفات</div><div id="expensesHistoryList" style="margin-top:14px;">' + emptyRow_('⏳', 'جاري التحميل...') + '</div></div></div>';
+    '<div class="card"><div class="card-heading">📋 آخر المصروفات</div><div id="expensesHistoryList" style="margin-top:14px;">' + emptyRow_('⏳', 'جاري التحميل...') + '</div></div></div>' +
+
+    '<div class="section-title">🗓️ المصروفات المدفوعة مقدمًا (بتتحول لمصروف حقيقي أوتوماتيك كل شهر)</div>' +
+    '<div class="grid grid-2">' +
+      '<div class="card"><div class="card-heading">➕ تسجيل مصروف مقدم</div>' +
+        '<div class="card-desc">مصروف دفعته مقدم (زي إيجار أو تأمين) وعايز يتوزع على شهور</div>' +
+        '<div class="form-grid" style="margin-top:12px;">' +
+          '<div class="field"><label>الوصف</label><input type="text" id="ppDesc" placeholder="إيجار المحل مارس-مايو"></div>' +
+          '<div class="field"><label>إجمالي المبلغ</label><input type="number" id="ppTotal"></div>' +
+          '<div class="field"><label>المبلغ الشهري</label><input type="number" id="ppMonthly"></div>' +
+          '<div class="field"><label>أول شهر يستهلك فيه</label><input type="month" id="ppStartMonth"></div>' +
+          '<div class="field"><label>هيتحول لأي حساب مصروف</label><input type="text" id="ppExpenseAccount" placeholder="مصروفات إيجار"></div>' +
+          '<div class="field"><label>حساب الأصل (لو مختلف)</label><input type="text" id="ppAssetAccount" placeholder="مصروفات مدفوعة مقدماً" value="مصروفات مدفوعة مقدماً"></div>' +
+        '</div>' +
+        '<button class="btn" style="margin-top:14px;" onclick="submitPrepaidExpense_()">تسجيل للمتابعة</button>' +
+        '<div class="hint" style="margin-top:8px;">لو الرصيد الافتتاحي اتسجل بالفعل من "أرصدة أول مدة"، الخطوة دي بس بتاعة المتابعة والاستهلاك الشهري — مش هتعمل قيد جديد للمبلغ الكلي</div>' +
+      '</div>' +
+      '<div class="card"><div class="card-row"><div class="card-heading">📋 المتابَعة حاليًا</div>' +
+        '<button class="btn secondary" onclick="runPrepaidAmortizationNow_()">▶️ تشغيل الاستهلاك دلوقتي</button></div>' +
+        '<div id="prepaidExpensesList" style="margin-top:12px;">' + emptyRow_('⏳', 'جاري التحميل...') + '</div>' +
+      '</div>' +
+    '</div>';
 }
 
 async function loadExpensesHistory_() {
@@ -1755,6 +1777,52 @@ async function loadExpensesHistory_() {
           '<div style="margin-top:4px; font-size:11.5px; color:var(--text-dim);">' + formatDate_(e.date) +
           ' · 🏦 ' + e.treasuryAccountName + (e.description ? ' · ' + e.description : '') + '</div></div>';
       }).join('');
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function loadPrepaidExpenses_() {
+  try {
+    const items = await api.listPrepaidExpenses();
+    const cur = (state.settings && state.settings.currency) || '';
+    const el = document.getElementById('prepaidExpensesList');
+    if (!el) return;
+    el.innerHTML = items.length === 0 ? emptyRow_('🗓️', 'لا يوجد مصروفات مقدمة متابَعة') :
+      items.map(function (p) {
+        const remaining = p.totalAmount - p.amortizedSoFar;
+        const done = remaining <= 0;
+        return '<div class="list-item" style="display:block; padding:12px 4px;">' +
+          '<div class="card-row"><b>' + escapeHtml_(p.description) + '</b><span class="pill ' + (done ? 'success' : 'info') + '">' + (done ? 'اتاكل بالكامل' : 'باقي ' + formatMoney_(remaining, cur)) + '</span></div>' +
+          '<div style="margin-top:4px; font-size:11.5px; color:var(--text-dim);">شهري ' + formatMoney_(p.monthlyAmount, cur) + ' · هيتحول لـ "' + escapeHtml_(p.expenseAccount) + '" · آخر استهلاك: ' + (p.lastAmortizedMonth || '—') + '</div></div>';
+      }).join('');
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function submitPrepaidExpense_() {
+  const description = document.getElementById('ppDesc').value.trim();
+  const totalAmount = Number(document.getElementById('ppTotal').value);
+  const monthlyAmount = Number(document.getElementById('ppMonthly').value);
+  const startMonth = document.getElementById('ppStartMonth').value;
+  const expenseAccount = document.getElementById('ppExpenseAccount').value.trim();
+  const assetAccount = document.getElementById('ppAssetAccount').value.trim() || 'مصروفات مدفوعة مقدماً';
+  if (!description || !totalAmount || !monthlyAmount || !startMonth || !expenseAccount) {
+    showToast_('لازم تملي كل الحقول', 'error'); return;
+  }
+  try {
+    await api.registerPrepaidExpense({ username: state.user.username }, {
+      description: description, totalAmount: totalAmount, monthlyAmount: monthlyAmount,
+      startMonth: startMonth, expenseAccount: expenseAccount, assetAccount: assetAccount
+    });
+    showToast_('تم التسجيل ✅ هيبدأ يستهلك من الشهر المحدد', 'success');
+    document.getElementById('ppDesc').value = ''; document.getElementById('ppTotal').value = ''; document.getElementById('ppMonthly').value = '';
+    loadPrepaidExpenses_();
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function runPrepaidAmortizationNow_() {
+  try {
+    await api.runPrepaidAmortization({ username: state.user.username });
+    showToast_('تم تشغيل الاستهلاك الشهري ✅', 'success');
+    loadPrepaidExpenses_();
   } catch (err) { showErrorToast_(err); }
 }
 
