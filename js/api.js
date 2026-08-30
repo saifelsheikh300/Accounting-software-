@@ -257,7 +257,7 @@ api.listSales = async function (filters) {
       paymentMethod: s.payment_method, customerName: s.customer_name, customerPhone: s.customer_phone,
       items: (s.sale_items || []).map(function (it) {
         const v = it.product_variants;
-        return { variantCode: v ? v.code : '', label: v ? ((v.products ? v.products.name : '') + ' — ' + (v.color || '') + ' ' + (v.size || '')) : '', qty: it.qty, price: it.unit_price };
+        return { variantCode: v ? v.code : '', label: v ? variantLabel_(v.products ? v.products.name : '', v.color, v.size) : '', qty: it.qty, price: it.unit_price };
       })
     };
   });
@@ -457,7 +457,7 @@ api.getPurchaseOrderItems = async function (orderId) {
     const v = i.product_variants;
     return {
       code: v ? v.code : '—',
-      label: (v && v.products ? v.products.name : '') + (v ? ' — ' + (v.color || '') + ' ' + (v.size || '') : ''),
+      label: v ? variantLabel_(v.products ? v.products.name : '', v.color, v.size) : '',
       qty: i.qty, unitPrice: i.unit_price
     };
   });
@@ -1005,7 +1005,7 @@ api.searchSalesByCode = async function (query) {
       paymentMethod: s.payment_method, customerName: s.customer_name, customerPhone: s.customer_phone,
       items: (s.sale_items || []).map(function (it) {
         const v = it.product_variants;
-        return { variantCode: v ? v.code : '', label: v ? ((v.products ? v.products.name : '') + ' — ' + (v.color || '') + ' ' + (v.size || '')) : '', qty: it.qty, price: it.unit_price };
+        return { variantCode: v ? v.code : '', label: v ? variantLabel_(v.products ? v.products.name : '', v.color, v.size) : '', qty: it.qty, price: it.unit_price };
       })
     };
   });
@@ -1070,7 +1070,7 @@ api.getInventoryValuation = async function () {
   (data || []).forEach(function (b) {
     const v = b.product_variants; if (!v) return;
     const key = v.code;
-    if (!byVariant[key]) byVariant[key] = { code: v.code, name: (v.products ? v.products.name : '') + ' — ' + (v.color || '') + ' ' + (v.size || ''), quantity: 0, value: 0 };
+    if (!byVariant[key]) byVariant[key] = { code: v.code, name: variantLabel_(v.products ? v.products.name : '', v.color, v.size), quantity: 0, value: 0 };
     byVariant[key].quantity += Number(b.quantity_remaining);
     byVariant[key].value += Number(b.quantity_remaining) * Number(b.unit_cost);
   });

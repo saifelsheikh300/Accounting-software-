@@ -827,7 +827,7 @@ function buildProductResultsHtml_(results, addFnName) {
   if (results.length === 0) return emptyRow_('🔎', 'لا يوجد نتائج');
   const tilesHtml = results.map(function (p) {
     return p.variants.map(function (v) {
-      const rawLabel = (p.name + ' — ' + v.color + ' ' + v.size).replace(/'/g, '');
+      const rawLabel = variantLabel_(p.name, v.color, v.size).replace(/'/g, '');
       const label = escapeHtml_(rawLabel);
       const price = v.specialPrice || p.basePrice;
       return '<div class="product-tile" onclick="' + addFnName + '(\'' + escapeHtml_(v.code) + '\', \'' + label + '\', ' + price + ')">' +
@@ -2466,7 +2466,7 @@ let poTilesCache_ = []; let poTilesShown_ = 0;
 const PRODUCT_TILES_PAGE_SIZE = 5;
 
 function productTileHtml_(p, v, onClickFn) {
-  const label = (p.name + ' — ' + v.color + ' ' + v.size).replace(/'/g, '');
+  const label = variantLabel_(p.name, v.color, v.size).replace(/'/g, '');
   const salePrice = v.specialPrice != null ? v.specialPrice : p.basePrice;
   const icon = (state.settings && state.settings.productIcon) || '📦';
   return '<div class="product-tile" onclick="' + onClickFn + '(\'' + v.code + '\', \'' + label + '\', ' + v.cost + ', ' + salePrice + ')">' +
@@ -2960,7 +2960,7 @@ async function invAddSearch_(query) {
     const results = await api.searchProducts(query);
     let html = results.map(function (p) {
       return p.variants.map(function (v) {
-        const label = (p.name + ' — ' + v.color + ' ' + v.size).replace(/'/g, '');
+        const label = variantLabel_(p.name, v.color, v.size).replace(/'/g, '');
         const price = v.specialPrice || p.basePrice;
         return '<div class="product-tile" onclick="addToInvoiceCart_(\'' + v.code + '\', \'' + label + '\', ' + price + ')">' +
           '<div class="product-thumb">' + ((state.settings && state.settings.productIcon) || '📦') + '</div><div class="product-tile-info"><div class="product-tile-name">' + p.name + '</div>' +
@@ -3880,6 +3880,11 @@ function formatMoney_(amount, currency) { const n = Number(amount) || 0; return 
 // بتقرب أي نسبة مئوية لأقرب رقم صحيح للعرض بس (زي نسب الشراكة وهوامش الربح)
 // عشان متظهرش كسور طويلة زي 33.333333333336% على الشاشة
 function roundPct_(n) { return Math.round(Number(n) || 0); }
+// بتبني "اسم المنتج — اللون المقاس" لكن بس لو فيه لون أو مقاس فعلاً، عشان متطلعش شرطة فاضية زي "الاسم — "
+function variantLabel_(name, color, size) {
+  const extra = [color, size].filter(function (v) { return v && String(v).trim() !== ''; }).join(' ');
+  return extra ? (name + ' — ' + extra) : name;
+}
 
 // ------------------------------------------------------------
 // تصدير أي بيانات لملف Excel حقيقي (.xlsx). rows: مصفوفة أوبچكتات،
@@ -3917,9 +3922,16 @@ function showErrorToast_(err) { showToast_('حصل خطأ: ' + (err.message || e
 // ------------------------------------------------------------
 window.addEventListener('DOMContentLoaded', async function () {
   applyPublicBranding();
-  const { data: { session } } = await supabaseClient.auth.getSession();
-  if (session) await bootApp();
-  else var __ht = document.getElementById('loginScreen'); if (__ht) __ht.style.display = 'flex';
+  try {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (session) await bootApp();
+    else { var __ht = document.getElementById('loginScreen'); if (__ht) __ht.style.display = 'flex'; }
+  } catch (err) {
+    console.error(err);
+    var __ht2 = document.getElementById('loginScreen'); if (__ht2) __ht2.style.display = 'flex';
+  } finally {
+    var __splash = document.getElementById('splashScreen'); if (__splash) __splash.remove();
+  }
 
   document.getElementById('loginPassword').addEventListener('keydown', function (e) { if (e.key === 'Enter') handleLogin(); });
   setInterval(function () { if (state.user) refreshNotifications(); }, 90000);
