@@ -619,6 +619,8 @@ function toggleTreasuryEye_(key) { state.treasuryRevealed[key] = !state.treasury
 // شاشة الكاشير (POS)
 // ============================================================
 let posCart = [];
+try { posCart = JSON.parse(localStorage.getItem('posCart_') || '[]'); } catch (e) { posCart = []; }
+function persistPosCart_() { try { localStorage.setItem('posCart_', JSON.stringify(posCart)); } catch (e) { /* تجاهل */ } }
 
 let posAllProducts = [];
 
@@ -650,7 +652,7 @@ function renderPosPage() {
     '</div>' +
     '<div class="section-title">ملخص اليوم</div><div id="posTodaySummary" class="grid grid-3"></div>'
   );
-  posCart = [];
+  renderPosCart_();
   loadPosSummary_();
   loadPosProductGrid_();
   loadPosTreasuryOptions_();
@@ -899,6 +901,7 @@ function addToPosCart_(variantCode, label, price) {
 }
 
 function renderPosCart_() {
+  persistPosCart_();
   const el = document.getElementById('posCartList');
   if (posCart.length === 0) { el.innerHTML = emptyRow_('🛒', 'السلة فاضية'); return; }
   let total = 0;
