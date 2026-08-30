@@ -261,7 +261,8 @@ async function bootApp() {
     var __ht = document.getElementById('loginScreen'); if (__ht) __ht.style.display = 'none';
     var __ht = document.getElementById('app'); if (__ht) __ht.style.display = 'flex';
 
-    navigate(state.user.isCashier ? 'pos' : 'dashboard');
+    const lastPage = !state.user.isCashier ? (localStorage.getItem('lastPage_') || 'dashboard') : 'pos';
+    navigate(lastPage);
     refreshNotifications();
   } catch (err) {
     var __ht = document.getElementById('loginScreen'); if (__ht) __ht.style.display = 'flex';
@@ -331,6 +332,7 @@ async function toggleTheme() {
 function navigate(pageKey) {
   if (pageKey !== 'inventory') { invLowStockOnly = false; invCategoryFilter = ''; invStatusFilter = ''; invFiltersOpen = false; }
   state.currentPage = pageKey;
+  try { localStorage.setItem('lastPage_', pageKey); } catch (e) { /* تجاهل لو التخزين المحلي مقفول */ }
   document.querySelectorAll('.nav-item').forEach(function (el) { el.classList.toggle('active', el.dataset.key === pageKey); });
 
   // على الموبايل الدرج بيتقفل تلقائيًا بعد ما تختار صفحة (سلوك الدروار المعتاد)
@@ -361,7 +363,55 @@ function navigate(pageKey) {
 
 function renderSkeleton_() { return '<div class="grid grid-4">' + '<div class="loading-skeleton" style="height:110px; border-radius:16px;"></div>'.repeat(4) + '</div>'; }
 function renderComingSoon_() { var __ht = document.getElementById('content'); if (__ht) __ht.innerHTML = '<div class="card"><div class="empty-state"><span class="emoji">🚧</span><div class="msg">الشاشة دي هتُبنى قريبًا</div></div></div>'; }
-function setContent_(html) { var __ht = document.getElementById('content'); if (__ht) __ht.innerHTML = '<div class="page-fade">' + html + '</div>'; enhanceSelects_(document.getElementById('content')); }
+
+// ------------------------------------------------------------
+// حفظ واسترجاع بيانات أي فورم تلقائيًا (لو رحت صفحة تانية أو عملت
+// ريفرش من غير ما تكمل تسجيل حاجة، البيانات بتفضل موجودة لما ترجع)
+// ------------------------------------------------------------
+let formDrafts_ = {};
+try { formDrafts_ = JSON.parse(localStorage.getItem('formDrafts_') || '{}'); } catch (e) { formDrafts_ = {}; }
+let saveDraftsTimer_ = null;
+function persistDraftsSoon_() {
+  clearTimeout(saveDraftsTimer_);
+  saveDraftsTimer_ = setTimeout(function () {
+    try { localStorage.setItem('formDrafts_', JSON.stringify(formDrafts_)); } catch (e) { /* تجاهل */ }
+  }, 400);
+}
+
+function saveDraftField_(e) {
+  const el = e.target;
+  if (!el.id || !document.getElementById('content').contains(el)) return;
+  if (el.type === 'password' || el.type === 'file') return; // بيانات حساسة/غير قابلة للتخزين، متتحفظش
+  const page = state.currentPage; if (!page) return;
+  if (!formDrafts_[page]) formDrafts_[page] = {};
+  formDrafts_[page][el.id] = (el.type === 'checkbox' || el.type === 'radio') ? el.checked : el.value;
+  persistDraftsSoon_();
+}
+document.addEventListener('input', saveDraftField_);
+document.addEventListener('change', saveDraftField_);
+
+function restoreDraftsForCurrentPage_() {
+  const page = state.currentPage; const draft = formDrafts_[page];
+  if (!draft) return;
+  Object.keys(draft).forEach(function (id) {
+    const el = document.getElementById(id);
+    if (!el || !document.getElementById('content').contains(el)) return;
+    if (el.type === 'checkbox' || el.type === 'radio') el.checked = !!draft[id];
+    else el.value = draft[id];
+  });
+}
+
+// لما أي عملية تنجح (توست نجاح)، الفورم بتاع الصفحة دي خلاص خلص غرضه، فبنمسح المسودة بتاعتها
+function clearDraftsForCurrentPage_() {
+  const page = state.currentPage;
+  if (formDrafts_[page]) { delete formDrafts_[page]; persistDraftsSoon_(); }
+}
+
+function setContent_(html) {
+  var __ht = document.getElementById('content'); if (__ht) __ht.innerHTML = '<div class="page-fade">' + html + '</div>';
+  restoreDraftsForCurrentPage_();
+  enhanceSelects_(document.getElementById('content'));
+}
 
 // ============================================================
 // هيلبر مشترك: حسابات الخزنة/البنوك — تُستخدم في أي شاشة بتحرك
@@ -3907,6 +3957,7 @@ function exportToExcel_(filename, headers, rows) {
 function formatDate_(d) { try { return new Date(d).toLocaleString('ar-EG'); } catch (e) { return ''; } }
 
 function showToast_(message, type) {
+  if (type === 'success') clearDraftsForCurrentPage_();
   const container = document.getElementById('toastContainer');
   const toast = document.createElement('div');
   toast.className = 'toast ' + (type || '');
