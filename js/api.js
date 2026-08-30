@@ -554,12 +554,15 @@ api.listEmployeeAdvanceBalances = async function () {
 api.listLoans = async function () {
   const { data, error } = await supabaseClient.from('loans').select('*').order('created_at', { ascending: false });
   if (error) throw error;
-  return (data || []).map(function (l) { return { id: l.id, name: l.name, principal: l.principal, remainingBalance: l.remaining_balance }; });
+  return (data || []).map(function (l) {
+    return { id: l.id, name: l.name, principal: l.principal, remainingBalance: l.remaining_balance, monthlyInstallment: l.monthly_installment, nextDueDate: l.next_due_date };
+  });
 };
 
 api.addLoan = async function (session, payload) {
   const { data, error } = await supabaseClient.rpc('rpc_add_loan', {
-    p_name: payload.name, p_principal: payload.amount, p_treasury_account_id: payload.treasuryAccountId || null, p_is_opening: !!payload.isOpening
+    p_name: payload.name, p_principal: payload.amount, p_treasury_account_id: payload.treasuryAccountId || null, p_is_opening: !!payload.isOpening,
+    p_monthly_installment: payload.monthlyInstallment || null, p_next_due_date: payload.nextDueDate || null
   });
   if (error) throw error;
   return { id: data };
@@ -1126,6 +1129,16 @@ api.listOpeningBalances = async function () {
 api.addOpeningBalance = async function (session, payload) {
   const { error } = await supabaseClient.rpc('rpc_add_opening_balance', {
     p_account_id: payload.accountId, p_amount: payload.amount, p_description: payload.description || '', p_as_of_date: payload.asOfDate
+  });
+  if (error) throw error;
+  return { success: true };
+};
+
+// رصيد افتتاحي على حساب جديد — بيتعمل هو نفسه تلقائيًا في شجرة الحسابات لو مش موجود
+api.addOpeningBalanceNewAccount = async function (session, payload) {
+  const { error } = await supabaseClient.rpc('rpc_add_opening_balance_new_account', {
+    p_account_name: payload.accountName, p_account_type: payload.accountType, p_amount: payload.amount,
+    p_description: payload.description || '', p_as_of_date: payload.asOfDate
   });
   if (error) throw error;
   return { success: true };

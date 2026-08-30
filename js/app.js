@@ -4790,6 +4790,8 @@ async function renderAdvancesLoansPage() {
       '<div class="field"><label>اسم القرض / الجهة</label><input type="text" id="loanName" placeholder="مثال: قرض بنك مصر"></div>' +
       '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>المبلغ</label><input type="number" id="loanAmount"></div>' +
       '<div class="field"><label>هيدخل في حساب</label><select id="loanTreasury">' + treasuryOptions + '</select></div></div>' +
+      '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>القسط الشهري (اختياري — للتذكير بالمواعيد)</label><input type="number" id="loanMonthlyInstallment"></div>' +
+      '<div class="field"><label>تاريخ استحقاق أول قسط</label><input type="date" id="loanNextDueDate"></div></div>' +
       '<label style="display:flex; align-items:center; gap:8px; margin-top:10px; cursor:pointer;"><input type="checkbox" id="loanIsOpening" onchange="onLoanOpeningToggle_()"> قرض قديم عندي بالفعل (رصيد افتتاحي) مش استلام فلوس دلوقتي</label>' +
       '<button class="btn success block" style="margin-top:14px;" onclick="submitAddLoan_()">➕ إضافة القرض</button></div>';
 
@@ -4797,8 +4799,10 @@ async function renderAdvancesLoansPage() {
     html += loans.length === 0 ? emptyRow_('🏦', 'مفيش قروض مسجّلة') :
       loans.map(function (l) {
         return '<div class="list-item" style="display:block; padding:14px 4px;"><b>' + l.name + '</b>' +
-          '<div style="margin-top:6px; font-size:12px; color:var(--text-dim);">الأصلي: ' + formatMoney_(l.principal, cur) + ' · المتبقي: ' + formatMoney_(l.remainingBalance, cur) + '</div>' +
-          (l.remainingBalance > 0 ? '<div class="form-grid" style="margin-top:8px;"><div class="field"><input type="number" id="loanRepayAmount_' + l.id + '" placeholder="مبلغ السداد"></div>' +
+          '<div style="margin-top:6px; font-size:12px; color:var(--text-dim);">الأصلي: ' + formatMoney_(l.principal, cur) + ' · المتبقي: ' + formatMoney_(l.remainingBalance, cur) +
+          (l.monthlyInstallment ? ' · القسط الشهري: ' + formatMoney_(l.monthlyInstallment, cur) : '') +
+          (l.nextDueDate ? ' · القسط الجاي مستحق: ' + formatDate_(l.nextDueDate) : '') + '</div>' +
+          (l.remainingBalance > 0 ? '<div class="form-grid" style="margin-top:8px;"><div class="field"><input type="number" id="loanRepayAmount_' + l.id + '" placeholder="مبلغ السداد" value="' + (l.monthlyInstallment || '') + '"></div>' +
             '<div class="field"><select id="loanRepayTreasury_' + l.id + '">' + treasuryOptions + '</select></div></div>' +
             '<button class="btn" style="margin-top:6px;" onclick="submitRepayLoan_(\'' + l.id + '\')">💰 تسجيل سداد</button>' : '<span class="pill success">مسدد بالكامل ✅</span>') +
           '</div>';
@@ -4818,9 +4822,14 @@ async function submitAddLoan_() {
   const name = document.getElementById('loanName').value.trim();
   const amount = Number(document.getElementById('loanAmount').value);
   const isOpening = document.getElementById('loanIsOpening').checked;
+  const monthlyInstallment = Number(document.getElementById('loanMonthlyInstallment').value) || null;
+  const nextDueDate = document.getElementById('loanNextDueDate').value || null;
   if (!name || !amount) { showToast_('اسم القرض والمبلغ مطلوبين', 'error'); return; }
   try {
-    await api.addLoan({ username: state.user.username }, { name: name, amount: amount, treasuryAccountId: document.getElementById('loanTreasury').value, isOpening: isOpening });
+    await api.addLoan({ username: state.user.username }, {
+      name: name, amount: amount, treasuryAccountId: document.getElementById('loanTreasury').value, isOpening: isOpening,
+      monthlyInstallment: monthlyInstallment, nextDueDate: nextDueDate
+    });
     showToast_('تم إضافة القرض ✅', 'success'); renderAdvancesLoansPage();
   } catch (err) { showErrorToast_(err); }
 }
@@ -4927,7 +4936,17 @@ async function renderOpeningBalancesPage() {
 
     html += '<div class="card" style="margin-top:18px;"><div class="card-heading">📂 رصيد افتتاحي — أي حساب تاني</div>' +
       '<div class="card-desc">للمخزون، الموردين، الأصول الثابتة، وأي حساب مش خزنة أو عميل</div>' +
-      '<div class="field"><label>الحساب</label><select id="obAccount">' + leafAccounts.map(function (a) { return '<option value="' + a.id + '">' + a.code + ' — ' + a.name + ' (' + a.type + ')</option>'; }).join('') + '</select></div>' +
+      '<label style="display:flex; align-items:center; gap:8px; margin-top:10px; cursor:pointer;">' +
+        '<input type="checkbox" id="obNewAccountToggle" onchange="toggleObNewAccount_()"><span style="font-size:13px;">الحساب ده جديد ولسه مش موجود في شجرة الحسابات</span>' +
+      '</label>' +
+      '<div id="obExistingAccountWrap"><div class="field" style="margin-top:10px;"><label>الحساب</label><select id="obAccount">' + leafAccounts.map(function (a) { return '<option value="' + a.id + '">' + a.code + ' — ' + a.name + ' (' + a.type + ')</option>'; }).join('') + '</select></div></div>' +
+      '<div id="obNewAccountWrap" style="display:none;">' +
+        '<div class="form-grid" style="margin-top:10px;">' +
+          '<div class="field"><label>اسم الحساب الجديد</label><input type="text" id="obNewAccountName" placeholder="مثلاً: شيكات تحت التحصيل"></div>' +
+          '<div class="field"><label>نوعه</label><select id="obNewAccountType"><option value="أصول">أصول</option><option value="خصوم">خصوم</option><option value="حقوق ملكية">حقوق ملكية</option><option value="إيرادات">إيرادات</option><option value="مصروفات">مصروفات</option></select></div>' +
+        '</div>' +
+        '<div class="hint" style="margin-top:8px;">هيتعمل تلقائيًا في شجرة الحسابات بكود مناسب — مش محتاجة تروحي تضيفيه بنفسك الأول</div>' +
+      '</div>' +
       '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>المبلغ</label><input type="number" id="obAmount"></div>' +
       '<div class="field"><label>التاريخ</label><input type="date" id="obDate" value="' + today + '"></div></div>' +
       '<div class="field" style="margin-top:10px;"><label>وصف</label><input type="text" id="obDesc"></div>' +
@@ -5015,14 +5034,34 @@ async function submitCustomerOpeningBalance_() {
   } catch (err) { showErrorToast_(err); }
 }
 
+function toggleObNewAccount_() {
+  const isNew = document.getElementById('obNewAccountToggle').checked;
+  document.getElementById('obExistingAccountWrap').style.display = isNew ? 'none' : '';
+  document.getElementById('obNewAccountWrap').style.display = isNew ? '' : 'none';
+}
+
 async function submitOpeningBalance_() {
+  const isNew = document.getElementById('obNewAccountToggle').checked;
+  const amount = Number(document.getElementById('obAmount').value);
+  const asOfDate = document.getElementById('obDate').value;
+  const description = document.getElementById('obDesc').value;
+  if (!amount) { showToast_('المبلغ مطلوب', 'error'); return; }
+
+  if (isNew) {
+    const name = document.getElementById('obNewAccountName').value.trim();
+    const type = document.getElementById('obNewAccountType').value;
+    if (!name) { showToast_('اسم الحساب الجديد مطلوب', 'error'); return; }
+    try {
+      await api.addOpeningBalanceNewAccount({ username: state.user.username }, { accountName: name, accountType: type, amount: amount, asOfDate: asOfDate, description: description });
+      showToast_('تم إنشاء الحساب وترحيل الرصيد ✅', 'success'); renderOpeningBalancesPage();
+    } catch (err) { showErrorToast_(err); }
+    return;
+  }
+
   const accountSelect = document.getElementById('obAccount');
   const accountText = accountSelect.options[accountSelect.selectedIndex] ? accountSelect.options[accountSelect.selectedIndex].text : '';
-  const payload = {
-    accountId: accountSelect.value, amount: Number(document.getElementById('obAmount').value),
-    asOfDate: document.getElementById('obDate').value, description: document.getElementById('obDesc').value
-  };
-  if (!payload.accountId || !payload.amount) { showToast_('الحساب والمبلغ مطلوبين', 'error'); return; }
+  const payload = { accountId: accountSelect.value, amount: amount, asOfDate: asOfDate, description: description };
+  if (!payload.accountId) { showToast_('الحساب مطلوب', 'error'); return; }
 
   if (accountText.indexOf('المخزون') !== -1) {
     const confirmed = confirm('⚠️ ده رقم مجرد بس، مش هيسجل منتجات حقيقية ولا يربطها بمورد.\n\nلو نويتي بعد كده تضيفي نفس البضاعة دي كمنتجات من "أوردر شراء → رصيد افتتاحي"، الرقم هيتضاعف (يتحط مرتين).\n\nمتأكدة إنك عايزة تكمّلي بالطريقة دي؟');
