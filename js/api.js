@@ -1446,3 +1446,9 @@ api.runPrepaidAmortization = async function (session) {
   const { error } = await supabaseClient.rpc('rpc_run_prepaid_amortization');
   if (error) throw error;
 };
+
+api.applyDefaultLowStockThreshold = async function (session) {
+  const { data, error } = await supabaseClient.rpc('rpc_apply_default_low_stock_threshold');
+  if (error) throw error;
+  return data;
+};

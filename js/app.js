@@ -1575,11 +1575,13 @@ async function submitProduct_() {
   const multiVariants = multiVariantOpen ? collectProductVariantRows_() : [];
   const simpleCost = Number(document.getElementById('prodCost').value) || 0;
   const simpleQty = Number(document.getElementById('prodQty').value) || 0;
+  const defaultThreshold = (state.settings && state.settings.lowStockThresholdDefault) || 5;
 
   const payload = {
     subCategory: document.getElementById('prodSubCat').value,
     name: document.getElementById('prodName').value.trim(), basePrice: Number(document.getElementById('prodPrice').value),
-    variants: multiVariants.length > 0 ? multiVariants : [{ color: '', size: '', quantity: simpleQty, cost: simpleCost }]
+    variants: (multiVariants.length > 0 ? multiVariants : [{ color: '', size: '', quantity: simpleQty, cost: simpleCost }])
+      .map(function (v) { return Object.assign({ lowStockThreshold: defaultThreshold }, v); })
   };
   if (!payload.subCategory) { showToast_('اختاري فئة', 'error'); return; }
   if (!payload.name || !payload.basePrice) { showToast_('اسم المنتج وسعر البيع مطلوبين', 'error'); return; }
@@ -1696,7 +1698,7 @@ async function submitEditProductFull_(code) {
     const simpleCostEl = document.getElementById('editSimpleCost');
     if (simpleCostEl) {
       const v = p.variants[0];
-      const payload = { cost: Number(simpleCostEl.value) || 0, quantity: Number(document.getElementById('editSimpleQty').value) || 0, specialPrice: null, lowStockThreshold: v ? v.lowStockThreshold : 5 };
+      const payload = { cost: Number(simpleCostEl.value) || 0, quantity: Number(document.getElementById('editSimpleQty').value) || 0, specialPrice: null, lowStockThreshold: v ? v.lowStockThreshold : ((state.settings && state.settings.lowStockThresholdDefault) || 5) };
       if (v) await api.updateVariant({ username: state.user.username }, v.code, payload);
       else await api.addVariant({ username: state.user.username }, { productCode: code, color: '', size: '', quantity: payload.quantity, cost: payload.cost });
     } else {
@@ -1708,7 +1710,7 @@ async function submitEditProductFull_(code) {
         const qty = Number(row.querySelector('.ev-qty').value) || 0;
         const salePriceRaw = row.querySelector('.ev-price').value;
         await api.updateVariant({ username: state.user.username }, vCode, {
-          cost: cost, quantity: qty, specialPrice: salePriceRaw ? Number(salePriceRaw) : null, lowStockThreshold: orig ? orig.lowStockThreshold : 5
+          cost: cost, quantity: qty, specialPrice: salePriceRaw ? Number(salePriceRaw) : null, lowStockThreshold: orig ? orig.lowStockThreshold : ((state.settings && state.settings.lowStockThresholdDefault) || 5)
         });
       }
       const newRows = Array.from(document.querySelectorAll('#editVariantsRows > [data-new-row]'));
@@ -2522,24 +2524,16 @@ function productTileHtml_(p, v, onClickFn) {
   const label = variantLabel_(p.name, v.color, v.size).replace(/'/g, '');
   const salePrice = v.specialPrice != null ? v.specialPrice : p.basePrice;
   const icon = (state.settings && state.settings.productIcon) || '📦';
-  return '<div class="product-tile" onclick="' + onClickFn + '(\'' + v.code + '\', \'' + label + '\', ' + v.cost + ', ' + salePrice + ')">' +
-    '<div class="product-thumb">' + icon + '</div><div class="product-tile-info"><div class="product-tile-name">' + p.name + '</div>' +
-    '<div class="product-tile-meta">' + v.color + ' · ' + v.size + '</div></div>' +
+  return '<div class="product-tile" onclick="' + onClickFn + '(\'' + escapeHtml_(v.code) + '\', \'' + escapeHtml_(label) + '\', ' + v.cost + ', ' + salePrice + ')">' +
+    '<div class="product-thumb">' + icon + '</div><div class="product-tile-info"><div class="product-tile-name">' + escapeHtml_(p.name) + '</div>' +
+    '<div class="product-tile-meta">' + escapeHtml_(v.color) + ' · ' + escapeHtml_(v.size) + '</div></div>' +
     '<b style="text-align:left; line-height:1.6;">شراء: ' + v.cost + '<br>بيع: ' + salePrice + '</b></div>';
 }
 
 function renderPoTilesPage_() {
-  const batch = poTilesCache_.slice(0, poTilesShown_);
-  let html = batch.map(function (t) { return productTileHtml_(t.p, t.v, 'addToPoCart_'); }).join('');
-  if (poTilesShown_ < poTilesCache_.length) {
-    html += '<button class="btn secondary block" style="margin-top:8px;" onclick="poShowMoreTiles_()">⬇️ عرض المزيد (' + (poTilesCache_.length - poTilesShown_) + ')</button>';
-  }
-  var __ht = document.getElementById('poSearchResults'); if (__ht) __ht.innerHTML = html;
-}
-
-function poShowMoreTiles_() {
-  poTilesShown_ += PRODUCT_TILES_PAGE_SIZE;
-  renderPoTilesPage_();
+  const html = poTilesCache_.map(function (t) { return productTileHtml_(t.p, t.v, 'addToPoCart_'); }).join('');
+  var __ht = document.getElementById('poSearchResults');
+  if (__ht) __ht.innerHTML = '<div style="max-height:620px; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch;">' + html + '</div>';
 }
 
 async function poSearch_(query) {
@@ -2657,7 +2651,7 @@ async function submitPoQuickAdd_() {
   try {
     const res = await api.addProductWithVariants({ username: state.user.username }, {
       name: name, subCategory: subCategory, basePrice: salePrice,
-      variants: [{ color: '', size: '', quantity: 0, cost: price, specialPrice: salePrice }], manualCode: manualCode || null
+      variants: [{ color: '', size: '', quantity: 0, cost: price, specialPrice: salePrice, lowStockThreshold: (state.settings && state.settings.lowStockThresholdDefault) || 5 }], manualCode: manualCode || null
     });
     showToast_('تمت إضافة "' + name + '" للمخزون ✅', 'success');
     addToPoCart_(res.variantCodes[0], name, price, salePrice, qty);
@@ -3819,7 +3813,9 @@ async function renderSettingsPage() {
       field_('EasyOrders API Key', 'setEasyOrdersApiKey', s.easyOrdersApiKey) + field_('EasyOrders Secret', 'setEasyOrdersSecret', s.easyOrdersSecret) +
       field_('حد التنبيه الافتراضي للمخزون', 'setLowStockThresholdDefault', s.lowStockThresholdDefault) +
       '</div><div class="hint" style="margin-top:8px;">الحساب الافتراضي بيبقى محدد تلقائي في كل مكان في البرنامج فيه اختيار حساب (بيعة، مصروف، شراء...) — تقدري تغيريه وقت العملية نفسها عادي لو محتاجة.</div>' +
-      '<button class="btn success block" style="margin-top:20px;" onclick="saveSettings_()">💾 حفظ الإعدادات</button></div>' +
+      '<button class="btn success block" style="margin-top:20px;" onclick="saveSettings_()">💾 حفظ الإعدادات</button>' +
+      '<button class="btn secondary block" style="margin-top:10px;" onclick="applyDefaultLowStockThreshold_()">🔄 طبّقي الحد ده على كل المنتجات الموجودة بالفعل</button>' +
+      '<div class="hint" style="margin-top:6px;">حد التنبيه بيتحفظ لكل منتج لوحده وقت ما بتضيفيه — الزرار ده بيغيّر المنتجات اللي موجودة من قبل كمان عشان يتوحّدوا كلهم على الرقم الجديد.</div></div>' +
       '<div class="card" style="max-width:760px; margin-top:16px;"><div class="card-heading">📦 نسخة احتياطية من البيانات</div>' +
       '<div class="hint">تنزيل نسخة من كل بيانات البرنامج (منتجات، مبيعات، حسابات، عملاء...) كملف واحد على جهازك — تقدري تحتفظي بيه أو ترفعيه على برنامج تاني فاضي لنفس النظام لاسترجاع البيانات.</div>' +
       '<button class="btn secondary block" style="margin-top:12px;" onclick="downloadBackup_()">⬇️ تنزيل نسخة احتياطية</button>' +
@@ -3883,6 +3879,17 @@ async function saveSettings_() {
     await api.updateSettingsBulk({ username: state.user.username }, payload);
     showToast_('تم حفظ الإعدادات ✅', 'success');
     state.settings = Object.assign(state.settings, payload); applySettingsToUI();
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function applyDefaultLowStockThreshold_() {
+  const threshold = document.getElementById('setLowStockThresholdDefault').value;
+  const confirmed = confirm('هيتغيّر حد التنبيه لكل المنتجات الموجودة عندك دلوقتي إلى ' + threshold + ' — متأكدة؟');
+  if (!confirmed) return;
+  try {
+    await api.updateSetting({ username: state.user.username }, 'lowStockThresholdDefault', threshold); // نتأكد إن القيمة المحفوظة هي المطبّقة فعلاً
+    const count = await api.applyDefaultLowStockThreshold({ username: state.user.username });
+    showToast_('تم تطبيق الحد الجديد على ' + count + ' صنف ✅', 'success');
   } catch (err) { showErrorToast_(err); }
 }
 
