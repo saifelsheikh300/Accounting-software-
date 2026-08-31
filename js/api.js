@@ -606,7 +606,8 @@ api.deleteAccount = async function (session, id) {
 api.addOpeningFixedAsset = async function (session, payload) {
   const { data, error } = await supabaseClient.rpc('rpc_add_opening_fixed_asset', {
     p_description: payload.description, p_amount: payload.amount, p_useful_life_months: payload.usefulLifeMonths,
-    p_already_elapsed_months: payload.alreadyElapsedMonths || 0, p_depreciation_method: payload.depreciationMethod || 'شهري'
+    p_already_elapsed_months: payload.alreadyElapsedMonths || 0, p_depreciation_method: payload.depreciationMethod || 'شهري',
+    p_accumulated_depreciation_override: payload.accumulatedDepreciationOverride
   });
   if (error) throw error;
   return { id: data };

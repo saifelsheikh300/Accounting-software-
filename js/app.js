@@ -4924,6 +4924,7 @@ async function renderFixedAssetsPage() {
       '<div class="field"><label>العمر الافتراضي (بالشهور)</label><input type="number" id="faUsefulLife" value="36"></div></div>' +
       '<div class="form-grid" style="margin-top:10px;"><div class="field"><label>مستحمل قد إيه لحد دلوقتي (بالشهور)</label><input type="number" id="faElapsed" value="0"></div>' +
       '<div class="field"><label>طريقة الإهلاك</label><select id="faMethod"><option value="شهري">شهري (تلقائي)</option><option value="دفعة نهائية">دفعة واحدة آخر العمر</option></select></div></div>' +
+      '<div class="field" style="margin-top:10px;"><label>أو دخّلي مجمع الإهلاك بالظبط لو عارفاه (اختياري — بيتجاهل حساب الشهور فوق)</label><input type="number" id="faAccumOverride" placeholder="سيبيه فاضي لو مش عارفة الرقم بالظبط"></div>' +
       '<div class="hint" style="margin-top:8px;">مثال: كمبيوتر بـ50,000 جنيه، عمره الافتراضي 5 سنين (60 شهر)، مستخدم من 3 سنين (36 شهر) — هيحسب مجمع الإهلاك تلقائي عن الـ36 شهر دول</div>' +
       '<button class="btn success block" style="margin-top:14px;" onclick="submitAddOpeningFixedAsset_()">✅ إضافة الأصل</button></div>';
 
@@ -4946,11 +4947,13 @@ async function submitAddOpeningFixedAsset_() {
   const amount = Number(document.getElementById('faAmount').value);
   const usefulLife = Number(document.getElementById('faUsefulLife').value);
   if (!description || !amount || !usefulLife) { showToast_('اسم الأصل والتكلفة والعمر الافتراضي مطلوبين', 'error'); return; }
+  const accumOverrideRaw = document.getElementById('faAccumOverride').value;
   try {
     await api.addOpeningFixedAsset({ username: state.user.username }, {
       description: description, amount: amount, usefulLifeMonths: usefulLife,
       alreadyElapsedMonths: Number(document.getElementById('faElapsed').value) || 0,
-      depreciationMethod: document.getElementById('faMethod').value
+      depreciationMethod: document.getElementById('faMethod').value,
+      accumulatedDepreciationOverride: accumOverrideRaw === '' ? null : Number(accumOverrideRaw)
     });
     showToast_('تم إضافة الأصل ✅', 'success');
     renderFixedAssetsPage();
