@@ -2204,6 +2204,8 @@ async function quickReturnSale_(saleId) {
 // شاشة الموردين والمشتريات
 // ============================================================
 let poCart = [];
+try { poCart = JSON.parse(localStorage.getItem('poCart_') || '[]'); } catch (e) { poCart = []; }
+function persistPoCart_() { try { localStorage.setItem('poCart_', JSON.stringify(poCart)); } catch (e) { /* تجاهل */ } }
 let supplierPageTab = 'neworder';
 let suppliersCache_ = null;
 
@@ -2667,6 +2669,7 @@ function addToPoCart_(variantCode, label, cost, salePrice, qty) {
 }
 
 function renderPoCart_() {
+  persistPoCart_();
   const el = document.getElementById('poCartList');
   if (poCart.length === 0) { el.innerHTML = emptyRow_('📦', 'لسه محددتش أصناف'); return; }
   const returnToggle = document.getElementById('poIsSupplierReturn');
@@ -3912,10 +3915,9 @@ function toggleNotifications() {
   const dropdown = document.getElementById('notifDropdown');
   if (dropdown.style.display === 'block') { dropdown.style.display = 'none'; return; }
   const notifs = window.__notifications || [];
-  const hasDbNotifs = notifs.some(function (n) { return n.id; });
   dropdown.style.display = 'block';
   dropdown.innerHTML = '<div class="notif-header" style="display:flex; align-items:center; justify-content:space-between;"><span>🔔 التنبيهات</span>' +
-    (hasDbNotifs ? '<span style="font-size:11.5px; color:var(--accent); cursor:pointer; font-weight:600;" onclick="markAllNotificationsRead_()">قراءة الكل ✓</span>' : '') + '</div>' + (
+    (notifs.length > 0 ? '<span style="font-size:11.5px; color:var(--accent); cursor:pointer; font-weight:600;" onclick="markAllNotificationsRead_()">قراءة الكل ✓</span>' : '') + '</div>' + (
     notifs.length === 0 ? '<div class="empty-state" style="padding:24px;"><span class="emoji" style="font-size:22px;">✅</span><div class="msg" style="font-size:12px;">مفيش تنبيهات جديدة</div></div>' :
     notifs.map(function (n) {
       const clickable = n.id ? ' style="cursor:pointer;" onclick="onNotifClick_(\'' + n.id + '\', ' + (n.linkPage ? '\'' + n.linkPage + '\'' : 'null') + ')"' : '';
