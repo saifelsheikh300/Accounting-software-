@@ -261,7 +261,7 @@ async function bootApp() {
     var __ht = document.getElementById('loginScreen'); if (__ht) __ht.style.display = 'none';
     var __ht = document.getElementById('app'); if (__ht) __ht.style.display = 'flex';
 
-    const lastPage = !state.user.isCashier ? (localStorage.getItem('lastPage_') || 'dashboard') : 'pos';
+    const lastPage = !state.user.isCashier ? (sessionStorage.getItem('lastPage_') || 'dashboard') : 'pos';
     navigate(lastPage);
     refreshNotifications();
   } catch (err) {
@@ -332,7 +332,7 @@ async function toggleTheme() {
 function navigate(pageKey) {
   if (pageKey !== 'inventory') { invLowStockOnly = false; invCategoryFilter = ''; invStatusFilter = ''; invFiltersOpen = false; }
   state.currentPage = pageKey;
-  try { localStorage.setItem('lastPage_', pageKey); } catch (e) { /* تجاهل لو التخزين المحلي مقفول */ }
+  try { sessionStorage.setItem('lastPage_', pageKey); } catch (e) { /* تجاهل لو التخزين المحلي مقفول */ }
   document.querySelectorAll('.nav-item').forEach(function (el) { el.classList.toggle('active', el.dataset.key === pageKey); });
 
   // على الموبايل الدرج بيتقفل تلقائيًا بعد ما تختار صفحة (سلوك الدروار المعتاد)
@@ -370,6 +370,7 @@ function renderComingSoon_() { var __ht = document.getElementById('content'); if
 // ------------------------------------------------------------
 let formDrafts_ = {};
 try { formDrafts_ = JSON.parse(localStorage.getItem('formDrafts_') || '{}'); } catch (e) { formDrafts_ = {}; }
+if (formDrafts_.settings) { delete formDrafts_.settings; try { localStorage.setItem('formDrafts_', JSON.stringify(formDrafts_)); } catch (e) {} }
 let saveDraftsTimer_ = null;
 function persistDraftsSoon_() {
   clearTimeout(saveDraftsTimer_);
@@ -382,7 +383,7 @@ function saveDraftField_(e) {
   const el = e.target;
   if (!el.id || !document.getElementById('content').contains(el)) return;
   if (el.type === 'password' || el.type === 'file') return; // بيانات حساسة/غير قابلة للتخزين، متتحفظش
-  const page = state.currentPage; if (!page) return;
+  const page = state.currentPage; if (!page || page === 'settings') return; // صفحة الإعدادات بتعرض القيم الحقيقية المحفوظة دايمًا، مش محتاجة مسودة فوقها
   if (!formDrafts_[page]) formDrafts_[page] = {};
   formDrafts_[page][el.id] = (el.type === 'checkbox' || el.type === 'radio') ? el.checked : el.value;
   persistDraftsSoon_();
@@ -392,7 +393,7 @@ document.addEventListener('change', saveDraftField_);
 
 function restoreDraftsForCurrentPage_() {
   const page = state.currentPage; const draft = formDrafts_[page];
-  if (!draft) return;
+  if (!draft || page === 'settings') return;
   Object.keys(draft).forEach(function (id) {
     const el = document.getElementById(id);
     if (!el || !document.getElementById('content').contains(el)) return;
@@ -2207,8 +2208,6 @@ let supplierPageTab = 'neworder';
 let suppliersCache_ = null;
 
 async function renderSuppliersPage() {
-  supplierPageTab = 'neworder';
-  poCart = [];
   suppliersCache_ = null;
   renderSupplierPageShell_();
 }
@@ -2224,7 +2223,7 @@ function renderSupplierPageShell_() {
   renderSupplierTabContent_();
 }
 
-function switchSupplierPageTab_(tab) { supplierPageTab = tab; poCart = []; supplierDueFilter = ''; renderSupplierPageShell_(); }
+function switchSupplierPageTab_(tab) { supplierPageTab = tab; supplierDueFilter = ''; renderSupplierPageShell_(); }
 
 async function getSuppliersCached_() {
   if (!suppliersCache_) suppliersCache_ = await api.getSuppliers();
@@ -2746,7 +2745,7 @@ async function submitPurchaseOrder_() {
         treasuryAccountId: document.getElementById('poTreasuryAccount').value || null
       });
       let msg = 'تم تسجيل المرتجع ✅ بقيمة ' + res.return_total;
-      showToast_(msg, 'success'); renderSuppliersPage();
+      poCart = []; showToast_(msg, 'success'); renderSuppliersPage();
       return;
     }
     if (isOpening) {
@@ -2761,7 +2760,7 @@ async function submitPurchaseOrder_() {
       };
       res = await api.createPurchaseOrder({ username: state.user.username }, payload);
     }
-    showToast_('تم تسجيل أوردر الشراء ✅ الإجمالي: ' + res.total, 'success'); renderSuppliersPage();
+    poCart = []; showToast_('تم تسجيل أوردر الشراء ✅ الإجمالي: ' + res.total, 'success'); renderSuppliersPage();
   } catch (err) { showErrorToast_(err); }
 }
 
@@ -3913,14 +3912,25 @@ function toggleNotifications() {
   const dropdown = document.getElementById('notifDropdown');
   if (dropdown.style.display === 'block') { dropdown.style.display = 'none'; return; }
   const notifs = window.__notifications || [];
+  const hasDbNotifs = notifs.some(function (n) { return n.id; });
   dropdown.style.display = 'block';
-  dropdown.innerHTML = '<div class="notif-header">🔔 التنبيهات</div>' + (
+  dropdown.innerHTML = '<div class="notif-header" style="display:flex; align-items:center; justify-content:space-between;"><span>🔔 التنبيهات</span>' +
+    (hasDbNotifs ? '<span style="font-size:11.5px; color:var(--accent); cursor:pointer; font-weight:600;" onclick="markAllNotificationsRead_()">قراءة الكل ✓</span>' : '') + '</div>' + (
     notifs.length === 0 ? '<div class="empty-state" style="padding:24px;"><span class="emoji" style="font-size:22px;">✅</span><div class="msg" style="font-size:12px;">مفيش تنبيهات جديدة</div></div>' :
     notifs.map(function (n) {
       const clickable = n.id ? ' style="cursor:pointer;" onclick="onNotifClick_(\'' + n.id + '\', ' + (n.linkPage ? '\'' + n.linkPage + '\'' : 'null') + ')"' : '';
       return '<div class="notif-item"' + clickable + '><div class="notif-dot ' + n.severity + '"></div><div><div class="notif-text">' + n.message + '</div>' + (n.time ? '<div class="notif-time">' + formatDate_(n.time) + '</div>' : '') + '</div></div>';
     }).join('')
   );
+}
+
+async function markAllNotificationsRead_() {
+  try {
+    await api.markAllNotificationsRead();
+    document.getElementById('notifDropdown').style.display = 'none';
+    refreshNotifications();
+    showToast_('تم تحديد الكل كمقروء ✅', 'success');
+  } catch (err) { showErrorToast_(err); }
 }
 
 async function onNotifClick_(id, linkPage) {

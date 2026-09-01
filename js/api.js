@@ -1353,6 +1353,15 @@ api.markNotificationRead = async function (id) {
   return { success: true };
 };
 
+api.markAllNotificationsRead = async function () {
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user) return { success: true };
+  const { error } = await supabaseClient.from('notifications').update({ is_read: true })
+    .or('user_id.eq.' + user.id + ',user_id.is.null').eq('is_read', false);
+  if (error) throw error;
+  return { success: true };
+};
+
 // ------------------------------------------------------------
 // المرفقات
 // ------------------------------------------------------------
