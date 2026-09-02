@@ -1447,10 +1447,10 @@ function mainCategoryOptions_(selected) {
   if (!invTreeCache.mainCategories.length) return '<option value="">أضف فئة رئيسية الأول</option>';
   return invTreeCache.mainCategories.map(function (m) { return '<option value="' + m.code + '"' + (m.code === selected ? ' selected' : '') + '>' + m.name + '</option>'; }).join('');
 }
-function subCategoryOptionsForParent_(parentCode) {
+function subCategoryOptionsForParent_(parentCode, selected) {
   const subs = invTreeCache.subCategories.filter(function (s) { return s.parent === parentCode; });
   if (subs.length === 0) return '<option value="">لا يوجد فئات فرعية — أضف واحدة فوق</option>';
-  return subs.map(function (s) { return '<option value="' + s.code + '">' + s.name + '</option>'; }).join('');
+  return subs.map(function (s) { return '<option value="' + s.code + '"' + (s.code === selected ? ' selected' : '') + '>' + s.name + '</option>'; }).join('');
 }
 
 async function submitMainCategory_() {
@@ -1493,9 +1493,15 @@ async function ensureDefaultCategory_() {
   } catch (err) { showErrorToast_(err); }
 }
 
+// بتفتكر آخر فئة (رئيسية/فرعية) استخدمتها وقت ما ضفتي منتج، عشان أي إضافة منتج جديدة تبدأ منها
+// مش ترجع لأول فئة في القايمة كل مرة
+let lastUsedMainCat_ = null, lastUsedSubCat_ = null;
+
 async function openAddProductModal_() {
   await ensureDefaultCategory_();
   prodVariantRowCount = 0;
+  const initialMainCat = (lastUsedMainCat_ && invTreeCache.mainCategories.some(function (m) { return m.code === lastUsedMainCat_; }))
+    ? lastUsedMainCat_ : invTreeCache.mainCategories[0].code;
   const body =
     '<div class="field"><label>اسم المنتج <span class="req">*</span></label><input type="text" id="prodName" placeholder="اكتبي اسم المنتج"></div>' +
     '<div class="form-grid" style="margin-bottom:14px;">' +
@@ -1504,9 +1510,9 @@ async function openAddProductModal_() {
     '</div>' +
     '<div class="field"><label>الكمية الحالية بالمخزون</label><input type="number" id="prodQty" value="0"></div>' +
     '<div class="inline-add-row" style="margin-bottom:10px;"><div class="field"><label>الفئة</label>' +
-    '<select id="prodMainCat" onchange="onProductMainCatChange_()">' + mainCategoryOptions_() + '</select></div>' +
+    '<select id="prodMainCat" onchange="onProductMainCatChange_()">' + mainCategoryOptions_(initialMainCat) + '</select></div>' +
     '<button class="inline-add-btn" onclick="closeModal(); openCategoriesModal_();">+ فئة</button></div>' +
-    '<div class="field"><select id="prodSubCat">' + subCategoryOptionsForParent_(invTreeCache.mainCategories[0].code) + '</select></div>' +
+    '<div class="field"><select id="prodSubCat">' + subCategoryOptionsForParent_(initialMainCat, lastUsedSubCat_) + '</select></div>' +
     '<div class="hint" style="cursor:pointer; color:var(--accent); margin-top:6px;" onclick="toggleMultiVariant_()">🎨 المنتج ده بيه أكتر من لون أو مقاس؟ دوسي هنا</div>' +
     '<div id="multiVariantSection" style="display:none; margin-top:12px;">' +
       '<div class="hint">ضيفي كل لون/مقاس بكميته وتكلفته — هيتحفظوا بدل الكمية والتكلفة العامة اللي فوق</div>' +
@@ -1567,7 +1573,8 @@ function collectProductVariantRows_() {
 }
 
 function onProductMainCatChange_() {
-  var __ht = document.getElementById('prodSubCat'); if (__ht) __ht.innerHTML = subCategoryOptionsForParent_(document.getElementById('prodMainCat').value);
+  lastUsedMainCat_ = document.getElementById('prodMainCat').value;
+  var __ht = document.getElementById('prodSubCat'); if (__ht) __ht.innerHTML = subCategoryOptionsForParent_(lastUsedMainCat_);
   refreshSelect_('prodSubCat');
 }
 
@@ -1588,6 +1595,8 @@ async function submitProduct_() {
   if (!payload.name || !payload.basePrice) { showToast_('اسم المنتج وسعر البيع مطلوبين', 'error'); return; }
   try {
     const res = await api.addProductWithVariants({ username: state.user.username }, payload);
+    lastUsedMainCat_ = document.getElementById('prodMainCat').value;
+    lastUsedSubCat_ = payload.subCategory;
     showToast_('تم حفظ المنتج ✅ الكود: ' + res.productCode, 'success');
     closeModal();
     await loadInventoryBaseData_();
@@ -2580,14 +2589,16 @@ async function openPoQuickAddForm_(prefillName) {
 }
 
 function renderPoQuickAddForm_(prefillName) {
-  const mainOpts = poTreeCache.mainCategories.map(function (m) { return '<option value="' + m.code + '">' + m.name + '</option>'; }).join('');
+  const initialMainCat = (lastUsedMainCat_ && poTreeCache.mainCategories.some(function (m) { return m.code === lastUsedMainCat_; }))
+    ? lastUsedMainCat_ : poTreeCache.mainCategories[0].code;
+  const mainOpts = poTreeCache.mainCategories.map(function (m) { return '<option value="' + m.code + '"' + (m.code === initialMainCat ? ' selected' : '') + '>' + m.name + '</option>'; }).join('');
   document.getElementById('poQuickAddInline').innerHTML =
     '<div class="card" style="background:var(--surface-2); margin-top:10px; padding:14px;">' +
       '<div class="inline-add-row"><div class="field"><label>الفئة الرئيسية</label>' +
       '<select id="poQuickMainCat" onchange="onPoQuickMainCatChange_()">' + mainOpts + '</select></div>' +
       '<button class="inline-add-btn" onclick="openPoQuickAddCategoryPrompt_(false)">+ فئة</button></div>' +
       '<div class="inline-add-row" style="margin-top:10px;"><div class="field"><label>الفئة الفرعية</label>' +
-      '<select id="poQuickSubCat">' + poSubCategoryOptions_(poTreeCache.mainCategories[0].code) + '</select></div>' +
+      '<select id="poQuickSubCat">' + poSubCategoryOptions_(initialMainCat, lastUsedSubCat_) + '</select></div>' +
       '<button class="inline-add-btn" onclick="openPoQuickAddCategoryPrompt_(true)">+ فئة فرعية</button></div>' +
       '<div class="form-grid" style="margin-top:12px;">' +
         '<div class="field"><label>اسم المنتج</label><input type="text" id="poQuickName" value="' + (prefillName || '').replace(/"/g, '') + '"></div>' +
@@ -2603,14 +2614,15 @@ function renderPoQuickAddForm_(prefillName) {
   enhanceSelects_(document.getElementById('poQuickAddInline'));
 }
 
-function poSubCategoryOptions_(parentCode) {
+function poSubCategoryOptions_(parentCode, selected) {
   const subs = poTreeCache.subCategories.filter(function (s) { return s.parent === parentCode; });
   if (!subs.length) return '<option value="">لا يوجد فئات فرعية — أضيفي واحدة</option>';
-  return subs.map(function (s) { return '<option value="' + s.code + '">' + s.name + '</option>'; }).join('');
+  return subs.map(function (s) { return '<option value="' + s.code + '"' + (s.code === selected ? ' selected' : '') + '>' + s.name + '</option>'; }).join('');
 }
 
 function onPoQuickMainCatChange_() {
-  var __ht = document.getElementById('poQuickSubCat'); if (__ht) __ht.innerHTML = poSubCategoryOptions_(document.getElementById('poQuickMainCat').value);
+  lastUsedMainCat_ = document.getElementById('poQuickMainCat').value;
+  var __ht = document.getElementById('poQuickSubCat'); if (__ht) __ht.innerHTML = poSubCategoryOptions_(lastUsedMainCat_);
   refreshSelect_('poQuickSubCat');
 }
 
@@ -2654,6 +2666,8 @@ async function submitPoQuickAdd_() {
       name: name, subCategory: subCategory, basePrice: salePrice,
       variants: [{ color: '', size: '', quantity: 0, cost: price, specialPrice: salePrice, lowStockThreshold: (state.settings && state.settings.lowStockThresholdDefault) || 5 }], manualCode: manualCode || null
     });
+    lastUsedMainCat_ = document.getElementById('poQuickMainCat').value;
+    lastUsedSubCat_ = subCategory;
     showToast_('تمت إضافة "' + name + '" للمخزون ✅', 'success');
     addToPoCart_(res.variantCodes[0], name, price, salePrice, qty);
     var __ht = document.getElementById('poSearchInput'); if (__ht) __ht.value = '';
