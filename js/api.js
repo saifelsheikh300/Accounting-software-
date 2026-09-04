@@ -101,7 +101,7 @@ api.addSeason = async function (session, payload) {
 
 api.getNotifications = async function () {
   const notifications = [];
-  const { data: lowStock } = await supabaseClient.from('product_variants').select('color,size,quantity,low_stock_threshold,products(name)').eq('status', 'نشط').lte('quantity', 999999);
+  const { data: lowStock } = await supabaseClient.from('product_variants').select('color,size,quantity,low_stock_threshold,products(name)').eq('status', 'نشط').is('deleted_at', null).lte('quantity', 999999);
   (lowStock || []).filter(function (v) { return v.quantity <= v.low_stock_threshold; }).slice(0, 10).forEach(function (v) {
     notifications.push({ type: 'low_stock', severity: 'warning', message: 'مخزون منخفض: ' + (v.products ? v.products.name : '') + ' (' + v.color + ' ' + v.size + ') — الكمية: ' + v.quantity, time: null });
   });
@@ -193,14 +193,14 @@ api.addProductWithVariants = async function (session, payload) {
 };
 
 api.searchProducts = async function (query, limit) {
-  let req = supabaseClient.from('products').select('*, product_variants(*)').eq('status', 'نشط').order('name').limit(limit || 15);
+  let req = supabaseClient.from('products').select('*, product_variants(*)').eq('status', 'نشط').is('deleted_at', null).order('name').limit(limit || 15);
   if (query) req = req.ilike('name', '%' + query + '%');
   const { data, error } = await req;
   if (error) throw error;
   return (data || []).map(function (p) {
     return {
       code: p.code, name: p.name, basePrice: p.base_price, hasVariants: p.has_variants,
-      variants: (p.product_variants || []).filter(function (v) { return v.status === 'نشط'; }).map(function (v) {
+      variants: (p.product_variants || []).filter(function (v) { return v.status === 'نشط' && !v.deleted_at; }).map(function (v) {
         return { code: v.code, color: v.color, size: v.size, quantity: v.quantity, cost: v.cost, specialPrice: v.special_price };
       })
     };
@@ -1460,4 +1460,16 @@ api.applyDefaultLowStockThreshold = async function (session) {
   const { data, error } = await supabaseClient.rpc('rpc_apply_default_low_stock_threshold');
   if (error) throw error;
   return data;
+};
+
+api.purgeDeletedItem = async function (session, table, id) {
+  const { error } = await supabaseClient.rpc('rpc_purge_deleted_item', { p_table: table, p_id: id });
+  if (error) throw error;
+  return { success: true };
+};
+
+api.reassignPurchaseOrderSupplier = async function (session, orderId, newSupplierName) {
+  const { error } = await supabaseClient.rpc('rpc_reassign_purchase_order_supplier', { p_order_id: orderId, p_new_supplier_name: newSupplierName });
+  if (error) throw error;
+  return { success: true };
 };

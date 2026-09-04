@@ -2445,6 +2445,7 @@ function buildSupplierDetailHtml_() {
           '<div class="card-value">' + formatMoney_(order.remaining, cur) + '</div>' +
           '<div class="card-sub"><span class="pill ' + pill + '">' + order.paymentStatus + '</span></div></div>' +
       '</div>';
+      html += '<button class="btn secondary" style="margin-top:12px;" onclick="openReassignSupplierPrompt_(\'' + order.orderId + '\')">🔄 اتسجل على مورد غلط؟ غيّري المورد</button>';
     }
     html += '<div class="card-heading" style="margin-top:18px;">📦 الأصناف اللي اتشترت في الأوردر ده</div>';
     html += '<div class="table-wrap" style="margin-top:8px;"><table><thead><tr><th>الكود</th><th>الصنف</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead><tbody>';
@@ -4430,15 +4431,48 @@ async function submitCostCenter_() {
 async function renderRecycleBinPage() {
   try {
     const items = await api.listDeletedRecords();
-    let html = '<div class="card">';
+    let html = '<div class="hint" style="margin-bottom:14px;">أي حاجة هنا من غير ما تتسترجع بتتمسح نهائيًا تلقائيًا بعد 30 يوم من تاريخ حذفها</div>';
+    html += '<div class="card">';
     html += items.length === 0 ? emptyRow_('🗑️', 'سلة المحذوفات فاضية دلوقتي') :
       items.map(function (it) {
         return '<div class="list-item"><span><span class="pill">' + it.tableLabel + '</span> ' + it.label +
           '<br><span style="color:var(--text-faint); font-size:11px;">اتحذف: ' + formatDate_(it.deletedAt) + '</span></span>' +
-          '<button class="btn secondary" onclick="restoreDeletedItem_(\'' + it.table + '\', \'' + it.id + '\')">↩️ استرجاع</button></div>';
+          '<span style="display:flex; gap:6px;">' +
+          '<button class="btn secondary" onclick="restoreDeletedItem_(\'' + it.table + '\', \'' + it.id + '\')">↩️ استرجاع</button>' +
+          '<button class="btn danger" onclick="purgeDeletedItem_(\'' + it.table + '\', \'' + it.id + '\')">🗑️ امسح نهائيًا</button>' +
+          '</span></div>';
       }).join('');
     html += '</div>';
     setContent_(html);
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function purgeDeletedItem_(table, id) {
+  if (!confirm('⚠️ المسح النهائي مفيش استرجاع منه خالص. متأكدة؟')) return;
+  try {
+    await api.purgeDeletedItem({ username: state.user.username }, table, id);
+    showToast_('تم المسح النهائي ✅', 'success');
+    renderRecycleBinPage();
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function openReassignSupplierPrompt_(orderId) {
+  try {
+    const suppliers = await getSuppliersCached_();
+    openModal('🔄 تغيير مورد الأوردر', 'الأوردر بكل تفاصيله ومبالغه هينتقل للمورد الجديد', '<div class="field"><label>المورد الجديد</label><input type="text" id="reassignSupplierName" list="reassignSupplierList" placeholder="اكتبي اسم المورد أو اختاري من الموجود"><datalist id="reassignSupplierList">' +
+      suppliers.map(function (s) { return '<option value="' + escapeHtml_(s.name) + '">'; }).join('') + '</datalist></div>',
+      '<button class="btn secondary" onclick="closeModal()">إلغاء</button><button class="btn" onclick="submitReassignSupplier_(\'' + orderId + '\')">تأكيد التغيير</button>');
+  } catch (err) { showErrorToast_(err); }
+}
+
+async function submitReassignSupplier_(orderId) {
+  const newSupplierName = document.getElementById('reassignSupplierName').value.trim();
+  if (!newSupplierName) { showToast_('اكتبي اسم المورد الجديد', 'error'); return; }
+  try {
+    await api.reassignPurchaseOrderSupplier({ username: state.user.username }, orderId, newSupplierName);
+    closeModal();
+    showToast_('تم تغيير المورد ✅', 'success');
+    renderSuppliersPage();
   } catch (err) { showErrorToast_(err); }
 }
 
