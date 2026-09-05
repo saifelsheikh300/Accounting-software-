@@ -2220,6 +2220,7 @@ let suppliersCache_ = null;
 
 async function renderSuppliersPage() {
   suppliersCache_ = null;
+  supplierDueFilter = '';
   renderSupplierPageShell_();
 }
 
